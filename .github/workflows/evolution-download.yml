@@ -7,7 +7,52 @@ permissions:
   contents: read
   actions: read
 jobs:
+  rules:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: evolution-arena
+          fetch-depth: 0
+      - name: Test the current rules with undefined behavior checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libboost-dev
+          g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/RunTests.cpp -o "$RUNNER_TEMP/evolution-tests"
+          "$RUNNER_TEMP/evolution-tests"
+          python3 test/evolution/test_catalog.py
+      - name: Select a matching Windows build
+        id: select
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          target=$(git rev-parse HEAD)
+          # The Windows compiler can still be running when this audit starts.
+          for attempt in $(seq 1 90); do
+            gh api "repos/$GH_REPO/actions/workflows/evolution-windows.yml/runs?branch=evolution-arena&event=push&per_page=12" --jq '.workflow_runs[] | [.id, .head_sha] | @tsv' > "$RUNNER_TEMP/candidates"
+            while read -r run sha; do
+              git cat-file -e "$sha^{commit}" 2>/dev/null || continue
+              git diff --quiet "$sha" "$target" -- . ':(exclude).github/workflows' || continue
+              conclusion=$(gh api "repos/$GH_REPO/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "build") | .conclusion')
+              [[ "$conclusion" == success ]] || continue
+              echo "run=$run" >> "$GITHUB_OUTPUT"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            done < "$RUNNER_TEMP/candidates"
+            sleep 40
+          done
+          echo "Timed out waiting for a successful Windows build matching $target"
+          exit 1
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+      sha: ${{ steps.select.outputs.sha }}
   portable:
+    needs: rules
     runs-on: windows-2025
     timeout-minutes: 10
     steps:
@@ -17,9 +62,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          $runs = gh api "repos/$env:GH_REPO/actions/workflows/evolution-windows.yml/runs?branch=evolution-arena&event=push&status=success&per_page=1" | ConvertFrom-Json
-          if ($LASTEXITCODE -or !$runs.workflow_runs) { throw 'No successful builds' }
-          $run = $runs.workflow_runs[0]
+          $run = gh api "repos/$env:GH_REPO/actions/runs/${{ needs.rules.outputs.run }}" | ConvertFrom-Json
+          if ($LASTEXITCODE -or $run.head_sha -ne '${{ needs.rules.outputs.sha }}') { throw 'Selected build does not match the tested source' }
           gh run download $run.id -n EvolutionArena-Windows-x64 -D artifact
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Expand-Archive -LiteralPath artifact/EvolutionArena-Windows-x64.zip -DestinationPath game
