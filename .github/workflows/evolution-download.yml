@@ -24,8 +24,9 @@ jobs:
           file=package/EvolutionArena-Windows-x64.zip
           unzip -tqq "$file"
           unzip -Z1 "$file" > "$RUNNER_TEMP/files"
+          grep -Ei "(client|server|launcher)\.exe$|evolution\.json$" "$RUNNER_TEMP/files" || true
           for member in VCMI_client.exe VCMI_server.exe VCMI_launcher.exe config/evolution.json; do
-            grep -Fiq "/$member" "$RUNNER_TEMP/files"
+            grep -Fiq "$member" "$RUNNER_TEMP/files" || { echo "Missing package member: $member"; exit 1; }
           done
           tag="evolution-preview-${sha:0:12}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
