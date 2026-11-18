@@ -1591,7 +1591,11 @@ void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battl
 		{
 			if(attackerState->hasBonusOfType(BonusType::SOUL_STEAL, subtype))
 			{
-				int64_t toHeal = bsa.killedAmount * attackerState->valOfBonuses(BonusType::SOUL_STEAL, subtype) * attackerState->getMaxHealth();
+				// The final unit count is signed 32-bit. Bound extra health to the
+				// representable roster before multiplying quantities by hit points.
+				int64_t copies = static_cast<int64_t>(bsa.killedAmount) * attackerState->valOfBonuses(BonusType::SOUL_STEAL, subtype);
+				int64_t room = std::numeric_limits<int32_t>::max() - attackerState->getCount();
+				int64_t toHeal = std::min(copies, room) * attackerState->getMaxHealth();
 				bool permanent = subtype == BonusCustomSubtype::soulStealPermanent;
 				healInfo += attackerState->heal(toHeal, EHealLevel::OVERHEAL, (permanent ? EHealPower::PERMANENT : EHealPower::ONE_BATTLE));
 				break;

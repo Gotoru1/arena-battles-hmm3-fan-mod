@@ -42,6 +42,7 @@
 #include "../windows/InfoWindows.h"
 #include "../windows/wiki/WikiWindow.h"
 #include "../arena/ArenaWindows.h"
+#include "../arena/ArenaDraft.h"
 #include "../CServerHandler.h"
 
 #include "../CPlayerInterface.h"
@@ -438,6 +439,7 @@ void CMainMenu::makeActiveInterface()
 
 void CMainMenu::openLobby(ESelectionScreen screenType, bool host, const std::vector<std::string> & names, ELoadMode loadMode, bool battleMode, bool hotseatMode, std::string server, ui16 port)
 {
+	ArenaDraft::abandonEvolution();
 	GAME->server().resetStateForLobby(screenType == ESelectionScreen::newGame ? EStartMode::NEW_GAME : EStartMode::LOAD_GAME, screenType, EServerMode::LOCAL, names);
 	GAME->server().loadMode = loadMode;
 	GAME->server().hotseatMode = hotseatMode;

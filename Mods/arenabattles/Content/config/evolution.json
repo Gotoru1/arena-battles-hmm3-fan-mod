@@ -1,0 +1,266 @@
+{
+	"mutations": {
+		"flurry": {
+			"name": "Flurry",
+			"text": "One extra strike per rank.",
+			"effects": [
+				{
+					"type": "ADDITIONAL_ATTACK",
+					"val": 1
+				}
+			]
+		},
+		"harvest": {
+			"name": "Harvest",
+			"text": "Each enemy casualty banks growth. Every ten banked points add one damage per unit in future waves.",
+			"effects": []
+		},
+		"fission": {
+			"name": "Fission",
+			"text": "Each living enemy killed in a physical hit adds one permanent copy per rank.",
+			"effects": [
+				{
+					"type": "SOUL_STEAL",
+					"val": 1,
+					"subtype": "soulStealPermanent"
+				}
+			]
+		},
+		"leech": {
+			"name": "Leech",
+			"text": "Recover health equal to 25% of damage to living targets per rank.",
+			"effects": [
+				{
+					"type": "LIFE_DRAIN",
+					"val": 25
+				}
+			]
+		},
+		"sweep": {
+			"name": "Scythe",
+			"text": "Strike adjacent enemies in melee. Each rank also grants +1 damage per unit.",
+			"effects": [
+				{
+					"type": "ATTACKS_ALL_ADJACENT",
+					"val": 1
+				},
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 1,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"barbs": {
+			"name": "Barbs",
+			"text": "Return 15% of eligible melee damage per rank.",
+			"effects": [
+				{
+					"type": "FIRE_SHIELD",
+					"val": 15
+				}
+			]
+		},
+		"riposte": {
+			"name": "Riposte",
+			"text": "One extra retaliation per round per rank.",
+			"effects": [
+				{
+					"type": "ADDITIONAL_RETALIATION",
+					"val": 1
+				}
+			]
+		},
+		"carapace": {
+			"name": "Carapace",
+			"text": "Before attacking, gain +1 defense per rank for this battle.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventBeforeAttack",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 1,
+									"subtype": "defense",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"rage": {
+			"name": "Scar Tissue",
+			"text": "Surviving a hit from a surviving enemy adds +1 damage per unit per rank for the battle.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 1,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"stride": {
+			"name": "Momentum",
+			"text": "Moving builds +1 damage per unit per rank for this battle.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 1,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"haste": {
+			"name": "Quickening",
+			"text": "Gain one speed per rank.",
+			"effects": [
+				{
+					"type": "STACKS_SPEED",
+					"val": 1
+				}
+			]
+		},
+		"vigor": {
+			"name": "Iron Heart",
+			"text": "Gain four hit points per unit per rank.",
+			"effects": [
+				{
+					"type": "STACK_HEALTH",
+					"val": 4
+				}
+			]
+		},
+		"impact": {
+			"name": "Impact",
+			"text": "Gain three damage per unit per rank.",
+			"effects": [
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 3,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"mass": {
+			"name": "Critical Mass",
+			"text": "Each 15 units at wave entry add one damage per unit per rank.",
+			"effects": []
+		}
+	},
+	"synergies": [
+		{
+			"name": "Feeding Frenzy",
+			"requires": [
+				"fission",
+				"flurry"
+			],
+			"effects": [
+				{
+					"type": "ADDITIONAL_ATTACK",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Blood Mirror",
+			"requires": [
+				"leech",
+				"barbs"
+			],
+			"effects": [
+				{
+					"type": "FIRE_SHIELD",
+					"val": 30
+				},
+				{
+					"type": "LIFE_DRAIN",
+					"val": 25
+				}
+			]
+		},
+		{
+			"name": "Living Fortress",
+			"requires": [
+				"riposte",
+				"carapace"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventBeforeAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 2,
+									"subtype": "defense",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		}
+	],
+	"boss": {
+		"name": "The Retort",
+		"text": "Each hit the boss survives from a surviving attacker adds damage for the rest of the battle. Its escorts have no such power.",
+		"effects": [
+			{
+				"type": "ON_COMBAT_EVENT",
+				"subtype": "combatEventAfterAttacked",
+				"addInfo": {
+					"effect": [
+						{
+							"action": "bonus",
+							"targetEnemy": false,
+							"bonus": {
+								"type": "CREATURE_DAMAGE",
+								"val": 3,
+								"subtype": "creatureDamageBoth",
+								"duration": "ONE_BATTLE"
+							}
+						}
+					]
+				}
+			}
+		]
+	}
+}

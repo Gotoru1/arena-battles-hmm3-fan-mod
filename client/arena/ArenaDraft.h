@@ -86,6 +86,10 @@ public:
 	~ArenaDraft();
 
 	void start();
+	static bool evolutionBattle();
+	static void abandonEvolution();
+	static void settleEvolution(bool won, int survivors, int64_t casualties);
+	static void afterEvolutionGame();
 
 	// used by the windows. player() is the side currently drafting, enemy() the other one.
 	ArenaSide & player() { return sides[active]; }
@@ -132,6 +136,10 @@ private:
 	void stepHandOver();
 
 	// player steps
+	void chooseMode();
+	void chooseEvolutionCreature();
+	void chooseEvolutionReward();
+	void buildEvolutionBattle();
 	void stepDifficulty(); // PvE only, before the hero
 	void stepChooseHero();
 	void stepSkill();

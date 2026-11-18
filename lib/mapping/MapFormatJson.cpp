@@ -983,6 +983,7 @@ void CMapLoaderJson::readHeader(const bool complete)
 	//TODO: check mods
 
 	mapHeader->battleOnly = header["battleOnly"].Bool();
+	mapHeader->evolutionSeed = header["evolutionSeed"].Integer();
 
 	readDisposedHeroes(handler);
 
@@ -1409,6 +1410,8 @@ void CMapSaverJson::writeHeader()
 	writeTeams(handler);
 
 	header["battleOnly"].Bool() = mapHeader->battleOnly;
+	if(mapHeader->evolutionSeed)
+		header["evolutionSeed"].Integer() = mapHeader->evolutionSeed;
 
 	writeOptions(handler);
 

@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include "arena/ArenaDraft.h"
 #include "ClientNetPackVisitors.h"
 
 #include "Client.h"
@@ -416,6 +417,7 @@ void ApplyClientNetPackVisitor::visitPlayerEndsGame(PlayerEndsGame & pack)
 		{
 			GAME->server().endGameplay();
 			GAME->mainmenu()->menu->switchToTab("main");
+			ENGINE->dispatchMainThread([] { arenaSafeCall([] { ArenaDraft::afterEvolutionGame(); }); });
 		}
 	}
 

@@ -8,6 +8,10 @@
 #include "StdInc.h"
 #include "ArenaDraft.h"
 #include "ArenaWindows.h"
+#include "RoguelikeRun.h"
+#include "../mainmenu/CMainMenu.h"
+#include "../../lib/mapObjects/army/CStackInstance.h"
+#include <cstdlib>
 
 #include "../CServerHandler.h"
 #include "../GameEngine.h"
@@ -591,6 +595,8 @@ void arenaSafeCall(const std::function<void()> & action)
 	}
 }
 
+#include "EvolutionDraft.inc"
+
 ArenaDraft::ArenaDraft(std::function<void()> onCancel, bool pvp)
 	: rng(std::random_device{}())
 	, onCancel(std::move(onCancel))
@@ -653,8 +659,10 @@ void ArenaDraft::start()
 
 	if(pvp)
 		stepChooseHero();
+	else if(run && run->phase == evolution::Phase::Reward)
+		chooseEvolutionReward();
 	else
-		stepDifficulty();
+		chooseMode();
 }
 
 namespace
@@ -708,6 +716,7 @@ void ArenaDraft::cancel()
 	if(cancelled)
 		return;
 	cancelled = true;
+	abandonEvolution();
 	closeBackdrop();
 	if(onCancel)
 		onCancel();
@@ -789,7 +798,10 @@ void ArenaDraft::stepChooseHero()
 			for(int i = 0; i < GameConstants::PRIMARY_SKILLS; i++)
 				side.primary[i] = initial[i];
 			self->syncPrimarySkills(side);
-			self->stepSkill();
+			if(run)
+				self->chooseEvolutionCreature();
+			else
+				self->stepSkill();
 		},
 		[self]() { self->cancel(); },
 		nullptr);
@@ -1320,7 +1332,8 @@ void ArenaDraft::stepHandOver()
 
 void ArenaDraft::startBattle()
 {
-	auto * gen = &CRandomGenerator::getDefault();
+	CRandomGenerator waveTerrain(run ? map->evolutionSeed : 1);
+	auto * gen = run ? &waveTerrain : &CRandomGenerator::getDefault();
 
 	std::vector<TerrainId> terrains;
 	for(const auto & terrain : LIBRARY->terrainTypeHandler->objects)
@@ -1344,7 +1357,7 @@ void ArenaDraft::startBattle()
 		auto & hero = sides[i].hero;
 		hero->setOwner(PlayerColor(i));
 		hero->pos = positions[i];
-		hero->exp = finalExp; // the level is recomputed from experience when the map is loaded
+		hero->exp = run ? 0 : finalExp; // the level is recomputed from experience when the map is loaded
 		syncPrimarySkills(sides[i]);
 		map->getEditManager()->insertObject(hero);
 	}
@@ -1352,13 +1365,14 @@ void ArenaDraft::startBattle()
 	auto path = VCMIDirs::get().userDataPath() / "Maps";
 	boost::filesystem::create_directories(path);
 	CMapService mapService;
-	mapService.saveMap(map, path / "ArenaBattles.vmap");
+	const std::string mapName = run ? "EvolutionArena" : "ArenaBattles";
+	mapService.saveMap(map, path / (mapName + ".vmap"));
 	CResourceHandler::get()->updateFilteredFiles([](const std::string &) { return true; });
 
 	closeBackdrop();
 
 	auto mapInfo = std::make_shared<CMapInfo>();
-	mapInfo->mapInit("Maps/ArenaBattles");
+	mapInfo->mapInit("Maps/" + mapName);
 	GAME->server().setMapInfo(mapInfo);
 	ExtraOptionsInfo extraOptions;
 	extraOptions.unlimitedReplay = false;

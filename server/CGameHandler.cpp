@@ -586,6 +586,8 @@ void CGameHandler::init(StartInfo *si, Load::ProgressAccumulator & progressTrack
 	CMapService mapService;
 	gs = std::make_shared<CGameState>();
 	int requestedSeed = settings["server"]["seed"].Integer();
+	if(si->mapname == "Maps/EvolutionArena" || si->mapname == "MAPS/EVOLUTIONARENA")
+		requestedSeed = mapService.loadMapHeader(ResourcePath(si->mapname, EResType::MAP))->evolutionSeed;
 	randomizer = std::make_unique<GameRandomizer>(*gs);
 	if (requestedSeed != 0)
 		randomizer->setSeed(requestedSeed);

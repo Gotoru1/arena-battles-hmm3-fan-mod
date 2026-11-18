@@ -1,0 +1,50 @@
+name: Evolution Arena Windows
+on:
+  push:
+    branches: [evolution-arena]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: evolution-windows-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: '14.29'
+      - name: Restore upstream Conan packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          pipx install conan
+          source CI/install_conan_dependencies.sh dependencies-windows-x64
+          conan profile detect
+          conan install . --output-folder=conan-generated --build=never --profile=dependencies/conan_profiles/msvc-x64 --conf="tools.cmake.cmaketoolchain:generator=Ninja" -s "&:build_type=RelWithDebInfo" -c tools.env.virtualenv:powershell=pwsh -o "&:target_pre_windows10=True" --conf="tools.microsoft.msbuild:vs_version=18"
+      - name: Compile, test and package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./conan-generated/conanrun.ps1
+          cmake --preset windows-msvc-ninja-release -DENABLE_EDITOR=OFF -DENABLE_EVOLUTION_TESTS=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build --preset windows-msvc-ninja-release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Push-Location out/build/windows-msvc-ninja-release
+          ctest -R Evolution --no-tests=error --output-on-failure -C RelWithDebInfo
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cpack -C RelWithDebInfo -G ZIP -D CPACK_PACKAGE_FILE_NAME=EvolutionArena-Windows-x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+      - uses: actions/upload-artifact@v6
+        with:
+          name: EvolutionArena-Windows-x64
+          path: out/build/windows-msvc-ninja-release/EvolutionArena-Windows-x64.zip
+          if-no-files-found: error

@@ -10,6 +10,7 @@
 #pragma once
 
 #include "CStackBasicDescriptor.h"
+#include "../../json/JsonNode.h"
 
 #include "CCreatureHandler.h"
 #include "bonuses/BonusCache.h"
@@ -41,6 +42,8 @@ class DLL_LINKAGE CStackInstance : public CBonusSystemNode, public CStackBasicDe
 
 	TExpType totalExperience; //commander needs same amount of exp as hero
 public:
+	// Arena map payload. Runtime bonuses travel through the normal bonus-node serializer.
+	JsonNode evolutionEffects;
 	struct RandomStackInfo
 	{
 		uint8_t level;

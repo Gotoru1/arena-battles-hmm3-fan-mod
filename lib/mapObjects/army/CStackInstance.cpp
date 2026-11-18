@@ -11,6 +11,7 @@
 #include "CStackInstance.h"
 
 #include "CArmedInstance.h"
+#include "../../json/JsonBonus.h"
 
 #include "../../CConfigHandler.h"
 #include "../../GameLibrary.h"
@@ -316,6 +317,14 @@ void CStackInstance::serializeJson(JsonSerializeFormat & handler)
 {
 	//todo: artifacts
 	CStackBasicDescriptor::serializeJson(handler); //must be first
+	if(!handler.saving || !evolutionEffects.isNull())
+		handler.serializeRaw("evolutionEffects", evolutionEffects, std::nullopt);
+	if(!handler.saving && evolutionEffects.isVector())
+	{
+		evolutionEffects.setModScope("core");
+		for(const auto & entry : evolutionEffects.Vector())
+			addNewBonus(JsonUtils::parseBonus(entry));
+	}
 
 	if(handler.saving)
 	{

@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include "arena/ArenaDraft.h"
 #include "CPlayerInterface.h"
 
 #include <vcmi/Artifact.h>
@@ -682,7 +683,7 @@ void CPlayerInterface::battleStart(const BattleID & battleID, const CCreatureSet
 	bool useQuickCombat = settings["adventure"]["quickCombat"].Bool() || (GAME->map().getMap()->battleOnly && !GAME->server().arenaMode && !GAME->server().customArena);
 	bool forceQuickCombat = settings["adventure"]["forceQuickCombat"].Bool();
 
-	if ((replayAllowed && useQuickCombat) || forceQuickCombat)
+	if (!ArenaDraft::evolutionBattle() && ((replayAllowed && useQuickCombat) || forceQuickCombat))
 	{
 		prepareAutoFightingAI(battleID, army1, army2, tile, hero1, hero2, side);
 	}
@@ -837,6 +838,20 @@ void CPlayerInterface::activeStack(const BattleID & battleID, const CStack * sta
 void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *br, QueryID queryID)
 {
 	EVENT_HANDLER_CALLED_BY_CLIENT;
+	if(ArenaDraft::evolutionBattle() && playerID == PlayerColor(0))
+	{
+		auto battle = cb->getBattle(battleID);
+		const auto side = battle->battleGetMySide();
+		int survivors = 0;
+		for(const auto * stack : battle->battleGetAllStacks())
+			if(stack->unitSide() == side && stack->unitSlot() == SlotID(0) && stack->base && !stack->isClone() && stack->alive())
+				survivors = stack->getCount();
+		int64_t casualties = 0;
+		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+		for(const auto & entry : br->casualties[enemy])
+			casualties += std::max(0, entry.second);
+		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties);
+	}
 	if(isAutoFightOn || autofightingAI)
 	{
 		isAutoFightOn = false;
