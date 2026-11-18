@@ -1,35 +1,48 @@
-name: Publish tested Evolution Arena preview
+name: Verify downloadable Evolution Arena package
 on:
   push:
     branches: [evolution-download]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
   actions: read
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  portable:
+    runs-on: windows-2025
+    timeout-minutes: 10
     steps:
-      - name: Publish the latest successful Windows package
-        shell: bash
+      - name: Download a successful Evolution Arena build
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          result=$(gh api "repos/$GH_REPO/actions/workflows/evolution-windows.yml/runs?branch=evolution-arena&event=push&status=success&per_page=1" --jq '.workflow_runs[0] | [.id, .head_sha, .html_url] | @tsv')
-          read -r run sha url <<< "$result"
-          [[ "$run" =~ ^[0-9]+$ && "$sha" =~ ^[a-f0-9]{40}$ ]]
-          gh run download "$run" -n EvolutionArena-Windows-x64 -D package
-          file=package/EvolutionArena-Windows-x64.zip
-          unzip -tqq "$file"
-          unzip -Z1 "$file" > "$RUNNER_TEMP/files"
-          grep -Ei "(client|server|launcher)\.exe$|evolution\.json$" "$RUNNER_TEMP/files" || true
-          for member in VCMI_client.exe VCMI_server.exe VCMI_launcher.exe config/evolution.json; do
-            grep -Fiq "$member" "$RUNNER_TEMP/files" || { echo "Missing package member: $member"; exit 1; }
-          done
-          tag="evolution-preview-${sha:0:12}"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            printf 'Portable Windows x64 preview. Extract the ZIP and run VCMI_launcher.exe. Requires your own Heroes III Complete data.\n\n[Build and tests](%s) · [Launch guide](https://github.com/%s/blob/%s/EVOLUTION-RU.md)\n' "$url" "$GH_REPO" "$sha" > "$RUNNER_TEMP/notes"
-            gh release create "$tag" "$file" --target "$sha" --prerelease --title "Evolution Arena · Windows x64 · ${sha:0:7}" --notes-file "$RUNNER_TEMP/notes"
-          fi
+          $runs = gh api "repos/$env:GH_REPO/actions/workflows/evolution-windows.yml/runs?branch=evolution-arena&event=push&status=success&per_page=1" | ConvertFrom-Json
+          if ($LASTEXITCODE -or !$runs.workflow_runs) { throw 'No successful builds' }
+          $run = $runs.workflow_runs[0]
+          gh run download $run.id -n EvolutionArena-Windows-x64 -D artifact
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Expand-Archive -LiteralPath artifact/EvolutionArena-Windows-x64.zip -DestinationPath game
+          "Validated source $($run.head_sha) from [this build]($($run.html_url))." >> $env:GITHUB_STEP_SUMMARY
+      - name: Inspect package and launch the shipped Windows binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location game
+          $required = 'VCMI_client.exe','VCMI_server.exe','VCMI_launcher.exe','Mods/arenabattles/Content/config/evolution.json','config/dirs.json','EVOLUTION-RU.md'
+          foreach ($name in $required) {
+            if (!(Test-Path -LiteralPath $name -PathType Leaf)) { throw "Missing $name" }
+          }
+          $legacy = Get-ChildItem -Recurse -File | Where-Object Extension -in '.lod','.snd','.vid'
+          if ($legacy) { throw "Unexpected legacy game archive: $($legacy.Name)" }
+          $profile = (Get-Content config/dirs.json -Raw | ConvertFrom-Json).userDataPath
+          if ($profile -ne '%LOCALAPPDATA%/EvolutionArena') { throw 'Unexpected profile destination' }
+          foreach ($name in 'VCMI_client.exe','VCMI_server.exe') {
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path $name))
+            $offset = [BitConverter]::ToInt32($bytes,60)
+            if ([BitConverter]::ToUInt16($bytes,$offset+4) -ne 0x8664) { throw "$name is not an x64 binary" }
+            $proc = Start-Process -FilePath (Resolve-Path $name) -ArgumentList '--version' -PassThru -WindowStyle Hidden
+            if (!$proc.WaitForExit(30000)) { $proc.Kill(); throw "$name --version timed out" }
+            if ($proc.ExitCode -ne 0) { throw "$name --version returned $($proc.ExitCode)" }
+            Write-Host "$name --version exited successfully."
+          }
