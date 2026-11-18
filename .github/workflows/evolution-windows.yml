@@ -6,9 +6,18 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: evolution-windows-${{ github.ref }}
-  cancel-in-progress: true
+  group: evolution-vertical-slice-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
+  rules:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile and run deterministic run tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/RunTests.cpp -o "$RUNNER_TEMP/evolution-tests"
+          "$RUNNER_TEMP/evolution-tests"
+          python3 test/evolution/test_catalog.py
   build:
     runs-on: windows-2025-vs2026
     timeout-minutes: 120
@@ -20,6 +29,12 @@ jobs:
         with:
           arch: x64
           toolset: '14.29'
+      - name: Set up compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          variant: sccache
+          key: evolution-msvc-x64
+          max-size: 3G
       - name: Restore upstream Conan packages
         shell: bash
         run: |
@@ -28,6 +43,8 @@ jobs:
           source CI/install_conan_dependencies.sh dependencies-windows-x64
           conan profile detect
           conan install . --output-folder=conan-generated --build=never --profile=dependencies/conan_profiles/msvc-x64 --conf="tools.cmake.cmaketoolchain:generator=Ninja" -s "&:build_type=RelWithDebInfo" -c tools.env.virtualenv:powershell=pwsh -o "&:target_pre_windows10=True" --conf="tools.microsoft.msbuild:vs_version=18"
+      - name: Verify mutation catalog
+        run: python test/evolution/test_catalog.py
       - name: Compile, test and package
         shell: pwsh
         run: |

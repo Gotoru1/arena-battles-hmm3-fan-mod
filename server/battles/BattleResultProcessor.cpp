@@ -326,7 +326,7 @@ void BattleResultProcessor::endBattleConfirm(const CBattleInfoCallback & battle)
 
 
 	//give exp
-	if(!finishingBattle->isDraw() && battleResult->exp[finishingBattle->winnerSide])
+	if(!gameHandler->gameState().getMap().evolutionSeed && !finishingBattle->isDraw() && battleResult->exp[finishingBattle->winnerSide])
 	{
 		const auto winnerHero = battle.battleGetFightingHero(finishingBattle->winnerSide);
 

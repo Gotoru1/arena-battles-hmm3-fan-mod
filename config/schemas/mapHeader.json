@@ -6,6 +6,7 @@
 	"required" : [ "victoryIconIndex", "victoryString", "defeatIconIndex", "defeatString" ],
 	"additionalProperties" : false,
 	"properties" : {
+		"evolutionSeed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
 		"victoryIconIndex" : {
 			"type" : "number"
 		},

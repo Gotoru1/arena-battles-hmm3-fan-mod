@@ -81,6 +81,7 @@ public:
 /// Full screen "choose one card" window (3 cards, 4 for heroes), used for heroes, skills, spells, artifacts and creatures
 class ArenaChoiceWindow : public CWindowObject
 {
+	friend class ArenaDraft; // Integration playtest selects through the same card handlers.
 	std::shared_ptr<CFilledTexture> texture;
 	std::shared_ptr<CLabel> title;
 	std::shared_ptr<CLabel> subtitle;

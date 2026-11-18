@@ -22,6 +22,8 @@ int main()
 	RoguelikeRun run(2048), replay(2048);
 	for(auto * r : {&run, &replay})
 		r->begin(2, {1,2,3,4}, 3, 24);
+	mustFail([&]{run.finish(true, 20, 12, {"a", "a", "b"});});
+	require(run.phase == Phase::Battle && run.kills == 0, "Rejected report mutated run");
 	for(int n = 1; n <= 16; ++n)
 	{
 		require(run.boss() == (n % 5 == 0), "Boss cadence");
@@ -54,6 +56,20 @@ int main()
 	mustFail([&]{run.pick(0);});
 	RoguelikeRun fresh(2048);
 	require(fresh.wave == 1 && fresh.history.empty() && fresh.kills == 0, "Fresh run reset");
+	fresh.begin(0, {1, 1, 1, 1}, 1, 24);
+	for(const auto & id : {"flurry", "fission", "mass", "harvest"})
+	{
+		std::vector<std::string> choices{id, "vigor", "haste"};
+		fresh.finish(true, 40, 10, choices);
+		auto i = std::find(fresh.offers.begin(), fresh.offers.end(), id);
+		fresh.pick(static_cast<size_t>(i-fresh.offers.begin()));
+	}
+	require(fresh.hasCombination({"fission", "flurry"}), "Feeding Frenzy missing");
+	require(!fresh.hasCombination({"leech", "barbs"}), "Blood Mirror unlocked too early");
+	require(!fresh.hasCombination({"carapace", "riposte"}), "Living Fortress unlocked too early");
+	fresh.finish(true, 95, 40, pool);
+	require(fresh.army.count == 110 && fresh.army.harvest == 40 && fresh.lineageDamage() == 11,
+		"Soul-steal survivors and Harvest must both feed lineage damage");
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

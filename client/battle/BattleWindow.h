@@ -33,6 +33,7 @@ class UnitActionPanel;
 /// GUI object that handles functionality of panel at the bottom of combat screen
 class BattleWindow : public InterfaceObjectConfigurable
 {
+	friend class ArenaDraft; // Integration playtest presses the animated combat control.
 	BattleInterface & owner;
 
 	std::shared_ptr<StackQueue> queue;

@@ -86,7 +86,7 @@
 								"bonus": {
 									"type": "PRIMARY_SKILL",
 									"val": 1,
-									"subtype": "defense",
+									"subtype": "primarySkill.defence",
 									"duration": "ONE_BATTLE"
 								}
 							}
@@ -189,8 +189,9 @@
 			],
 			"effects": [
 				{
-					"type": "ADDITIONAL_ATTACK",
-					"val": 1
+					"type": "FEROCITY",
+					"val": 1,
+					"addInfo": 1
 				}
 			]
 		},
@@ -229,7 +230,7 @@
 								"bonus": {
 									"type": "PRIMARY_SKILL",
 									"val": 2,
-									"subtype": "defense",
+									"subtype": "primarySkill.defence",
 									"duration": "ONE_BATTLE"
 								}
 							}

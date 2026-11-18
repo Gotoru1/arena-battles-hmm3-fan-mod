@@ -182,7 +182,7 @@ void CHealth::addResurrected(int32_t amount)
 
 int64_t CHealth::available() const
 {
-	return static_cast<int64_t>(firstHPleft) + owner->getMaxHealth() * fullUnits;
+	return static_cast<int64_t>(firstHPleft) + static_cast<int64_t>(owner->getMaxHealth()) * fullUnits;
 }
 
 int64_t CHealth::total() const
@@ -300,7 +300,7 @@ void CHealth::takeResurrected()
 	{
 		int64_t totalHealth = available();
 
-		totalHealth -= resurrected * owner->getMaxHealth();
+		totalHealth -= static_cast<int64_t>(resurrected) * owner->getMaxHealth();
 		vstd::amax(totalHealth, 0);
 		setFromTotal(totalHealth);
 		resurrected = 0;

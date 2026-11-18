@@ -277,7 +277,7 @@ bool BattleActionProcessor::doAttackAction(const CBattleInfoCallback & battle, c
 	}
 
 	//attack
-	int totalAttacks = stack->getTotalAttacks(false);
+	int64_t totalAttacks = stack->getTotalAttacks(false);
 
 	//TODO: move to CUnitState
 	const auto * attackingHero = battle.battleGetFightingHero(ba.side);
@@ -295,7 +295,7 @@ bool BattleActionProcessor::doAttackAction(const CBattleInfoCallback & battle, c
 	BonusList attackerBonusesToRemove = *stack->getAllBonuses(Bonus::untilAfterAttackSequence);	//they need to be gathered here since bonuses with this duration added during attack (like blind) should not be removed
 	BonusList defenderBonusesToRemove = *destinationStack->getAllBonuses(Bonus::untilAfterAttackSequence);
 
-	for (int i = 0; i < totalAttacks; ++i)
+	for (int64_t i = 0; i < totalAttacks && stack->alive() && destinationStack->alive(); ++i)
 	{
 		//first strike
 		if(i == 0 && firstStrike && destinationStack->ableToRetaliate() && !stack->hasBonusOfType(BonusType::BLOCKS_RETALIATION) && !stack->isInvincible() && !longWeaponAttack)
@@ -437,7 +437,7 @@ bool BattleActionProcessor::doShootAction(const CBattleInfoCallback & battle, co
 	}
 	//allow more than one additional attack
 
-	int totalRangedAttacks = stack->getTotalAttacks(true);
+	int64_t totalRangedAttacks = stack->getTotalAttacks(true);
 
 	//TODO: move to CUnitState
 	const auto * attackingHero = battle.battleGetFightingHero(ba.side);
@@ -446,14 +446,11 @@ bool BattleActionProcessor::doShootAction(const CBattleInfoCallback & battle, co
 		totalRangedAttacks += attackingHero->valOfBonuses(BonusType::HERO_GRANTS_ATTACKS, BonusSubtypeID(stack->creatureId()));
 	}
 
-	for(int i = firstStrike ? 0:1; i < totalRangedAttacks; ++i)
+	for(int64_t i = firstStrike ? 0:1; i < totalRangedAttacks && stack->alive() && stack->shots.canUse(); ++i)
 	{
-		if(stack->alive()
-			&& (emptyTileAreaAttack || destinationStack->alive())
-			&& stack->shots.canUse())
-		{
-			makeAttack(battle, stack, destinationStack, 0, destination, false, true, false);
-		}
+		if(!emptyTileAreaAttack && !destinationStack->alive())
+			break;
+		makeAttack(battle, stack, destinationStack, 0, destination, false, true, false);
 	}
 
 	removeBonuses(battle, stack, attackerBonusesToRemove);

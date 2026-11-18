@@ -68,6 +68,17 @@ public:
 		return it == army.mutations.end() ? 0 : it->second;
 	}
 
+	bool hasCombination(const std::vector<std::string> & required) const
+	{
+		return !required.empty() && std::all_of(required.begin(), required.end(),
+			[this](const std::string & id) { return rank(id) != 0; });
+	}
+
+	Amount lineageDamage() const
+	{
+		return army.harvest / 10 + army.count / 15 * rank("mass");
+	}
+
 	// The battle callback reports actual surviving units (including permanent soul steals).
 	// Recruitment supplies an army floor only on victory; defeat can never be converted into a win.
 	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool)
@@ -76,6 +87,8 @@ public:
 			throw std::logic_error("Battle already settled");
 		if(survivors < 0 || casualties < 0)
 			throw std::invalid_argument("Negative battle report");
+		std::sort(pool.begin(), pool.end());
+		pool.erase(std::unique(pool.begin(), pool.end()), pool.end());
 		if(won && pool.size() < 3)
 			throw std::invalid_argument("Reward pool needs at least three distinct mutations");
 		kills += casualties;

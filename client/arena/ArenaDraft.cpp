@@ -595,6 +595,10 @@ void arenaSafeCall(const std::function<void()> & action)
 	}
 }
 
+#include "../CPlayerInterface.h"
+#include "../battle/BattleInterface.h"
+#include "../battle/BattleWindow.h"
+#include "../battle/BattleResultWindow.h"
 #include "EvolutionDraft.inc"
 
 ArenaDraft::ArenaDraft(std::function<void()> onCancel, bool pvp)

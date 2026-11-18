@@ -3,6 +3,8 @@
 namespace
 {
 	std::unique_ptr<evolution::RoguelikeRun> run;
+	bool verifying = false;
+	int verificationResult = -1;
 
 	const JsonNode & evolutionCatalog()
 	{
@@ -53,6 +55,53 @@ namespace
 	}
 }
 
+void ArenaDraft::startVerification()
+{
+	verifying = true;
+	CMainMenu::openLobby(ESelectionScreen::newGame, true, {}, ELoadMode::NONE, true);
+	GAME->server().arenaMode = true;
+}
+
+int ArenaDraft::verificationExitCode()
+{
+	return verifying ? (verificationResult < 0 ? 2 : verificationResult) : 0;
+}
+
+void ArenaDraft::verificationFrame()
+{
+	if(!verifying)
+		return;
+	if(verificationResult >= 0)
+		GAME->onShutdownRequested(false);
+	if(auto result = ENGINE->windows().topWindow<BattleResultWindow>())
+		result->bExitf();
+	else if(auto cards = ENGINE->windows().topWindow<ArenaChoiceWindow>())
+	{
+		size_t index = 0;
+		if(run && run->phase == evolution::Phase::Reward)
+		{
+			for(const char * preferred : {"fission", "flurry", "leech", "mass", "impact", "vigor"})
+			{
+				auto it = std::find(run->offers.begin(), run->offers.end(), preferred);
+				if(it != run->offers.end())
+				{
+					index = static_cast<size_t>(it - run->offers.begin());
+					break;
+				}
+			}
+		}
+		cards->select(static_cast<int>(index));
+		cards->choose();
+	}
+	else if(auto battle = ENGINE->windows().topWindow<BattleWindow>())
+	{
+		if(battle->owner.tacticsMode)
+			battle->bTacticPhaseEnd();
+		else if(battle->owner.makingTurn() && !battle->owner.curInt->isAutoFightOn)
+			battle->bAutofightf();
+	}
+}
+
 bool ArenaDraft::evolutionBattle()
 {
 	return run && run->phase == evolution::Phase::Battle;
@@ -77,7 +126,7 @@ void ArenaDraft::chooseMode()
 				self->stepDifficulty();
 				return;
 			}
-			auto seed = std::random_device{}();
+			auto seed = verifying ? 2048u : std::random_device{}();
 			if(const char * value = std::getenv("EVOLUTION_SEED"))
 			{
 				std::string input(value);
@@ -125,6 +174,18 @@ void ArenaDraft::afterEvolutionGame()
 {
 	if(!run)
 		return;
+	if(verifying)
+	{
+		bool won = run->phase == evolution::Phase::Reward;
+		logGlobal->info("Evolution playtest: wave %s, victory %d, roster %s, casualties %s",
+			run->wave.str(), won, run->army.count.str(), run->kills.str());
+		if(!won || run->wave == 15)
+		{
+			verificationResult = won ? 0 : 1;
+			run.reset();
+			return;
+		}
+	}
 	if(run->phase == evolution::Phase::Reward)
 	{
 		auto continuing = std::move(run);
@@ -176,7 +237,7 @@ void ArenaDraft::buildEvolutionBattle()
 		appendEffects(effects, data["mutations"][mutation.first], mutation.second);
 
 	// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
-	evolution::Amount bonus = run->army.harvest / 10 + run->army.count / 15 * run->rank("mass");
+	const auto bonus = run->lineageDamage();
 	if(bonus > 0)
 	{
 		JsonNode damage;
@@ -188,8 +249,10 @@ void ArenaDraft::buildEvolutionBattle()
 	std::string discoveries;
 	for(const auto & combo : data["synergies"].Vector())
 	{
-		const auto & ingredients = combo["requires"].Vector();
-		if(!std::all_of(ingredients.begin(), ingredients.end(), [](const JsonNode & id) { return run->rank(id.String()) > 0; }))
+		std::vector<std::string> ingredients;
+		for(const auto & id : combo["requires"].Vector())
+			ingredients.push_back(id.String());
+		if(!run->hasCombination(ingredients))
 			continue;
 		appendEffects(effects, combo, 1);
 		const auto & name = combo["name"].String();

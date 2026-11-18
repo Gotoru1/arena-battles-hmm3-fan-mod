@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include "../arena/ArenaDraft.h"
 #include "BattleWindow.h"
 
 #include "BattleActionsController.h"
@@ -638,7 +639,7 @@ void BattleWindow::bAutofightf()
 	if (owner.actionsController->heroSpellcastingModeActive())
 		return;
 
-	if(settings["battle"]["endWithAutocombat"].Bool() && onlyOnePlayerHuman)
+	if(!ArenaDraft::evolutionBattle() && settings["battle"]["endWithAutocombat"].Bool() && onlyOnePlayerHuman)
 	{
 		endWithAutocombat();
 		return;
@@ -815,8 +816,13 @@ std::optional<uint32_t> BattleWindow::getQueueHoveredUnitId()
 	return queue->getHoveredUnitIdIfAny();
 }
 
-void BattleWindow::endWithAutocombat() 
+void BattleWindow::endWithAutocombat()
 {
+	if(ArenaDraft::evolutionBattle())
+	{
+		bAutofightf();
+		return;
+	}
 	if(!owner.makingTurn())
 		return;
 

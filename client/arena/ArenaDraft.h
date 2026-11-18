@@ -87,6 +87,9 @@ public:
 
 	void start();
 	static bool evolutionBattle();
+	static void startVerification();
+	static void verificationFrame();
+	static int verificationExitCode();
 	static void abandonEvolution();
 	static void settleEvolution(bool won, int survivors, int64_t casualties);
 	static void afterEvolutionGame();

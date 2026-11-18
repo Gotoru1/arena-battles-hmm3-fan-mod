@@ -15,6 +15,7 @@
 
 #include "../client/ClientCommandManager.h"
 #include "../client/CMT.h"
+#include "../client/arena/ArenaDraft.h"
 #include "../client/CPlayerInterface.h"
 #include "../client/CServerHandler.h"
 #include "../client/GameEngine.h"
@@ -141,6 +142,7 @@ int main(int argc, char * argv[])
 	opts.add_options()
 		("help,h", "display help and exit")
 		("version,v", "display version information and exit")
+		("evolution-check", "play 15 real Evolution waves through the client and return a verification exit code")
 		("testmap", po::value<std::string>(), "")
 		("testsave", po::value<std::string>(), "")
 		("logLocation", po::value<std::string>(), "new location for log files")
@@ -369,7 +371,9 @@ int main(int argc, char * argv[])
 			GAME->mainmenu()->makeActiveInterface();
 
 			bool playIntroVideo = !vm.count("battle") && !vm.count("nointro") && settings["video"]["showIntro"].Bool();
-			if(playIntroVideo)
+			if(vm.count("evolution-check"))
+				ArenaDraft::startVerification();
+			else if(playIntroVideo)
 				GAME->mainmenu()->playIntroVideos();
 			else
 				GAME->mainmenu()->playMusic();
@@ -445,7 +449,7 @@ int main(int argc, char * argv[])
 	{
 		logGlobal->info("Shutdown requested during initialization");
 	}
-	return 0;
+	return ArenaDraft::verificationExitCode();
 }
 
 /// Notify user about encountered fatal error and terminate the game

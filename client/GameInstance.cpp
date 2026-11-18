@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include "arena/ArenaDraft.h"
 #include "GameInstance.h"
 
 #include "CPlayerInterface.h"
@@ -87,6 +88,7 @@ void GameInstance::onGlobalLobbyInterfaceActivated()
 
 void GameInstance::onUpdate()
 {
+	ArenaDraft::verificationFrame();
 	if (interfaceInstance)
 		interfaceInstance->update();
 }

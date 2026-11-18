@@ -845,7 +845,7 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 		int survivors = 0;
 		for(const auto * stack : battle->battleGetAllStacks())
 			if(stack->unitSide() == side && stack->unitSlot() == SlotID(0) && stack->base && !stack->isClone() && stack->alive())
-				survivors = stack->getCount();
+				survivors = std::max(0, stack->getCount() - stack->health.getResurrected());
 		int64_t casualties = 0;
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 		for(const auto & entry : br->casualties[enemy])
