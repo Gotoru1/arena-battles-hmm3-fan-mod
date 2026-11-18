@@ -1,0 +1,34 @@
+name: Publish tested Evolution Arena preview
+on:
+  push:
+    branches: [evolution-download]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the latest successful Windows package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          result=$(gh api "repos/$GH_REPO/actions/workflows/evolution-windows.yml/runs?branch=evolution-arena&event=push&status=success&per_page=1" --jq '.workflow_runs[0] | [.id, .head_sha, .html_url] | @tsv')
+          read -r run sha url <<< "$result"
+          [[ "$run" =~ ^[0-9]+$ && "$sha" =~ ^[a-f0-9]{40}$ ]]
+          gh run download "$run" -n EvolutionArena-Windows-x64 -D package
+          file=package/EvolutionArena-Windows-x64.zip
+          unzip -tqq "$file"
+          unzip -Z1 "$file" > "$RUNNER_TEMP/files"
+          for member in VCMI_client.exe VCMI_server.exe VCMI_launcher.exe config/evolution.json; do
+            grep -Fiq "/$member" "$RUNNER_TEMP/files"
+          done
+          tag="evolution-preview-${sha:0:12}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            printf 'Portable Windows x64 preview. Extract the ZIP and run VCMI_launcher.exe. Requires your own Heroes III Complete data.\n\n[Build and tests](%s) · [Launch guide](https://github.com/%s/blob/%s/EVOLUTION-RU.md)\n' "$url" "$GH_REPO" "$sha" > "$RUNNER_TEMP/notes"
+            gh release create "$tag" "$file" --target "$sha" --prerelease --title "Evolution Arena · Windows x64 · ${sha:0:7}" --notes-file "$RUNNER_TEMP/notes"
+          fi
