@@ -29,14 +29,14 @@ namespace
 		return data;
 	}
 
-	ArenaOffer evolutionCard(std::string title, std::string detail)
+	ArenaOffer evolutionCard(std::string title, std::string detail, ColorRGBA color = Colors::YELLOW)
 	{
 		ArenaOffer card;
 		card.description = title;
-		card.build = [title, detail](Widgets & widgets)
+		card.build = [title, detail, color](Widgets & widgets)
 		{
 			widgets.push_back(std::make_shared<CLabel>(CARD_CENTER, 62, FONT_BIG,
-				ETextAlignment::CENTER, Colors::YELLOW, title, ArenaCard::WIDTH-12));
+				ETextAlignment::CENTER, color, title, ArenaCard::WIDTH-12));
 			widgets.push_back(std::make_shared<CMultiLineLabel>(Rect(12, 108, ArenaCard::WIDTH-24, 192),
 				FONT_MEDIUM, ETextAlignment::TOPCENTER, Colors::WHITE, detail));
 		};
@@ -47,7 +47,13 @@ namespace
 	{
 		for(auto effect : definition["effects"].Vector())
 		{
-			if(effect["type"].String() == "ON_COMBAT_EVENT")
+			if(effect["type"].String() == "EVOLUTION_TRAIT")
+			{
+				// Low ten bits identify the behavior, upper bits hold the repeat rank.
+				auto & key = effect["val"].Integer();
+				key += 1024LL * std::min<unsigned>(rank - 1, INT32_MAX / 1024 - 1);
+			}
+			else if(effect["type"].String() == "ON_COMBAT_EVENT")
 			{
 				// Event payloads grant terminal bonuses. Team echoes use the server queue.
 				for(auto & action : effect["addInfo"]["effect"].Vector())
@@ -364,6 +370,7 @@ void ArenaDraft::showEvolutionCards(size_t slot)
 	{
 		const auto & entry = catalog[id];
 		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
+		const std::array<ColorRGBA,4> colors{{{195,195,195,255},{95,165,255,255},{199,120,255,255},{255,158,55,255}}};
 		std::string hint;
 		if(!run->rank(id, slot))
 			for(const auto & combo : evolutionCatalog()["synergies"].Vector())
@@ -379,7 +386,7 @@ void ArenaDraft::showEvolutionCards(size_t slot)
 					hint += "\nОткроет: " + combo["name"].String();
 			}
 		cards.push_back(evolutionCard(entry["name"].String(), labels.at(entry["rarity"].Integer()) + "\n\n" + entry["text"].String()
-			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id, slot)) + hint));
+			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id, slot)) + hint, colors.at(entry["rarity"].Integer())));
 	}
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",

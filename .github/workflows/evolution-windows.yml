@@ -1,7 +1,7 @@
 name: Evolution Arena Windows
 on:
   push:
-    branches: [evolution-arena]
+    branches: [evolution-arena, evolution-arena-2]
   workflow_dispatch:
 permissions:
   contents: read

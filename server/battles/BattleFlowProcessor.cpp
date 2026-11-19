@@ -11,6 +11,7 @@
 #include "BattleFlowProcessor.h"
 
 #include "BattleProcessor.h"
+#include "BattleActionProcessor.h"
 
 #include "../CGameHandler.h"
 #include "../TurnTimerHandler.h"
@@ -254,6 +255,7 @@ void BattleFlowProcessor::startNextRound(const CBattleInfoCallback & battle, boo
 	bnr.battleID = battle.getBattle()->getBattleID();
 	logGlobal->debug("Next round starts");
 	gameHandler->sendAndApply(bnr);
+	owner->actionsProcessor->evolutionRound(battle, isFirstRound);
 
 	// operate on copy - removing obstacles will invalidate iterator on 'battle' container
 	auto obstacles = battle.battleGetAllObstacles();

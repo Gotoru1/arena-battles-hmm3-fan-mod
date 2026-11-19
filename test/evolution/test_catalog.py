@@ -36,46 +36,31 @@ class CatalogTests(unittest.TestCase):
         else:
             self.assertGreater(effect["val"], 0)
 
-    def test_mutations(self):
-        mutations = DATA["mutations"]
-        self.assertGreaterEqual(len(mutations), 80)
-        self.assertEqual({entry['rarity'] for entry in mutations.values()}, {0, 1, 2, 3})
-        for key, entry in mutations.items():
-            with self.subTest(mutation=key):
-                self.assertTrue(entry["effects"] or key in {"mass", "harvest", "kinship", "ossuary", "nursery", "underdog", "seedbank", "remnant", "tithe", "graft", "spoils", "molting", "incubator"})
-                self.assertTrue(entry["name"] and entry["text"])
-                if "awaken" in entry:
-                    self.assertEqual(entry["awaken"]["rank"], 2)
-                    self.assertTrue(entry["alternate"]["effects"] and entry["alternate"]["text"])
-                    self.assertNotEqual(entry["alternate"]["name"], entry["awaken"]["name"])
-                for effect in entry["effects"] + entry.get("awaken", {}).get("effects", []) + entry.get("alternate", {}).get("effects", []):
-                    self.check_effect(effect)
+    def test_design_and_active_pool(self):
+        design = json.loads((ROOT / "Mods/arenabattles/Content/config/evolution-design.json").read_text(encoding="utf-8"))
+        self.assertEqual([row["id"] for row in design], list(range(1,101)))
+        self.assertEqual([sum(row["rarity"] == r for row in design) for r in range(4)], [25,30,30,15])
+        self.assertEqual(len({row["name"] for row in design}),100)
+        self.assertEqual({item["rarity"] for item in DATA["mutations"].values()}, set(range(4)))
+        for key, entry in DATA["mutations"].items():
+            effect, = entry["effects"]
+            self.check_effect(effect)
+            self.assertEqual(effect["type"], "EVOLUTION_TRAIT")
+            self.assertEqual(key, "trait" + str(effect["val"]))
+            original = design[effect["val"] - 1]
+            for field in ("name", "text", "rarity"):
+                self.assertEqual(original[field], entry[field])
 
-    def test_hidden_combinations(self):
-        actual = {tuple(sorted(s["requires"])): s for s in DATA["synergies"]}
-        expected = {("fission", "flurry"): "FEROCITY", ("barbs", "leech"): "FIRE_SHIELD",
-                    ("carapace", "riposte"): "ON_COMBAT_EVENT"}
-        for pair, bonus in expected.items():
-            with self.subTest(pair=pair):
-                self.assertTrue(set(pair) <= DATA["mutations"].keys())
-                effects = actual[pair]["effects"]
-                self.assertIn(bonus, {e["type"] for e in effects})
-                for e in effects:
-                    self.check_effect(e)
-
-    def test_rotation_and_recipe_effects(self):
+    def test_encounter_catalog(self):
+        self.assertFalse(DATA["synergies"])
+        for pair in DATA["schools"]:
+            self.assertEqual(len(set(pair)), 2)
+            self.assertTrue(set(pair) <= DATA["mutations"].keys())
         bosses = [DATA["boss"], *DATA["otherBosses"]]
-        self.assertEqual(len({b["name"] for b in bosses}), 10)
-        for entry in bosses + DATA["synergies"] + DATA["anomalies"]:
+        self.assertEqual(len({boss["name"] for boss in bosses}), 10)
+        for entry in bosses + DATA["anomalies"]:
             for effect in entry["effects"]:
                 self.check_effect(effect)
-        recipes = {tuple(sorted(entry["requires"])) for entry in DATA["synergies"]}
-        for school in DATA["schools"]:
-            self.assertIn(tuple(sorted(school)), recipes)
-            self.assertTrue(all(DATA["mutations"][key]["effects"] for key in school))
-        for recipe in DATA["synergies"]:
-            self.assertTrue(set(recipe["requires"]) <= DATA["mutations"].keys())
-        self.assertEqual(len({tuple(sorted(s["requires"])) for s in DATA["synergies"]}), 30)
 
     def test_boss_ramps_after_hit(self):
         effect, = DATA["boss"]["effects"]

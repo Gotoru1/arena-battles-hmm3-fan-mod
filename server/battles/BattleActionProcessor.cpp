@@ -1238,6 +1238,7 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 
 	gameHandler->sendAndApply(blm);
 
+	evolutionAttack(battle, attacker, defender, bat);
 	for(const auto & hit : bat.bsa)
 	{
 		if(hit.attackerID != attacker->unitId() || hit.killedAmount <= 0) continue;
@@ -1841,3 +1842,5 @@ void BattleActionProcessor::evolutionSignal(const CBattleInfoCallback & battle, 
 		return true;
 	});
 }
+
+#include "EvolutionReactions.inc"

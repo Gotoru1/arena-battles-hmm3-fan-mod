@@ -95,7 +95,9 @@ class BattleActionProcessor : boost::noncopyable
 
 	void evolutionSignal(const CBattleInfoCallback & battle, const CStack * source, int signal);
 	void processBattleEventTriggers(const CBattleInfoCallback & battle, CombatEventType event, const CStack * target, const CStack * secondary);
+	void evolutionAttack(const CBattleInfoCallback & battle, const CStack * attacker, const CStack * defender, const BattleAttack & attack);
 public:
+	void evolutionRound(const CBattleInfoCallback & battle, bool first);
 	explicit BattleActionProcessor(BattleProcessor * owner, CGameHandler * newGameHandler);
 
 	bool makeAutomaticBattleAction(const CBattleInfoCallback & battle, const BattleAction & ba);

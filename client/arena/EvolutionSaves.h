@@ -14,8 +14,8 @@ public:
 	std::filesystem::path path(int slot) const
 	{
 		if(slot < 0 || slot >= 3) throw std::out_of_range("Invalid Evolution save slot");
-		if(slot == 0) return directory / "evolution-run.sav";
-		return directory / ("evolution-run-" + std::to_string(slot+1) + ".sav");
+		if(slot == 0) return directory / "evolution2-run.sav";
+		return directory / ("evolution2-run-" + std::to_string(slot+1) + ".sav");
 	}
 
 	bool exists(int slot) const { return std::filesystem::exists(path(slot)); }
@@ -23,6 +23,8 @@ public:
 	RoguelikeRun read(int slot) const
 	{
 		std::ifstream input(path(slot),std::ios::binary);
+		std::string signature;
+		if(!(input >> signature) || signature != "Evolution2/1") throw std::runtime_error("Несовместимая версия сохранения");
 		return RoguelikeRun::restore(input);
 	}
 
@@ -47,6 +49,7 @@ public:
 		{
 			std::ofstream out(temp, std::ios::binary | std::ios::trunc);
 			out.exceptions(std::ios::badbit | std::ios::failbit);
+			out << "Evolution2/1\n";
 			state.save(out);
 			out.close();
 			std::filesystem::rename(temp, dest);
