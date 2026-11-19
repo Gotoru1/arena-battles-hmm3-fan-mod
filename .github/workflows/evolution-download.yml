@@ -90,3 +90,14 @@ jobs:
             if ($proc.ExitCode -ne 0) { throw "$name --version returned $($proc.ExitCode)" }
             Write-Host "$name --version exited successfully."
           }
+
+  rarity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: 78d03d8b09da9d30a62bcdd7bbb007da0434a2a7
+          path: gameplay
+      - run: sudo apt-get update -qq && sudo apt-get install -y libboost-dev
+      - run: g++ -std=c++17 -I gameplay test/evolution/RarityDistribution.cpp -o "$RUNNER_TEMP/rarity" && "$RUNNER_TEMP/rarity"
