@@ -47,6 +47,8 @@ public:
 	int hero = -1;
 	std::array<int, 4> primary{};
 	Lineage army;
+	std::vector<Lineage> companions;
+	std::vector<size_t> recipients;
 	std::vector<std::string> history;
 	std::vector<std::string> synergies;
 	std::vector<std::string> offers;
@@ -65,30 +67,47 @@ public:
 		phase = Phase::Battle;
 	}
 
-	unsigned rank(const std::string & id) const
+	size_t rosterSize() const { return 1 + companions.size(); }
+	const Lineage & stack(size_t slot) const { return slot ? companions.at(slot-1) : army; }
+	Lineage & stack(size_t slot) { return slot ? companions.at(slot-1) : army; }
+
+	void recruit(int creature, int count)
 	{
-		auto it = army.mutations.find(id);
-		return it == army.mutations.end() ? 0 : it->second;
+		if(phase != Phase::Battle || rosterSize() >= (wave >= 4 ? 3u : 2u) || creature < 0 || count <= 0)
+			throw std::logic_error("Invalid recruitment");
+		for(size_t i = 0; i < rosterSize(); ++i)
+			if(stack(i).creature == creature) throw std::logic_error("Duplicate creature");
+		Lineage line;
+		line.creature = creature;
+		line.count = count;
+		companions.push_back(line);
 	}
 
-	bool hasCombination(const std::vector<std::string> & required) const
+	unsigned rank(const std::string & id, size_t slot = 0) const
+	{
+		const auto & mutations = stack(slot).mutations;
+		auto it = mutations.find(id);
+		return it == mutations.end() ? 0 : it->second;
+	}
+
+	bool hasCombination(const std::vector<std::string> & required, size_t slot = 0) const
 	{
 		return !required.empty() && std::all_of(required.begin(), required.end(),
-			[this](const std::string & id) { return rank(id) != 0; });
+			[this, slot](const std::string & id) { return rank(id, slot) != 0; });
 	}
 
-	Amount lineageDamage() const
+	Amount lineageDamage(size_t slot = 0) const
 	{
-		return army.harvest / 10 + army.count / 15 * rank("mass");
+		return stack(slot).harvest / 10 + stack(slot).count / 15 * rank("mass", slot);
 	}
 
 	// The battle callback reports actual surviving units (including permanent soul steals).
 	// Recruitment supplies an army floor only on victory; defeat can never be converted into a win.
-	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {}, bool elite = false)
+	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {}, bool elite = false, const std::vector<int> & companionSurvivors = {})
 	{
 		if(phase != Phase::Battle)
 			throw std::logic_error("Battle already settled");
-		if(survivors < 0 || casualties < 0)
+		if(companionSurvivors.size() != companions.size() || std::any_of(companionSurvivors.begin(), companionSurvivors.end(), [](int n){ return n < 0; }) || survivors < 0 || casualties < 0)
 			throw std::invalid_argument("Negative battle report");
 		std::sort(pool.begin(), pool.end());
 		pool.erase(std::unique(pool.begin(), pool.end()), pool.end());
@@ -105,6 +124,11 @@ public:
 		}
 		army.harvest += casualties * rank("harvest");
 		army.count = survivors + 5 + wave * 2;
+		for(size_t i = 0; i < companions.size(); ++i)
+		{
+			companions[i].count = wave / (i + 2) + 1 + companionSurvivors[i];
+			companions[i].harvest += casualties * rank("harvest", i+1);
+		}
 		offers.clear();
 		for(int slot = 0; slot < 3; ++slot)
 		{
@@ -123,15 +147,16 @@ public:
 		phase = Phase::Reward;
 	}
 
-	void pick(size_t index)
+	void pick(size_t index, size_t slot = 0)
 	{
 		if(phase != Phase::Reward || index >= offers.size())
 			throw std::logic_error("Invalid reward selection");
-		auto & level = army.mutations[offers[index]];
+		auto & level = stack(slot).mutations[offers[index]];
 		if(level == std::numeric_limits<unsigned>::max())
 			throw std::overflow_error("Mutation rank exceeds unsigned range");
 		++level;
 		history.push_back(offers[index]);
+		recipients.push_back(slot);
 		offers.clear();
 		++wave;
 		phase = Phase::Battle;
@@ -143,7 +168,7 @@ public:
 	{
 		if(phase != Phase::Battle && phase != Phase::Reward)
 			throw std::logic_error("No active run");
-		out << "EA2 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+		out << "EA3 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
 			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
 		for(auto value : primary) out << value << ' ';
 		out << '\n' << random << '\n';
@@ -152,6 +177,11 @@ public:
 			out << list->size() << '\n';
 			for(const auto & item : *list) out << std::quoted(item) << '\n';
 		}
+		out << companions.size() << '\n';
+		for(const auto & line : companions)
+			out << line.creature << ' ' << line.count << ' ' << line.harvest << '\n';
+		for(auto slot : recipients) out << slot << ' ';
+		out << '\n';
 		if(!out) throw std::runtime_error("Не удалось записать забег");
 	}
 
@@ -161,7 +191,7 @@ public:
 		std::string version;
 		RoguelikeRun result(0);
 		bool reward = false;
-		if(!(in >> version) || version != "EA2" || !(in >> result.seed >> reward >> result.wave >> result.kills
+		if(!(in >> version) || (version != "EA2" && version != "EA3") || !(in >> result.seed >> reward >> result.wave >> result.kills
 			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
 			throw invalid;
 		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
@@ -180,7 +210,26 @@ public:
 			}
 		}
 		if(result.wave != Amount(result.history.size()) + 1 || result.offers.size() != (reward ? 3u : 0u)) throw invalid;
-		for(const auto & id : result.history) ++result.army.mutations[id];
+		if(version == "EA3")
+		{
+			size_t count;
+			if(!(in >> count) || count > 2) throw invalid;
+			for(size_t i = 0; i < count; ++i)
+			{
+				Lineage line;
+				if(!(in >> line.creature >> line.count >> line.harvest) || line.creature < 0 || line.count < 1 || line.harvest < 0) throw invalid;
+				for(size_t j = 0; j < result.rosterSize(); ++j)
+					if(result.stack(j).creature == line.creature) throw invalid;
+				result.companions.push_back(line);
+			}
+		}
+		for(const auto & id : result.history)
+		{
+			size_t slot = 0;
+			if(version == "EA3" && (!(in >> slot) || slot >= result.rosterSize())) throw invalid;
+			result.recipients.push_back(slot);
+			++result.stack(slot).mutations[id];
+		}
 		result.phase = reward ? Phase::Reward : Phase::Battle;
 		return result;
 	}

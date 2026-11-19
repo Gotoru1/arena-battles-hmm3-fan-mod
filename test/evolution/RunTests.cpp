@@ -91,6 +91,35 @@ int main()
 		hunt.finish(true,10,4,{"a","b","c","d"},{{"a",0},{"b",0},{"c",1},{"d",2}},true);
 		require(hunt.offers.front()=="d", "Elite rarity guarantee");
 	}
+	RoguelikeRun team(55);
+	team.begin(2, {1,2,3,4}, 1, 24);
+	mustFail([&]{team.recruit(1, 4);});
+	team.recruit(3, 6);
+	mustFail([&]{team.recruit(4, 3);});
+	for(int wave = 1; wave <= 3; ++wave)
+	{
+		team.finish(true, 5, 8, {"mass","flurry","fission"}, {}, false, {wave});
+		require(team.stack(1).count == wave + 1 + wave/2, "Independent survivor report");
+		const std::string id = wave == 1 ? "mass" : wave == 2 ? "fission" : "flurry";
+		auto choice = std::find(team.offers.begin(), team.offers.end(), id);
+		team.pick(static_cast<size_t>(choice-team.offers.begin()), wave == 1 ? 0 : 1);
+	}
+	require(team.hasCombination({"fission","flurry"},1) && !team.hasCombination({"fission","flurry"},0), "Stack-specific synergy");
+	team.recruit(6, 3);
+	team.finish(true, 0, 8, pool, {}, false, {0,2});
+	std::stringstream teamSave;
+	team.save(teamSave);
+	auto loaded = RoguelikeRun::restore(teamSave);
+	require(loaded.rosterSize() == 3 && loaded.stack(2).creature == 6 && loaded.stack(2).count == 4
+		&& loaded.stack(1).count == 3 && loaded.recipients == team.recipients
+		&& loaded.offers == team.offers && loaded.hasCombination({"fission","flurry"},1), "Roster checkpoint");
+	loaded.pick(0,2);
+	loaded.finish(false, 0, 1, pool, {}, false, {0,0});
+	require(loaded.phase == Phase::Defeat, "Roster wiped");
+	std::stringstream legacy;
+	legacy << "EA2 1 0 2 0 2 1 24 0\n1 1 1 1\n" << team.random << "\n1\n\"mass\"\n0\n0\n";
+	auto migrated = RoguelikeRun::restore(legacy);
+	require(migrated.rank("mass") == 1 && migrated.recipients == std::vector<size_t>{0}, "EA2 migration");
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

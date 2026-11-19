@@ -91,7 +91,7 @@ public:
 	static void verificationFrame();
 	static int verificationExitCode();
 	static void abandonEvolution();
-	static void settleEvolution(bool won, int survivors, int64_t casualties);
+	static void settleEvolution(bool won, const std::array<int, 3> & survivors, int64_t casualties);
 	static void afterEvolutionGame();
 
 	// used by the windows. player() is the side currently drafting, enemy() the other one.
@@ -142,6 +142,7 @@ private:
 	void chooseMode();
 	void chooseEvolutionCreature();
 	void chooseEvolutionReward();
+	void showEvolutionCards(size_t slot);
 	void buildEvolutionBattle();
 	void stepDifficulty(); // PvE only, before the hero
 	void stepChooseHero();

@@ -842,10 +842,14 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 	{
 		auto battle = cb->getBattle(battleID);
 		const auto side = battle->battleGetMySide();
-		int survivors = 0;
+		std::array<int, 3> survivors{};
 		for(const auto * stack : battle->battleGetAllStacks())
-			if(stack->unitSide() == side && stack->unitSlot() == SlotID(0) && stack->base && !stack->isClone() && stack->alive())
-				survivors = std::max(0, stack->getCount() - stack->health.getResurrected());
+			{
+			if(stack->unitSide() != side || !stack->base || stack->isClone() || !stack->alive()) continue;
+			for(int slot = 0; slot < 3; ++slot)
+				if(stack->unitSlot() == SlotID(slot))
+					survivors[slot] = std::max(0, stack->getCount() - stack->health.getResurrected());
+		}
 		int64_t casualties = 0;
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 		for(const auto & entry : br->casualties[enemy])
