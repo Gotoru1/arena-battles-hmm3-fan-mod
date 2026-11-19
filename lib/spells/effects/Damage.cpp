@@ -41,6 +41,10 @@ void Damage::apply(ServerCallback * server, const Mechanics * m, const EffectTar
 	stacksInjured.battleID = m->battle()->getBattle()->getBattleID();
 	blm.battleID = m->battle()->getBattle()->getBattleID();
 
+	const auto * environment = dynamic_cast<const SpellCastEnvironment *>(server);
+	const auto * map = environment ? environment->getMap() : nullptr;
+	const int casterUnit = map && map->evolutionSeed ? m->caster->getCasterUnitId() : -1;
+
 	size_t targetIndex = 0;
 	const battle::Unit * firstTarget = nullptr;
 	const bool describe = server->describeChanges();
@@ -57,7 +61,7 @@ void Damage::apply(ServerCallback * server, const Mechanics * m, const EffectTar
 			BattleStackAttacked bsa;
 			bsa.damageAmount = damageForTarget(targetIndex, m, unit);
 			bsa.stackAttacked = unit->unitId();
-			bsa.attackerID = server->getMap() && server->getMap()->evolutionSeed ? m->caster->getCasterUnitId() : -1;
+			bsa.attackerID = casterUnit;
 			auto newState = unit->acquireState();
 			CStack::prepareAttacked(bsa, *server->getRNG(), newState);
 
