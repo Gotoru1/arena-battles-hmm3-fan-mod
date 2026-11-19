@@ -10,6 +10,7 @@
 #include "StdInc.h"
 #include "BattleActionProcessor.h"
 #include "../../lib/battle/EvolutionSignals.h"
+#include "../../lib/battle/EvolutionChain.h"
 #include "../../lib/battle/EvolutionDamage.h"
 
 #include "BattleProcessor.h"

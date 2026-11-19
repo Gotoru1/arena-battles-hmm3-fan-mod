@@ -2,6 +2,8 @@
 // Exercise the production reaction dispatcher with a small packet-applying battlefield.
 #include <algorithm>
 #include <cassert>
+#include <functional>
+#include "../../lib/battle/EvolutionChain.h"
 #include <string>
 #include <cstdint>
 #include <map>
@@ -109,7 +111,16 @@ struct CGameHandler {
 	void sendAndApply(const BattleStackMoved & p){field.units.at(p.stack).data.pos=p.tilesToMove.back();}
 };
 namespace evolution {int64_t damageProduct(int64_t a,int b,int c){return a*b/c;}}
+namespace evolution_server {class EvolutionReactions;}
 struct BattleActionProcessor {CGameHandler * gameHandler;
+	uint64_t reactionSerial=0;
+	evolution_server::EvolutionReactions * activeReaction=nullptr;
+	void withEvolution(const CBattleInfoCallback &,const std::function<void(evolution_server::EvolutionReactions &)> &);
+	void makeAttack(const CBattleInfoCallback & battle,const CStack * from,const CStack * to,int,BattleHex,bool,bool,bool){
+		auto & target=gameHandler->field.units.at(to->unitId());
+		target.data.health=0;
+		evolutionAttack(battle,from,to,{{{to->unitId(),from->unitId(),10,true,1}}});
+	}
 	void moveStack(const CBattleInfoCallback &,int id,BattleHex h){gameHandler->field.units.at(id).data.pos=h;}
 	void evolutionRound(const CBattleInfoCallback &,bool);
 	void evolutionAttack(const CBattleInfoCallback &,const CStack *,const CStack *,const BattleAttack &);
@@ -226,4 +237,21 @@ int main(){
 	assert(partition.units.at(3).getBonusesOfType(BonusType::NONE,500003)->front()->val==1);
 	splitActions.evolutionAttack(partition,&partition.units.at(2),&partition.units.at(1),{{{1,2,1,false,1}}});
 	assert(partition.units.size()==3);
+	evolution::BattleChain longChain(42);
+	longChain.post(evolution::ReactionKind::Hunt,1,2);
+	uint64_t processed=0;
+	longChain.drain([&](const evolution::Reaction & event){
+		assert(event.cause==processed && event.serial==processed+1);
+		if(++processed<100000) longChain.post(event.kind,event.source,event.target);
+	});
+	assert(processed==100000 && longChain.allowHunt(1,2,true) && !longChain.allowHunt(1,2,true));
+	CBattleInfoCallback ghosts;
+	CGameHandler ghostServer{ghosts,{}};
+	BattleActionProcessor ghostActions{&ghostServer};
+	ghosts.units.emplace(1,CStack{1,{1,1,10,{1},BattleSide::LEFT},{}});
+	ghosts.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,68});
+	for(int i=2;i<=9;++i) ghosts.units.emplace(i,CStack{i,{2,1,i==2?0:10,{i+1},BattleSide::RIGHT},{}});
+	ghostActions.evolutionAttack(ghosts,&ghosts.units.at(1),&ghosts.units.at(2),{{{2,1,10,true,1}}});
+	for(int i=2;i<=9;++i) assert(!ghosts.units.at(i).alive());
+	assert(ghostActions.reactionSerial==1);
 }

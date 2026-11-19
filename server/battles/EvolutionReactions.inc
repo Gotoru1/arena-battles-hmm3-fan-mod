@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Included by BattleActionProcessor.cpp. All changes go through VCMI's battle packets.
-namespace
+namespace evolution_server
 {
 class EvolutionReactions
 {
 	CGameHandler & server;
 	const CBattleInfoCallback & battle;
 	using Rules = std::map<int,int>;
+	evolution::BattleChain chain;
+	std::function<void(const CStack *,const CStack *)> strike;
+	std::map<uint32_t,uint32_t> origins;
+
+	uint32_t origin(uint32_t id) const
+	{
+		auto it=origins.find(id);
+		return it==origins.end()?id:it->second;
+	}
 
 	static Rules rules(const CStack * unit, bool temporaryOnly = false)
 	{
@@ -128,6 +137,7 @@ class EvolutionReactions
 	{
 		auto * child = spawn(parent->unitSide(),species,count,origin);
 		if(!child) return;
+		origins[child->unitId()]=origin(parent->unitId());
 		const auto inherited = rules(parent);
 		if(clone)
 		{
@@ -191,6 +201,7 @@ class EvolutionReactions
 	{
 		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
 		if(!egg) return;
+		origins[egg->unitId()]=origin(parent->unitId());
 		Bonus source;
 		source.type = BonusType::EVOLUTION_BROOD;
 		source.val = static_cast<int>(parent->unitId());
@@ -238,6 +249,7 @@ class EvolutionReactions
 			static const CreatureID skeleton(CreatureID::decode("core:skeleton"));
 			if(auto * child = spawn(carrier->unitSide(),skeleton,bones,carrier->getPosition()))
 			{
+				origins[child->unitId()]=origin(carrier->unitId());
 				total -= uint64_t(bones)*8;
 				if(rules(carrier).count(87))
 				{
@@ -274,6 +286,7 @@ class EvolutionReactions
 		const int count = unit->getCount()/2;
 		auto * child=spawn(unit->unitSide(),unit->creatureId(),count,unit->getPosition());
 		if(!child) return;
+		origins[child->unitId()]=origin(unit->unitId());
 		// Reserve full individuals for the new body. The wounded front individual stays here.
 		const int temporary=std::min(count,unit->health.getResurrected());
 		auto state=unit->acquireState();
@@ -313,6 +326,22 @@ class EvolutionReactions
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
+		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(68))
+		{
+			static const CreatureID ghost(CreatureID::decode("core:wight"));
+			if(auto * hunter=spawn(source->unitSide(),ghost,1,corpse->getPosition()))
+			{
+				origins[hunter->unitId()]=origin(source->unitId());
+				transfer(hunter,68,1);
+				if(rules(source).count(87))
+				{
+					for(auto trait:rules(source)) transfer(hunter,trait.first,trait.second);
+					adapt(hunter);
+				}
+				observe(hunter);
+				chain.post(evolution::ReactionKind::Hunt,hunter->unitId(),corpse->unitId());
+			}
+		}
 		const auto infection = corpse->getBonusesOfType(BonusType::EVOLUTION_PARASITE);
 		for(const auto & mark : *infection)
 		{
@@ -365,9 +394,8 @@ class EvolutionReactions
 		packet.battleID = battle.getBattle()->getBattleID();
 		packet.stacks.push_back(hit);
 		server.sendAndApply(packet);
-		casualties(hit.killedAmount);
-		split(target);
-		if(hit.killed() && !target->alive()) fallen(owner,target);
+		chain.post(evolution::ReactionKind::Loss,owner->unitId(),target->unitId(),hit.killedAmount,hit.killed() && !target->alive());
+		flush();
 		return amount;
 	}
 
@@ -389,7 +417,38 @@ class EvolutionReactions
 		}
 	}
 public:
-	EvolutionReactions(CGameHandler & server, const CBattleInfoCallback & battle) : server(server), battle(battle) {}
+	EvolutionReactions(CGameHandler & server,const CBattleInfoCallback & battle,uint64_t id,std::function<void(const CStack *,const CStack *)> strike)
+		:server(server),battle(battle),chain(id),strike(std::move(strike)){}
+
+	void flush()
+	{
+		chain.drain([&](const evolution::Reaction & event){
+			auto * source=battle.battleGetStackByID(event.source,false);
+			auto * target=battle.battleGetStackByID(event.target,false);
+			if(!target) return;
+			switch(event.kind)
+			{
+			case evolution::ReactionKind::Loss:
+				casualties(event.amount);
+				if(event.amount) split(target);
+				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && rules(source).count(1))
+					lay(source,target->getPosition());
+				if(event.destroyed && !target->alive()) chain.post(evolution::ReactionKind::Death,event.source,event.target);
+				break;
+			case evolution::ReactionKind::Death:
+				if(!target->alive()) fallen(source,target);
+				break;
+			case evolution::ReactionKind::Hunt:
+				if(!source || !source->alive()) break;
+				{
+					auto * prey=nearest(source,target->unitSide());
+					if(prey && chain.allowHunt(origin(event.source),origin(prey->unitId()),origins.count(prey->unitId())!=0))
+						strike(source,prey);
+				}
+				break;
+			}
+		});
+	}
 
 	void round(bool first)
 	{
@@ -434,13 +493,9 @@ public:
 		// death reactions but cannot recursively emit another primary attack.
 		for(const auto & hit : packet.bsa)
 		{
-			auto * unit = battle.battleGetStackByID(hit.stackAttacked,false);
-			casualties(hit.killedAmount);
-			if(hit.killedAmount) split(unit);
-			if(unit && hit.killedAmount > 0 && source->alive() && unit->unitSide() != source->unitSide() && active.count(1))
-				lay(source,unit->getPosition());
-			if(unit && hit.killed() && !unit->alive()) fallen(source,unit);
+			chain.post(evolution::ReactionKind::Loss,hit.attackerID,hit.stackAttacked,hit.killedAmount,hit.killed());
 		}
+		flush();
 		if(!primary || !source->alive() || primary->unitSide() == source->unitSide()) return;
 		if(primary->alive())
 		{
@@ -483,15 +538,28 @@ public:
 };
 }
 
+void BattleActionProcessor::withEvolution(const CBattleInfoCallback & battle,const std::function<void(evolution_server::EvolutionReactions &)> & work)
+{
+	if(activeReaction) { work(*activeReaction); return; }
+	evolution_server::EvolutionReactions context(*gameHandler,battle,++reactionSerial,[&](const CStack * hunter,const CStack * prey){
+		makeAttack(battle,hunter,prey,0,prey->getPosition(),true,false,false);
+	});
+	struct Reset { evolution_server::EvolutionReactions * & active; ~Reset(){active=nullptr;} } reset{activeReaction};
+	activeReaction=&context;
+	work(context);
+	context.flush();
+}
+
 void BattleActionProcessor::evolutionRound(const CBattleInfoCallback & battle, bool first)
 {
-	EvolutionReactions(*gameHandler,battle).round(first);
+	withEvolution(battle,[&](auto & context){context.round(first);});
 }
 
 void BattleActionProcessor::evolutionAttack(const CBattleInfoCallback & battle,const CStack * source,const CStack * target,const BattleAttack & attack)
 {
-	EvolutionReactions reactions(*gameHandler,battle);
-	reactions.attack(source,target,attack);
-	const auto destination = reactions.pursue(source,target);
-	if(destination != source->getPosition()) moveStack(battle,source->unitId(),destination);
+	withEvolution(battle,[&](auto & reactions){
+		reactions.attack(source,target,attack);
+		const auto destination=reactions.pursue(source,target);
+		if(destination!=source->getPosition()) moveStack(battle,source->unitId(),destination);
+	});
 }

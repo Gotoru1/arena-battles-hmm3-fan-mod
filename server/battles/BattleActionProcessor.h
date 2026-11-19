@@ -30,6 +30,7 @@ class CUnitState;
 
 VCMI_LIB_NAMESPACE_END
 
+namespace evolution_server { class EvolutionReactions; }
 class CGameHandler;
 class BattleProcessor;
 
@@ -95,6 +96,9 @@ class BattleActionProcessor : boost::noncopyable
 
 	void evolutionSignal(const CBattleInfoCallback & battle, const CStack * source, int signal);
 	void processBattleEventTriggers(const CBattleInfoCallback & battle, CombatEventType event, const CStack * target, const CStack * secondary);
+	uint64_t reactionSerial = 0;
+	evolution_server::EvolutionReactions * activeReaction = nullptr;
+	void withEvolution(const CBattleInfoCallback & battle,const std::function<void(evolution_server::EvolutionReactions &)> & work);
 	void evolutionAttack(const CBattleInfoCallback & battle, const CStack * attacker, const CStack * defender, const BattleAttack & attack);
 public:
 	void evolutionRound(const CBattleInfoCallback & battle, bool first);

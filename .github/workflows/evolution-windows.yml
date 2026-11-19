@@ -5,9 +5,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: evolution-vertical-slice-${{ github.ref }}
-  cancel-in-progress: false
 jobs:
   rules:
     runs-on: ubuntu-24.04
@@ -31,6 +28,10 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/RunTests.cpp -o "$RUNNER_TEMP/evolution-tests"
           "$RUNNER_TEMP/evolution-tests"
   build:
+    needs: rules
+    concurrency:
+      group: evolution-vertical-slice-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: windows-2025-vs2026
     timeout-minutes: 120
     steps:
