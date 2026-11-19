@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
         with:
-          ref: 78d03d8b09da9d30a62bcdd7bbb007da0434a2a7
+          ref: 6e91e239e67e8fdac588c45c2287cc3f7a8aa443
           path: gameplay
       - run: sudo apt-get update -qq && sudo apt-get install -y libboost-dev
       - run: g++ -std=c++17 -I gameplay test/evolution/RarityDistribution.cpp -o "$RUNNER_TEMP/rarity" && "$RUNNER_TEMP/rarity"

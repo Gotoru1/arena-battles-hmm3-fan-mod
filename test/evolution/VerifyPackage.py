@@ -113,8 +113,11 @@ def main():
         raise RuntimeError("New attempt inherited a roster or a mutation")
     for wave, snapshot in enumerate(snapshots, 1):
         enemies = snapshot["army"][1]
-        boss = any(e.get("subtype") == "combatEventAfterAttacked" for e in enemies[0].get("evolutionEffects", []))
-        if boss != (wave % 5 == 0) or any(unit.get("evolutionEffects") for unit in enemies[1:]):
+        expected_boss = []
+        if wave % 5 == 0:
+            rotation = [data["boss"], *data["otherBosses"]]
+            expected_boss = rotation[(wave // 5 - 1) % len(rotation)]["effects"]
+        if enemies[0].get("evolutionEffects", []) != expected_boss or any(unit.get("evolutionEffects") for unit in enemies[1:]):
             raise RuntimeError(f"Unexpected boss or escort effects on wave {wave}")
     effects = [snap["army"][0][0].get("evolutionEffects", []) for snap in snapshots]
     if args.case == "fortress" and not any(e.get("subtype") == "combatEventBeforeAttacked" for group in effects for e in group):
