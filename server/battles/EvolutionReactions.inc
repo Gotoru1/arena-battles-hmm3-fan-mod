@@ -11,7 +11,7 @@ class EvolutionReactions
 	std::function<void(const CStack *,const CStack *)> strike;
 	std::map<uint32_t,uint32_t> origins;
 
-	uint32_t origin(uint32_t id) const
+	uint32_t lineageRoot(uint32_t id) const
 	{
 		auto it=origins.find(id);
 		return it==origins.end()?id:it->second;
@@ -94,7 +94,7 @@ class EvolutionReactions
 			auto prior = rules(target);
 			if(prior[id] >= rank) continue;
 			putTrait(target,id,rank);
-			if(!prior.count(61) || prior[id] != 0) continue;
+			if(!prior.count(61) || prior.at(61) <= 0 || prior[id] != 0) continue;
 			// A rank increase is not an acquisition. It cannot reactivate the catalyst.
 			for(auto entry : prior)
 				if(entry.first != id && entry.first != 61 && entry.second < INT32_MAX/1024)
@@ -137,7 +137,7 @@ class EvolutionReactions
 	{
 		auto * child = spawn(parent->unitSide(),species,count,origin);
 		if(!child) return;
-		origins[child->unitId()]=origin(parent->unitId());
+		origins[child->unitId()]=lineageRoot(parent->unitId());
 		const auto inherited = rules(parent);
 		if(clone)
 		{
@@ -201,7 +201,7 @@ class EvolutionReactions
 	{
 		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
 		if(!egg) return;
-		origins[egg->unitId()]=origin(parent->unitId());
+		origins[egg->unitId()]=lineageRoot(parent->unitId());
 		Bonus source;
 		source.type = BonusType::EVOLUTION_BROOD;
 		source.val = static_cast<int>(parent->unitId());
@@ -249,7 +249,7 @@ class EvolutionReactions
 			static const CreatureID skeleton(CreatureID::decode("core:skeleton"));
 			if(auto * child = spawn(carrier->unitSide(),skeleton,bones,carrier->getPosition()))
 			{
-				origins[child->unitId()]=origin(carrier->unitId());
+				origins[child->unitId()]=lineageRoot(carrier->unitId());
 				total -= uint64_t(bones)*8;
 				if(rules(carrier).count(87))
 				{
@@ -286,7 +286,7 @@ class EvolutionReactions
 		const int count = unit->getCount()/2;
 		auto * child=spawn(unit->unitSide(),unit->creatureId(),count,unit->getPosition());
 		if(!child) return;
-		origins[child->unitId()]=origin(unit->unitId());
+		origins[child->unitId()]=lineageRoot(unit->unitId());
 		// Reserve full individuals for the new body. The wounded front individual stays here.
 		const int temporary=std::min(count,unit->health.getResurrected());
 		auto state=unit->acquireState();
@@ -331,7 +331,7 @@ class EvolutionReactions
 			static const CreatureID ghost(CreatureID::decode("core:wight"));
 			if(auto * hunter=spawn(source->unitSide(),ghost,1,corpse->getPosition()))
 			{
-				origins[hunter->unitId()]=origin(source->unitId());
+				origins[hunter->unitId()]=lineageRoot(source->unitId());
 				transfer(hunter,68,1);
 				if(rules(source).count(87))
 				{
@@ -442,7 +442,7 @@ public:
 				if(!source || !source->alive()) break;
 				{
 					auto * prey=nearest(source,target->unitSide());
-					if(prey && chain.allowHunt(origin(event.source),origin(prey->unitId()),origins.count(prey->unitId())!=0))
+					if(prey && chain.allowHunt(lineageRoot(event.source),lineageRoot(prey->unitId()),origins.count(prey->unitId())!=0))
 						strike(source,prey);
 				}
 				break;
