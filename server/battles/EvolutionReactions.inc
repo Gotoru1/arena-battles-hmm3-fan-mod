@@ -27,6 +27,8 @@ class EvolutionReactions
 			int key = marker->val % 1024;
 			result[key] = std::max(result[key], 1 + marker->val / 1024);
 		}
+		const auto muted=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500050));
+		for(const auto & mark:*muted) result.erase(mark->val);
 		return result;
 	}
 
@@ -72,6 +74,48 @@ class EvolutionReactions
 		mark.subtype=key;
 		mark.val=combo;
 		grant(anchor,mark);
+	}
+
+	bool marked(const CStack * unit,int subtype,int value) const
+	{
+		const auto marks=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(subtype));
+		return std::any_of(marks->begin(),marks->end(),[&](const auto & mark){return mark->val==value;});
+	}
+
+	void remember(const CStack * unit,int subtype,int value)
+	{
+		if(marked(unit,subtype,value)) return;
+		Bonus mark;
+		mark.type=BonusType::NONE;
+		mark.subtype=BonusCustomSubtype(subtype);
+		mark.val=value;
+		grant(unit,mark);
+	}
+
+	void exchange()
+	{
+		std::set<uint32_t> paired;
+		const auto initial=living();
+		for(auto * bearer:initial)
+		{
+			const auto left=rules(bearer);
+			if(!left.count(50) || paired.count(bearer->unitId())) continue;
+			for(auto * ally:initial)
+			{
+				if(ally==bearer || ally->unitSide()!=bearer->unitSide() || paired.count(ally->unitId())) continue;
+				const auto right=rules(ally);
+				auto offered=std::find_if(left.begin(),left.end(),[&](const auto & entry){return entry.first!=50 && entry.first!=88 && !right.count(entry.first);});
+				auto returned=std::find_if(right.begin(),right.end(),[&](const auto & entry){return entry.first!=50 && entry.first!=88 && !left.count(entry.first);});
+				if(offered==left.end() || returned==right.end()) continue;
+				remember(bearer,500050,offered->first);
+				remember(ally,500050,returned->first);
+				transfer(bearer,returned->first,returned->second);
+				transfer(ally,offered->first,offered->second);
+				paired.insert(ally->unitId());
+				paired.insert(bearer->unitId());
+				break;
+			}
+		}
 	}
 
 	void putTrait(const CStack * unit, int id, int rank)
@@ -365,6 +409,9 @@ class EvolutionReactions
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
+		if(source && source->unitSide()!=corpse->unitSide())
+			for(auto * witness:beforeSummons)
+				if(witness->unitSide()==corpse->unitSide() && rules(witness).count(8)) remember(witness,500008,source->unitId());
 		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(68))
 		{
 			static const CreatureID ghost(CreatureID::decode("core:wight"));
@@ -512,6 +559,7 @@ public:
 
 	void round(bool first)
 	{
+		if(first) exchange();
 		for(auto * unit : living())
 		{
 			const auto active = rules(unit);
@@ -559,6 +607,11 @@ public:
 		if(!primary || !source->alive() || primary->unitSide() == source->unitSide()) return;
 		if(primary->alive())
 		{
+			const int side=static_cast<int>(source->unitSide());
+			if(marked(primary,500108,side))
+				injure(primary,source,std::max<int64_t>(1,source->getCount()/2));
+			else if(active.count(8) && marked(source,500008,primary->unitId()))
+				remember(primary,500108,side);
 			auto charges=spellCharges(source);
 			if(!charges.empty())
 			{

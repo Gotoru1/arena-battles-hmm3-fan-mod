@@ -137,7 +137,7 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
-	const std::vector<int> traits{1,3,9,10,15,18,19,21,23,25,27,32,39,51,56,57,59,60,61,67,68,78,87};
+	const std::vector<int> traits{1,3,8,9,10,15,18,19,21,23,25,27,32,39,50,51,56,57,59,60,61,67,68,78,87};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -325,4 +325,21 @@ int main(){
 	magic.units.at(2).data.health=0;
 	magicActions.evolutionDamage(magic,{1,{{2,-1,38,true,4}}});
 	assert(magic.units.size()==3);
+	CBattleInfoCallback oath;
+	CGameHandler oathServer{oath,{}};
+	BattleActionProcessor oathActions{&oathServer};
+	for(int i=1;i<=4;++i) oath.units.emplace(i,CStack{i,{i,10,100,{i*3},i<4?BattleSide::LEFT:BattleSide::RIGHT},{}});
+	oath.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,8});
+	oath.units.at(2).bonuses.push_back({BonusType::EVOLUTION_TRAIT,50});
+	oath.units.at(2).bonuses.push_back({BonusType::EVOLUTION_TRAIT,23});
+	oathActions.evolutionRound(oath,true);
+	// Unit two has traded its spark for Blood Debt and is the only witness that marks the killer.
+	oath.units.at(3).data.health=0;
+	oathActions.evolutionAttack(oath,&oath.units.at(4),&oath.units.at(3),{{{3,4,100,true,10}}});
+	assert(oath.units.at(1).getBonusesOfType(BonusType::NONE,500008)->empty());
+	assert(oath.units.at(2).getBonusesOfType(BonusType::NONE,500008)->size()==1);
+	oathActions.evolutionAttack(oath,&oath.units.at(2),&oath.units.at(4),{{{4,2,10,false,0}}});
+	assert(oath.units.at(4).data.health==100);
+	oathActions.evolutionAttack(oath,&oath.units.at(1),&oath.units.at(4),{{{4,1,10,false,0}}});
+	assert(oath.units.at(4).data.health==95);
 }
