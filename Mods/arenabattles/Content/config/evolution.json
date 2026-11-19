@@ -525,6 +525,103 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "Удар с небес",
+			"requires": [
+				"wings",
+				"charge"
+			],
+			"effects": [
+				{
+					"type": "JOUSTING",
+					"val": 15
+				},
+				{
+					"type": "RETURN_AFTER_STRIKE",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Гроза рядов",
+			"requires": [
+				"sweep",
+				"coin"
+			],
+			"effects": [
+				{
+					"type": "DOUBLE_DAMAGE_CHANCE",
+					"val": 25
+				},
+				{
+					"type": "TWO_HEX_ATTACK_BREATH",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Костяной бастион",
+			"requires": [
+				"vigor",
+				"barbs",
+				"riposte"
+			],
+			"effects": [
+				{
+					"type": "UNLIMITED_RETALIATIONS",
+					"val": 1
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventBeforeAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"subtype": "creatureDamageBoth",
+									"val": 2,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Кровавый след",
+			"requires": [
+				"stride",
+				"leech"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"subtype": "creatureDamageBoth",
+									"val": 3,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "LIFE_DRAIN",
+					"val": 15
+				}
+			]
 		}
 	],
 	"boss": {
@@ -550,5 +647,53 @@
 				}
 			}
 		]
-	}
+	},
+	"otherBosses": [
+		{
+			"name": "Зеркальный страж",
+			"text": "Отражает 35% урона в ближнем бою и отвечает без ограничения. Стрелки и атаки без ответа помогают пережить бой.",
+			"effects": [
+				{
+					"type": "FIRE_SHIELD",
+					"val": 35
+				},
+				{
+					"type": "UNLIMITED_RETALIATIONS",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Небесный охотник",
+			"text": "Перелетает препятствия и усиливает урон на 4 после перемещения. Перехвати его или удерживай в ближнем бою.",
+			"effects": [
+				{
+					"type": "FLYING",
+					"val": 1
+				},
+				{
+					"type": "STACKS_SPEED",
+					"val": 2
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"subtype": "creatureDamageBoth",
+									"val": 4,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		}
+	]
 }

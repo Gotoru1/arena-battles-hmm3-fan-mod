@@ -4,6 +4,31 @@ namespace
 {
 	std::unique_ptr<evolution::RoguelikeRun> run;
 	bool verifying = false;
+	bool eliteFight = false;
+
+	std::filesystem::path checkpointPath()
+	{
+		return std::filesystem::path(VCMIDirs::get().userDataPath().native()) / "evolution-run.sav";
+	}
+
+	void checkpoint()
+	{
+		if(verifying) return;
+		const auto dest = checkpointPath();
+		if(run->phase == evolution::Phase::Defeat)
+		{
+			std::filesystem::remove(dest);
+			return;
+		}
+		std::filesystem::create_directories(dest.parent_path());
+		auto temp = dest;
+		temp += ".tmp";
+		std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+		out.exceptions(std::ios::badbit | std::ios::failbit);
+		run->save(out);
+		out.close();
+		std::filesystem::rename(temp, dest);
+	}
 	int verificationResult = -1;
 
 	const JsonNode & evolutionCatalog()
@@ -118,9 +143,19 @@ void ArenaDraft::chooseMode()
 	std::vector<ArenaOffer> cards{
 		evolutionCard("Evolution Arena", "Выбери героя и отряд. После победы получай мутации. Каждая пятая волна — босс."),
 		evolutionCard("Одиночная арена", "Подготовь армию для одного боя.")};
+	if(!verifying && std::filesystem::exists(checkpointPath()))
+		cards.push_back(evolutionCard("Продолжить", "Вернуться к последней волне или к тем же трём картам награды. Новый забег заменит сохранение после выбора стартового отряда."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Арена против компьютера", "Выбери режим", cards,
 		[self](int pick)
 		{
+			if(pick == 2)
+			{
+				std::ifstream in(checkpointPath(), std::ios::binary);
+				run = std::make_unique<evolution::RoguelikeRun>(evolution::RoguelikeRun::restore(in));
+				if(run->phase == evolution::Phase::Reward) self->chooseEvolutionReward();
+				else self->buildEvolutionBattle();
+				return;
+			}
 			if(pick == 1)
 			{
 				self->stepDifficulty();
@@ -171,7 +206,8 @@ void ArenaDraft::settleEvolution(bool won, int survivors, int64_t casualties)
 		pool.push_back(entry.first);
 		rarities.emplace(entry.first, static_cast<unsigned>(entry.second["rarity"].Integer()));
 	}
-	run->finish(won, survivors, casualties, std::move(pool), rarities);
+	run->finish(won, survivors, casualties, std::move(pool), rarities, eliteFight);
+	try { checkpoint(); } catch(const std::exception & e) { logGlobal->error("Evolution checkpoint: %s", e.what()); }
 }
 
 void ArenaDraft::afterEvolutionGame()
@@ -216,8 +252,22 @@ void ArenaDraft::chooseEvolutionReward()
 	{
 		const auto & entry = catalog[id];
 		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
+		std::string hint;
+		if(!run->rank(id))
+			for(const auto & combo : evolutionCatalog()["synergies"].Vector())
+			{
+				bool includesCard = false;
+				bool otherRanksReady = true;
+				for(const auto & part : combo["requires"].Vector())
+				{
+					if(part.String() == id) includesCard = true;
+					else if(!run->rank(part.String())) otherRanksReady = false;
+				}
+				if(includesCard && otherRanksReady)
+					hint += "\nОткроет: " + combo["name"].String();
+			}
 		cards.push_back(evolutionCard(entry["name"].String(), labels.at(entry["rarity"].Integer()) + "\n\n" + entry["text"].String()
-			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id))));
+			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id)) + hint));
 	}
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",
@@ -229,6 +279,10 @@ void ArenaDraft::chooseEvolutionReward()
 void ArenaDraft::buildEvolutionBattle()
 {
 	const auto & data = evolutionCatalog();
+	checkpoint(); // before consuming the RNG, so resuming recreates the same opponent
+	eliteFight = false;
+	const auto bossIndex = ((run->wave / 5 + 2) % 3).convert_to<unsigned>();
+	const auto & bossRule = bossIndex == 0 ? data["boss"] : data["otherBosses"].Vector().at(bossIndex-1);
 	rng.seed(run->random());
 	map->evolutionSeed = static_cast<int>(run->random() % INT32_MAX) + 1;
 	randomizer->setSeed(map->evolutionSeed);
@@ -282,15 +336,28 @@ void ArenaDraft::buildEvolutionBattle()
 		int amount = evolution::engineInt(2 + run->wave / (slot == 0 ? 1 : 3) + run->threat() * share / (100 * cost));
 		giveCreature(enemy(), slot+1, id, amount);
 		if(run->boss() && slot == 0)
-			appendEffects(enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects, data["boss"], 1);
+			appendEffects(enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects, bossRule, 1);
 	}
 
 	std::string detail = "Твой отряд: " + run->army.count.str() + " " + creature.toCreature()->getNamePluralTranslated();
 	if(run->boss())
-		detail += "\nБосс: " + enemy().hero->getStackPtr(SlotID(0))->getName() + ". " + data["boss"]["text"].String();
+		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
 	auto self = shared_from_this();
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
+	if(!run->boss() && run->wave % 3 == 0)
+		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
-		"В свой ход нажми A для автобоя с анимацией", cards, [self](int) { self->startBattle(); },
+		"В свой ход нажми A для автобоя с анимацией", cards, [self, slots](int pick)
+		{
+			eliteFight = pick == 1;
+			if(eliteFight)
+				for(int i = 0; i < slots; ++i)
+				{
+					auto * stack = self->enemy().hero->getStackPtr(SlotID(i));
+					const int size = evolution::engineInt((evolution::Amount(stack->getCount()) * 8 + 4) / 5);
+					self->giveCreature(self->enemy(), i+1, stack->getCreatureID(), size);
+				}
+			self->startBattle();
+		},
 		[self]() { self->cancel(); }, nullptr);
 }

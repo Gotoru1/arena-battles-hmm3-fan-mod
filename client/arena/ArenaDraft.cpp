@@ -12,6 +12,8 @@
 #include "../mainmenu/CMainMenu.h"
 #include "../../lib/mapObjects/army/CStackInstance.h"
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 
 #include "../CServerHandler.h"
 #include "../GameEngine.h"

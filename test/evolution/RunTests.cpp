@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "../../client/arena/RoguelikeRun.h"
 #include <iostream>
+#include <sstream>
 #include <set>
 
 using namespace evolution;
@@ -51,6 +52,19 @@ int main()
 		if(n % 5 != 0) require(run.threat() > threat, "Rising regular threat");
 		mustFail([&]{run.pick(0);});
 	}
+	for(int phase = 0; phase < 2; ++phase)
+	{
+		auto snapshot = run;
+		if(phase) snapshot.finish(true, 23, 5, pool);
+		std::stringstream stream;
+		snapshot.save(stream);
+		auto restored = RoguelikeRun::restore(stream);
+		require(restored.phase == snapshot.phase && restored.random == snapshot.random && restored.offers == snapshot.offers
+			&& restored.history == snapshot.history && restored.army.mutations == snapshot.army.mutations && restored.army.count == snapshot.army.count
+			&& restored.wave == snapshot.wave && restored.army.harvest == snapshot.army.harvest, "Checkpoint round trip");
+		std::istringstream truncated("EA2 42 1");
+		mustFail([&]{ RoguelikeRun::restore(truncated); });
+	}
 	run.finish(false, 0, 1, pool);
 	require(run.phase == Phase::Defeat && run.offers.empty(), "Permadeath");
 	mustFail([&]{run.pick(0);});
@@ -70,6 +84,13 @@ int main()
 	fresh.finish(true, 95, 40, pool);
 	require(fresh.army.count == 110 && fresh.army.harvest == 40 && fresh.lineageDamage() == 11,
 		"Soul-steal survivors and Harvest must both feed lineage damage");
+	for(unsigned seed=0; seed<200; ++seed)
+	{
+		RoguelikeRun hunt(seed);
+		hunt.begin(0,{1,1,1,1},0,24);
+		hunt.finish(true,10,4,{"a","b","c","d"},{{"a",0},{"b",0},{"c",1},{"d",2}},true);
+		require(hunt.offers.front()=="d", "Elite rarity guarantee");
+	}
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

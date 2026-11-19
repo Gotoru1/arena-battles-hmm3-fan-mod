@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <iomanip>
+#include <istream>
+#include <ostream>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -81,7 +84,7 @@ public:
 
 	// The battle callback reports actual surviving units (including permanent soul steals).
 	// Recruitment supplies an army floor only on victory; defeat can never be converted into a win.
-	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {})
+	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {}, bool elite = false)
 	{
 		if(phase != Phase::Battle)
 			throw std::logic_error("Battle already settled");
@@ -109,6 +112,8 @@ public:
 			std::array<int,4> weights = chances;
 			for(size_t tier = 0; tier < groups.size(); ++tier)
 				if(groups[tier].empty()) weights[tier] = 0;
+			if(elite && slot == 0 && (!groups[2].empty() || !groups[3].empty()))
+				weights[0] = weights[1] = 0;
 			const auto tier = std::discrete_distribution<int>(weights.begin(), weights.end())(random);
 			auto & group = groups[tier];
 			auto index = std::uniform_int_distribution<size_t>(0, group.size()-1)(random);
@@ -130,6 +135,54 @@ public:
 		offers.clear();
 		++wave;
 		phase = Phase::Battle;
+	}
+
+	// A battle checkpoint holds the RNG immediately before enemy generation.
+	// Ranks are reconstructed from the ordered draft so they cannot disagree.
+	void save(std::ostream & out) const
+	{
+		if(phase != Phase::Battle && phase != Phase::Reward)
+			throw std::logic_error("No active run");
+		out << "EA2 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
+		for(auto value : primary) out << value << ' ';
+		out << '\n' << random << '\n';
+		for(const auto * list : {&history, &offers, &synergies})
+		{
+			out << list->size() << '\n';
+			for(const auto & item : *list) out << std::quoted(item) << '\n';
+		}
+		if(!out) throw std::runtime_error("Не удалось записать забег");
+	}
+
+	static RoguelikeRun restore(std::istream & in)
+	{
+		const std::runtime_error invalid("Сохранение забега повреждено");
+		std::string version;
+		RoguelikeRun result(0);
+		bool reward = false;
+		if(!(in >> version) || version != "EA2" || !(in >> result.seed >> reward >> result.wave >> result.kills
+			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
+			throw invalid;
+		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
+			throw invalid;
+		for(auto & value : result.primary) if(!(in >> value)) throw invalid;
+		if(!(in >> result.random)) throw invalid;
+		for(auto * list : {&result.history, &result.offers, &result.synergies})
+		{
+			size_t count;
+			if(!(in >> count)) throw invalid;
+			for(size_t i = 0; i < count; ++i)
+			{
+				std::string item;
+				if(!(in >> std::quoted(item)) || item.empty()) throw invalid;
+				list->push_back(std::move(item));
+			}
+		}
+		if(result.wave != Amount(result.history.size()) + 1 || result.offers.size() != (reward ? 3u : 0u)) throw invalid;
+		for(const auto & id : result.history) ++result.army.mutations[id];
+		result.phase = reward ? Phase::Reward : Phase::Battle;
+		return result;
 	}
 
 	Amount threat() const
