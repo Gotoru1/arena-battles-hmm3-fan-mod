@@ -465,6 +465,110 @@
 					}
 				}
 			]
+		},
+		"ossuary": {
+			"name": "Костница",
+			"text": "После победы за каждых трёх недостающих бойцов в другом отряде к носителю приходит один боец за ранг. Потери считаются отдельно по отрядам.",
+			"rarity": 2,
+			"effects": []
+		},
+		"nursery": {
+			"name": "Матка выводка",
+			"text": "За каждых 8 выживших бойцов носителя каждый другой отряд получает по одному своему существу за ранг после победы.",
+			"rarity": 3,
+			"effects": []
+		},
+		"kinship": {
+			"name": "Общая кровь",
+			"text": "Если после победы носителей больше, чем в начале боя, каждая новая копия даёт другим отрядам по 5 очков роста за ранг. 10 очков навсегда дают +1 к урону каждого бойца.",
+			"rarity": 3,
+			"effects": []
+		},
+		"underdog": {
+			"name": "Последние в строю",
+			"text": "Если в начале боя этот отряд самый малочисленный в армии, каждый его боец получает +4 к урону за ранг на весь бой. Ничья тоже считается.",
+			"rarity": 1,
+			"effects": []
+		},
+		"wait": {
+			"name": "Затаённый выпад",
+			"text": "Команда «Ждать» накапливает +2 к урону каждого бойца за ранг до конца боя.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 2,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"forge": {
+			"name": "Кузница щитов",
+			"text": "Команда «Защищаться» закаляет оружие: +3 к атаке и +1 к урону за ранг до конца боя.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 3,
+									"subtype": "primarySkill.attack",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 1,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"acid": {
+			"name": "Едкая слюна",
+			"text": "После атаки есть 30% шанс дополнительно нанести 8 урона за каждого бойца в отряде. Новый ранг увеличивает урон кислоты.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "ACID_BREATH",
+					"val": 8,
+					"addInfo": 30
+				}
+			]
 		}
 	},
 	"synergies": [
@@ -620,6 +724,60 @@
 				{
 					"type": "LIFE_DRAIN",
 					"val": 15
+				}
+			]
+		},
+		{
+			"name": "Терпение хищника",
+			"requires": [
+				"wait",
+				"ambush"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 5,
+									"subtype": "primarySkill.attack",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Часовой улья",
+			"requires": [
+				"nursery",
+				"forge"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 6,
+									"subtype": "primarySkill.defence",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
 				}
 			]
 		}

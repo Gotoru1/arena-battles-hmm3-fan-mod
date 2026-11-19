@@ -34,11 +34,11 @@ class CatalogTests(unittest.TestCase):
 
     def test_mutations(self):
         mutations = DATA["mutations"]
-        self.assertGreaterEqual(len(mutations), 28)
+        self.assertGreaterEqual(len(mutations), 35)
         self.assertEqual({entry['rarity'] for entry in mutations.values()}, {0, 1, 2, 3})
         for key, entry in mutations.items():
             with self.subTest(mutation=key):
-                self.assertTrue(entry["effects"] or key in {"mass", "harvest"})
+                self.assertTrue(entry["effects"] or key in {"mass", "harvest", "kinship", "ossuary", "nursery", "underdog"})
                 self.assertTrue(entry["name"] and entry["text"])
                 for effect in entry["effects"]:
                     self.check_effect(effect)
@@ -63,7 +63,7 @@ class CatalogTests(unittest.TestCase):
                 self.check_effect(effect)
         for recipe in DATA["synergies"]:
             self.assertTrue(set(recipe["requires"]) <= DATA["mutations"].keys())
-        self.assertEqual(len({tuple(sorted(s["requires"])) for s in DATA["synergies"]}), 7)
+        self.assertEqual(len({tuple(sorted(s["requires"])) for s in DATA["synergies"]}), 9)
 
     def test_boss_ramps_after_hit(self):
         effect, = DATA["boss"]["effects"]

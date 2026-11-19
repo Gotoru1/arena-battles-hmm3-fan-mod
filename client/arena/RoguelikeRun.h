@@ -96,9 +96,17 @@ public:
 			[this, slot](const std::string & id) { return rank(id, slot) != 0; });
 	}
 
+	bool smallest(size_t slot) const
+	{
+		if(rosterSize() < 2) return false;
+		for(size_t other = 0; other < rosterSize(); ++other)
+			if(stack(other).count < stack(slot).count) return false;
+		return true;
+	}
+
 	Amount lineageDamage(size_t slot = 0) const
 	{
-		return stack(slot).harvest / 10 + stack(slot).count / 15 * rank("mass", slot);
+		return stack(slot).harvest / 10 + stack(slot).count / 15 * rank("mass", slot) + (smallest(slot) ? 4u : 0u) * Amount(rank("underdog", slot));
 	}
 
 	// The battle callback reports actual surviving units (including permanent soul steals).
@@ -122,12 +130,28 @@ public:
 			phase = Phase::Defeat;
 			return;
 		}
-		army.harvest += casualties * rank("harvest");
-		army.count = survivors + 5 + wave * 2;
-		for(size_t i = 0; i < companions.size(); ++i)
+		std::vector<Amount> remaining{survivors};
+		remaining.insert(remaining.end(), companionSurvivors.begin(), companionSurvivors.end());
+		std::vector<Amount> recruits(rosterSize()), growth(rosterSize());
+		// Use one end-of-battle snapshot. Recruits cannot recursively produce recruits.
+		for(size_t i = 0; i < rosterSize(); ++i)
 		{
-			companions[i].count = wave / (i + 2) + 1 + companionSurvivors[i];
-			companions[i].harvest += casualties * rank("harvest", i+1);
+			Amount change = remaining[i] - stack(i).count;
+			growth[i] += casualties * rank("harvest", i);
+			for(size_t ally = 0; ally < rosterSize(); ++ally)
+			{
+				if(ally == i) continue;
+				recruits[ally] += (remaining[i] / 8) * rank("nursery", i);
+				if(change < 0) recruits[ally] += (-change / 3) * rank("ossuary", ally);
+				if(change > 0) growth[ally] += change * 5 * rank("kinship", i);
+			}
+		}
+		for(size_t i = 0; i < rosterSize(); ++i)
+		{
+			stack(i).harvest += growth[i];
+			stack(i).count = remaining[i] + recruits[i];
+			if(i == 0) stack(i).count += 5 + wave * 2;
+			else stack(i).count += 1 + wave / (i + 1);
 		}
 		offers.clear();
 		for(int slot = 0; slot < 3; ++slot)

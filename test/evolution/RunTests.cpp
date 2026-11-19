@@ -120,6 +120,18 @@ int main()
 	legacy << "EA2 1 0 2 0 2 1 24 0\n1 1 1 1\n" << team.random << "\n1\n\"mass\"\n0\n0\n";
 	auto migrated = RoguelikeRun::restore(legacy);
 	require(migrated.rank("mass") == 1 && migrated.recipients == std::vector<size_t>{0}, "EA2 migration");
+	RoguelikeRun hive(83);
+	hive.begin(1,{1,1,1,1},1,24);
+	hive.recruit(2,6);
+	hive.army.mutations = {{"nursery",1},{"kinship",1},{"ossuary",1}};
+	hive.stack(1).mutations = {{"underdog",2},{"nursery",1}};
+	require(hive.lineageDamage(1) == 8 && !hive.smallest(0), "Outnumbered specialist");
+	hive.finish(true,32,3,pool,{},false,{0});
+	require(hive.army.count == 41 && hive.stack(1).count == 5, "Loss salvage and brood use battle counts only");
+	require(hive.stack(1).harvest == 40 && hive.lineageDamage(1) == 12, "Permanent copy growth feeds allies");
+	hive.pick(0);
+	hive.finish(false,60,3,pool,{},false,{30});
+	require(hive.phase == Phase::Defeat && hive.stack(1).harvest == 40, "No post-victory effects on defeat");
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});
