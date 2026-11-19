@@ -14,6 +14,8 @@ VCMI_LIB_NAMESPACE_BEGIN
 
 struct BattleLogMessage;
 struct BattleAttack;
+struct StacksInjured;
+struct BattleSpellCast;
 class BattleAction;
 class CBattleInfoCallback;
 class BattleHex;
@@ -101,6 +103,8 @@ class BattleActionProcessor : boost::noncopyable
 	void withEvolution(const CBattleInfoCallback & battle,const std::function<void(evolution_server::EvolutionReactions &)> & work);
 	void evolutionAttack(const CBattleInfoCallback & battle, const CStack * attacker, const CStack * defender, const BattleAttack & attack);
 public:
+	void evolutionDamage(const CBattleInfoCallback & battle,const StacksInjured & packet);
+	void evolutionSpell(const CBattleInfoCallback & battle,const BattleSpellCast & packet);
 	void evolutionRound(const CBattleInfoCallback & battle, bool first);
 	explicit BattleActionProcessor(BattleProcessor * owner, CGameHandler * newGameHandler);
 

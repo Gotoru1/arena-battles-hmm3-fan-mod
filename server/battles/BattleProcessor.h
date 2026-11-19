@@ -21,6 +21,8 @@ class BattleAction;
 class int3;
 class CBattleInfoCallback;
 struct BattleResult;
+struct BattleSpellCast;
+struct StacksInjured;
 struct BattleLayout;
 class BattleID;
 VCMI_LIB_NAMESPACE_END
@@ -54,6 +56,8 @@ class BattleProcessor : boost::noncopyable
 	void setBattleResult(const CBattleInfoCallback & battle, EBattleResult resultType, BattleSide victoriusSide);
 
 public:
+	void evolutionDamage(const StacksInjured & packet);
+	void evolutionSpell(const BattleSpellCast & packet);
 	explicit BattleProcessor(CGameHandler * gameHandler);
 	~BattleProcessor();
 

@@ -305,3 +305,15 @@ void BattleProcessor::battleFinalize(const BattleID & battleID, const BattleResu
 {
 	resultProcessor->battleFinalize(battleID, result);
 }
+
+void BattleProcessor::evolutionDamage(const StacksInjured & packet)
+{
+	if(packet.stacks.empty() || !gameHandler->gameState().getMap().evolutionSeed) return;
+	if(auto * battle=gameHandler->gameState().getBattle(packet.battleID)) actionsProcessor->evolutionDamage(*battle,packet);
+}
+
+void BattleProcessor::evolutionSpell(const BattleSpellCast & packet)
+{
+	if(!gameHandler->gameState().getMap().evolutionSeed) return;
+	if(auto * battle=gameHandler->gameState().getBattle(packet.battleID)) actionsProcessor->evolutionSpell(*battle,packet);
+}

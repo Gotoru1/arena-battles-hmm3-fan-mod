@@ -133,10 +133,30 @@ class EvolutionReactions
 		return battle.battleGetStackByID(info.id);
 	}
 
+	std::vector<Bonus> spellCharges(const CStack * unit) const
+	{
+		auto held=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500021));
+		std::vector<Bonus> result;
+		for(const auto & charge:*held) result.push_back(*charge);
+		return result;
+	}
+
+	void spend(const CStack * unit,const std::vector<Bonus> & charges)
+	{
+		if(charges.empty()) return;
+		SetStackEffect packet;
+		packet.battleID=battle.getBattle()->getBattleID();
+		packet.toRemove.emplace_back(unit->unitId(),charges);
+		server.sendAndApply(packet);
+	}
+
 	void summon(const CStack * parent, CreatureID species, int count, BattleHex origin, bool clone)
 	{
-		auto * child = spawn(parent->unitSide(),species,count,origin);
+		auto charges=spellCharges(parent);
+		const int extra=static_cast<int>(std::min<size_t>(charges.size(),INT32_MAX-count));
+		auto * child = spawn(parent->unitSide(),species,count+extra,origin);
 		if(!child) return;
+		spend(parent,charges);
 		origins[child->unitId()]=lineageRoot(parent->unitId());
 		const auto inherited = rules(parent);
 		if(clone)
@@ -423,7 +443,7 @@ public:
 	void flush()
 	{
 		chain.drain([&](const evolution::Reaction & event){
-			auto * source=battle.battleGetStackByID(event.source,false);
+			auto * source=event.source==UINT32_MAX ? nullptr : battle.battleGetStackByID(event.source,false);
 			auto * target=battle.battleGetStackByID(event.target,false);
 			if(!target) return;
 			switch(event.kind)
@@ -448,6 +468,27 @@ public:
 				break;
 			}
 		});
+	}
+
+	void spellCast(const BattleSpellCast & spell)
+	{
+		for(auto id:spell.affectedCres)
+		{
+			const auto * unit=battle.battleGetStackByID(id);
+			if(!unit || !unit->alive() || unit->unitSide()==spell.side || spell.resistedCres.count(id) || !rules(unit).count(21)) continue;
+			Bonus charge;
+			charge.type=BonusType::NONE;
+			charge.subtype=BonusCustomSubtype(500021);
+			charge.val=1;
+			grant(unit,charge);
+		}
+	}
+
+	void externalDamage(const StacksInjured & injuries)
+	{
+		for(const auto & hit:injuries.stacks)
+			if(hit.killedAmount || hit.killed()) chain.post(evolution::ReactionKind::Loss,hit.attackerID,hit.stackAttacked,hit.killedAmount,hit.killed());
+		flush();
 	}
 
 	void round(bool first)
@@ -499,6 +540,12 @@ public:
 		if(!primary || !source->alive() || primary->unitSide() == source->unitSide()) return;
 		if(primary->alive())
 		{
+			auto charges=spellCharges(source);
+			if(!charges.empty())
+			{
+				spend(source,charges);
+				injure(primary,source,evolution::damageProduct(source->getCount(),static_cast<int64_t>(charges.size())));
+			}
 			const auto wounds = primary->getBonusesOfType(BonusType::EVOLUTION_WOUND);
 			for(const auto & wound : *wounds)
 			{
@@ -562,4 +609,14 @@ void BattleActionProcessor::evolutionAttack(const CBattleInfoCallback & battle,c
 		const auto destination=reactions.pursue(source,target);
 		if(destination!=source->getPosition()) moveStack(battle,source->unitId(),destination);
 	});
+}
+
+void BattleActionProcessor::evolutionDamage(const CBattleInfoCallback & battle,const StacksInjured & packet)
+{
+	withEvolution(battle,[&](auto & context){context.externalDamage(packet);});
+}
+
+void BattleActionProcessor::evolutionSpell(const CBattleInfoCallback & battle,const BattleSpellCast & packet)
+{
+	withEvolution(battle,[&](auto & context){context.spellCast(packet);});
 }

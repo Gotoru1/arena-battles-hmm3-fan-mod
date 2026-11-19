@@ -67,6 +67,7 @@ struct CStack {
 struct Hexes : std::vector<BattleHex>{void insert(BattleHex h){push_back(h);}};
 struct BattleStackMoved {int battleID{},stack{};bool teleporting=false;Hexes tilesToMove;};
 struct BattleUnitsChanged {int battleID{}; std::vector<UnitChanges> changedStacks;};
+struct BattleSpellCast { BattleSide side;std::set<unsigned> affectedCres,resistedCres; };
 struct StacksInjured {int battleID{};std::vector<BattleStackAttacked> stacks;};
 struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd,toRemove;};
 struct CBattleInfoCallback {
@@ -110,11 +111,13 @@ struct CGameHandler {
 	}}
 	void sendAndApply(const BattleStackMoved & p){field.units.at(p.stack).data.pos=p.tilesToMove.back();}
 };
-namespace evolution {int64_t damageProduct(int64_t a,int b,int c){return a*b/c;}}
+namespace evolution {int64_t damageProduct(int64_t a,int64_t b,int c=1){return a*b/c;}}
 namespace evolution_server {class EvolutionReactions;}
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
 	evolution_server::EvolutionReactions * activeReaction=nullptr;
+	void evolutionDamage(const CBattleInfoCallback &,const StacksInjured &);
+	void evolutionSpell(const CBattleInfoCallback &,const BattleSpellCast &);
 	void withEvolution(const CBattleInfoCallback &,const std::function<void(evolution_server::EvolutionReactions &)> &);
 	void makeAttack(const CBattleInfoCallback & battle,const CStack * from,const CStack * to,int,BattleHex,bool,bool,bool){
 		auto & target=gameHandler->field.units.at(to->unitId());
@@ -254,4 +257,20 @@ int main(){
 	ghostActions.evolutionAttack(ghosts,&ghosts.units.at(1),&ghosts.units.at(2),{{{2,1,10,true,1}}});
 	for(int i=2;i<=9;++i) assert(!ghosts.units.at(i).alive());
 	assert(ghostActions.reactionSerial==1);
+	CBattleInfoCallback magic;
+	CGameHandler magicServer{magic,{}};
+	BattleActionProcessor magicActions{&magicServer};
+	magic.units.emplace(1,CStack{1,{1,12,120,{4},BattleSide::LEFT},{}});
+	magic.units.emplace(2,CStack{2,{2,5,50,{5},BattleSide::RIGHT},{}});
+	magic.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,21});
+	magicActions.evolutionSpell(magic,{BattleSide::LEFT,{1},{}});
+	magicActions.evolutionSpell(magic,{BattleSide::RIGHT,{1},{1}});
+	assert(magic.units.at(1).bonuses.size()==1);
+	magicActions.evolutionSpell(magic,{BattleSide::RIGHT,{1},{}});
+	magicActions.evolutionAttack(magic,&magic.units.at(1),&magic.units.at(2),{{{2,1,10,false,0}}});
+	assert(magic.units.at(2).data.health==38 && magic.units.at(1).bonuses.size()==1);
+	magic.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,18});
+	magic.units.at(2).data.health=0;
+	magicActions.evolutionDamage(magic,{1,{{2,-1,38,true,4}}});
+	assert(magic.units.size()==3);
 }

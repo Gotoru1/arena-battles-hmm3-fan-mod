@@ -15,6 +15,7 @@
 #include "../ISpellMechanics.h"
 
 #include "../../CStack.h"
+#include "../../mapping/CMap.h"
 #include "../../battle/IBattleState.h"
 #include "../../battle/CBattleInfoCallback.h"
 #include "../../networkPacks/PacksForClientBattle.h"
@@ -56,7 +57,7 @@ void Damage::apply(ServerCallback * server, const Mechanics * m, const EffectTar
 			BattleStackAttacked bsa;
 			bsa.damageAmount = damageForTarget(targetIndex, m, unit);
 			bsa.stackAttacked = unit->unitId();
-			bsa.attackerID = -1;
+			bsa.attackerID = server->getMap() && server->getMap()->evolutionSeed ? m->caster->getCasterUnitId() : -1;
 			auto newState = unit->acquireState();
 			CStack::prepareAttacked(bsa, *server->getRNG(), newState);
 

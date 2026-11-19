@@ -11,6 +11,7 @@
 #include "ServerSpellCastEnvironment.h"
 
 #include "CGameHandler.h"
+#include "battles/BattleProcessor.h"
 #include "queries/QueriesProcessor.h"
 #include "queries/CQuery.h"
 
@@ -42,6 +43,7 @@ vstd::RNG * ServerSpellCastEnvironment::getRNG()
 void ServerSpellCastEnvironment::apply(CPackForClient & pack)
 {
 	gh->sendAndApply(pack);
+	if(const auto * spell=dynamic_cast<const BattleSpellCast *>(&pack)) gh->battles->evolutionSpell(*spell);
 }
 
 void ServerSpellCastEnvironment::apply(BattleLogMessage & pack)
@@ -67,6 +69,7 @@ void ServerSpellCastEnvironment::apply(SetStackEffect & pack)
 void ServerSpellCastEnvironment::apply(StacksInjured & pack)
 {
 	gh->sendAndApply(pack);
+	gh->battles->evolutionDamage(pack);
 }
 
 void ServerSpellCastEnvironment::apply(BattleObstaclesChanged & pack)
