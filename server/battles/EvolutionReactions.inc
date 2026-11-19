@@ -536,6 +536,53 @@ public:
 		});
 	}
 
+	static bool threatens(const CStack * mover,BattleHex hex,const CStack * guard)
+	{
+		if(!guard->alive() || guard->unitSide()==mover->unitSide() || !rules(guard).count(20)) return false;
+		for(auto a:guard->getHexes())
+			for(auto b:mover->getHexes(hex))
+				if(BattleHex::getDistance(a,b)==1) return true;
+		return false;
+	}
+
+	void spread(const CStack * host)
+	{
+		auto infected=host->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500026));
+		if(infected->empty()) return;
+		for(auto * other:living())
+		{
+			if(other->unitSide()!=host->unitSide() || other==host || BattleHex::getDistance(other->getPosition(),host->getPosition())!=1) continue;
+			for(auto type:{BonusType::EVOLUTION_PARASITE,BonusType::EVOLUTION_WOUND})
+			{
+				const auto status=host->getBonusesOfType(type);
+				for(const auto & mark:*status)
+				{
+					const auto * owner=battle.battleGetStackByID(mark->val,false);
+					if(!owner || !attach(other,owner,type)) continue;
+					remember(other,500026,(*infected->begin())->val);
+					return;
+				}
+			}
+		}
+	}
+
+	void moved(const CStack * mover)
+	{
+		spread(mover);
+		const auto landing=mover->getPosition();
+		for(auto * guard:living())
+		{
+			if(!mover->alive() || mover->getPosition()!=landing) break;
+			if(!threatens(mover,landing,guard) || marked(guard,500020,battle.battleGetRound())) continue;
+			auto old=guard->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500020));
+			std::vector<Bonus> previous;
+			for(const auto & mark:*old)previous.push_back(*mark);
+			spend(guard,previous);
+			remember(guard,500020,battle.battleGetRound());
+			strike(guard,mover);
+		}
+	}
+
 	void spellCast(const BattleSpellCast & spell)
 	{
 		for(auto id:spell.affectedCres)
@@ -597,6 +644,7 @@ public:
 	void attack(const CStack * source,const CStack * primary,const BattleAttack & packet)
 	{
 		const auto active = rules(source);
+		spread(source);
 		// The packet may contain multiple victims. A spark is indirect damage, so it dispatches
 		// death reactions but cannot recursively emit another primary attack.
 		for(const auto & hit : packet.bsa)
@@ -627,6 +675,7 @@ public:
 			}
 			if(primary->alive() && active.count(9)) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
+			if(primary->alive() && active.count(26)) remember(primary,500026,source->unitId());
 		}
 		if(active.count(23))
 		{
@@ -691,4 +740,20 @@ void BattleActionProcessor::evolutionDamage(const CBattleInfoCallback & battle,c
 void BattleActionProcessor::evolutionSpell(const CBattleInfoCallback & battle,const BattleSpellCast & packet)
 {
 	withEvolution(battle,[&](auto & context){context.spellCast(packet);});
+}
+
+bool BattleActionProcessor::evolutionThreatened(const CBattleInfoCallback & battle,const CStack * mover,BattleHex hex)
+{
+	for(auto * guard:battle.battleGetAllStacks())
+		if(evolution_server::EvolutionReactions::threatens(mover,hex,guard))
+		{
+			const auto marks=guard->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500020));
+			if(std::none_of(marks->begin(),marks->end(),[&](const auto & mark){return mark->val==battle.battleGetRound();})) return true;
+		}
+	return false;
+}
+
+void BattleActionProcessor::evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover)
+{
+	withEvolution(battle,[&](auto & context){context.moved(mover);});
 }

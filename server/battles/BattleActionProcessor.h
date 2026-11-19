@@ -101,6 +101,8 @@ class BattleActionProcessor : boost::noncopyable
 	uint64_t reactionSerial = 0;
 	evolution_server::EvolutionReactions * activeReaction = nullptr;
 	void withEvolution(const CBattleInfoCallback & battle,const std::function<void(evolution_server::EvolutionReactions &)> & work);
+	bool evolutionThreatened(const CBattleInfoCallback & battle,const CStack * mover,BattleHex hex);
+	void evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover);
 	void evolutionAttack(const CBattleInfoCallback & battle, const CStack * attacker, const CStack * defender, const BattleAttack & attack);
 public:
 	void evolutionDamage(const CBattleInfoCallback & battle,const StacksInjured & packet);

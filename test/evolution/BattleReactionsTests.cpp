@@ -50,7 +50,9 @@ struct CStack {
 	int unitBaseAmount() const{return data.count;}
 	void damage(int64_t & n){data.health-=int(n);}
 	auto unitSide() const{return data.side;} auto creatureId() const{return CreatureID(data.species);}
-	auto getPosition() const{return data.pos;} int getAvailableHealth() const{return data.health;}
+	auto getPosition() const{return data.pos;} std::vector<BattleHex> getHexes() const{return {data.pos};}
+	std::vector<BattleHex> getHexes(BattleHex p) const{return {p};}
+	int getAvailableHealth() const{return data.health;}
 	auto getBonusesOfType(BonusType t) const{
 		auto result=std::make_shared<std::vector<std::shared_ptr<Bonus>>>();
 		for(auto b:bonuses) if(b.type==t)result->push_back(std::make_shared<Bonus>(b));
@@ -120,6 +122,8 @@ namespace evolution_server {class EvolutionReactions;}
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
 	evolution_server::EvolutionReactions * activeReaction=nullptr;
+	bool evolutionThreatened(const CBattleInfoCallback &,const CStack *,BattleHex);
+	void evolutionMoved(const CBattleInfoCallback &,const CStack *);
 	void evolutionDamage(const CBattleInfoCallback &,const StacksInjured &);
 	void evolutionSpell(const CBattleInfoCallback &,const BattleSpellCast &);
 	void withEvolution(const CBattleInfoCallback &,const std::function<void(evolution_server::EvolutionReactions &)> &);
@@ -342,4 +346,18 @@ int main(){
 	assert(oath.units.at(4).data.health==100);
 	oathActions.evolutionAttack(oath,&oath.units.at(1),&oath.units.at(4),{{{4,1,10,false,0}}});
 	assert(oath.units.at(4).data.health==95);
+	CBattleInfoCallback border;
+	CGameHandler borderServer{border,{}};
+	BattleActionProcessor borderActions{&borderServer};
+	for(int i=1;i<=4;++i)border.units.emplace(i,CStack{i,{i,4,40,{i+3},i==1?BattleSide::LEFT:BattleSide::RIGHT},{}});
+	border.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,20});
+	assert(borderActions.evolutionThreatened(border,&border.units.at(2),{5}));
+	borderActions.evolutionMoved(border,&border.units.at(2));
+	assert(!border.units.at(2).alive() && !borderActions.evolutionThreatened(border,&border.units.at(3),{5}));
+	border.round++;
+	assert(borderActions.evolutionThreatened(border,&border.units.at(3),{5}));
+	for(int id:{9,26}) border.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,id});
+	borderActions.evolutionAttack(border,&border.units.at(1),&border.units.at(3),{{{3,1,1,false,0}}});
+	borderActions.evolutionMoved(border,&border.units.at(3));
+	assert(border.units.at(4).getBonusesOfType(BonusType::EVOLUTION_PARASITE)->front()->val==1);
 }

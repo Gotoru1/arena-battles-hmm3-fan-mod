@@ -11,6 +11,8 @@
 #include "BattleActionProcessor.h"
 #include "../../lib/battle/EvolutionSignals.h"
 #include "../../lib/battle/EvolutionChain.h"
+#include "../../lib/gameState/CGameState.h"
+#include "../../lib/mapping/CMap.h"
 #include "../../lib/battle/EvolutionDamage.h"
 
 #include "BattleProcessor.h"
@@ -753,6 +755,7 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 		assert(battle.isInTacticRange(dest));
 	}
 
+	const bool arenaMovement = gameHandler->gameState().getMap().evolutionSeed && !battle.battleGetTacticDist();
 	auto start = currentUnit->getPosition();
 	if (start == dest)
 		return { 0, false, false };
@@ -858,6 +861,11 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 			sm.distance = pathDistance;
 			sm.teleporting = false;
 			gameHandler->sendAndApply(sm);
+			if(arenaMovement)
+			{
+				evolutionMoved(battle,currentUnit);
+				if(!currentUnit->alive() || currentUnit->getPosition()!=dest) return {static_cast<int16_t>(pathDistance),true,false};
+			}
 		}
 	}
 	else //for non-flying creatures
@@ -969,6 +977,7 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 					}
 					if(!obstacleHit)
 						passed.insert(hex);
+					if(arenaMovement && evolutionThreatened(battle,currentUnit,hex)) obstacleHit=true;
 				}
 			}
 
@@ -983,6 +992,12 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 				sm.tilesToMove = tiles;
 				gameHandler->sendAndApply(sm);
 				tiles.clear();
+				if(arenaMovement)
+				{
+					const auto landing=currentUnit->getPosition();
+					evolutionMoved(battle,currentUnit);
+					if(!currentUnit->alive() || landing!=currentUnit->getPosition()) return {static_cast<int16_t>(pathDistance),true,false};
+				}
 			}
 
 			//we don't handle obstacle at the destination tile -> it's handled separately in the if at the end
