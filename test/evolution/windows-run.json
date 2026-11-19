@@ -1,0 +1,755 @@
+{
+  "commit": "dd27eef50f4d6e92a301d1a4cf7044c4dba3fa37",
+  "seed": 2048,
+  "columns": [
+    "wave",
+    "victory",
+    "post_victory_roster_or_last_roster_on_loss",
+    "cumulative_enemy_casualties"
+  ],
+  "stock": [
+    [
+      1,
+      1,
+      31,
+      3
+    ],
+    [
+      2,
+      1,
+      40,
+      6
+    ],
+    [
+      3,
+      1,
+      56,
+      13
+    ],
+    [
+      4,
+      1,
+      82,
+      20
+    ],
+    [
+      5,
+      1,
+      113,
+      32
+    ],
+    [
+      6,
+      1,
+      134,
+      40
+    ],
+    [
+      7,
+      1,
+      173,
+      51
+    ],
+    [
+      8,
+      1,
+      221,
+      61
+    ],
+    [
+      9,
+      1,
+      253,
+      66
+    ],
+    [
+      10,
+      1,
+      288,
+      73
+    ],
+    [
+      11,
+      1,
+      314,
+      80
+    ],
+    [
+      12,
+      1,
+      357,
+      85
+    ],
+    [
+      13,
+      1,
+      377,
+      89
+    ],
+    [
+      14,
+      1,
+      429,
+      95
+    ],
+    [
+      15,
+      1,
+      459,
+      106
+    ]
+  ],
+  "cases": {
+    "replay": {
+      "reports": [
+        [
+          1,
+          1,
+          31,
+          3
+        ],
+        [
+          2,
+          1,
+          40,
+          6
+        ],
+        [
+          3,
+          1,
+          56,
+          13
+        ],
+        [
+          4,
+          1,
+          82,
+          20
+        ],
+        [
+          5,
+          1,
+          113,
+          32
+        ],
+        [
+          6,
+          1,
+          134,
+          40
+        ],
+        [
+          7,
+          1,
+          173,
+          51
+        ],
+        [
+          8,
+          1,
+          221,
+          61
+        ],
+        [
+          9,
+          1,
+          253,
+          66
+        ],
+        [
+          10,
+          1,
+          288,
+          73
+        ],
+        [
+          11,
+          1,
+          314,
+          80
+        ],
+        [
+          12,
+          1,
+          357,
+          85
+        ],
+        [
+          13,
+          1,
+          377,
+          89
+        ],
+        [
+          14,
+          1,
+          429,
+          95
+        ],
+        [
+          15,
+          1,
+          459,
+          106
+        ]
+      ],
+      "boss_waves": [
+        5,
+        10,
+        15
+      ],
+      "animation_messages": 94,
+      "set_stack_effect_packets": 15,
+      "stacks_injured_packets": 7,
+      "player_effects_before_last_battle": [
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "primarySkill.defence",
+                  "type": "PRIMARY_SKILL",
+                  "val": 1
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventBeforeAttack",
+          "type": "ON_COMBAT_EVENT"
+        },
+        {
+          "subtype": "soulStealPermanent",
+          "type": "SOUL_STEAL",
+          "val": 4
+        },
+        {
+          "type": "ADDITIONAL_ATTACK",
+          "val": 1
+        },
+        {
+          "subtype": "creatureDamageBoth",
+          "type": "CREATURE_DAMAGE",
+          "val": 3
+        },
+        {
+          "type": "LIFE_DRAIN",
+          "val": 50
+        },
+        {
+          "type": "STACK_HEALTH",
+          "val": 4
+        },
+        {
+          "subtype": "creatureDamageBoth",
+          "type": "CREATURE_DAMAGE",
+          "val": 112
+        },
+        {
+          "addInfo": 1,
+          "type": "FEROCITY",
+          "val": 1
+        }
+      ]
+    },
+    "mirror": {
+      "reports": [
+        [
+          1,
+          1,
+          31,
+          3
+        ],
+        [
+          2,
+          1,
+          40,
+          9
+        ],
+        [
+          3,
+          1,
+          51,
+          14
+        ],
+        [
+          4,
+          1,
+          63,
+          24
+        ],
+        [
+          5,
+          1,
+          78,
+          34
+        ],
+        [
+          6,
+          1,
+          92,
+          37
+        ],
+        [
+          7,
+          1,
+          111,
+          50
+        ],
+        [
+          8,
+          1,
+          132,
+          60
+        ],
+        [
+          9,
+          1,
+          155,
+          64
+        ],
+        [
+          10,
+          1,
+          180,
+          77
+        ],
+        [
+          11,
+          1,
+          207,
+          85
+        ],
+        [
+          12,
+          1,
+          236,
+          94
+        ],
+        [
+          13,
+          1,
+          266,
+          98
+        ],
+        [
+          14,
+          1,
+          299,
+          104
+        ],
+        [
+          15,
+          1,
+          332,
+          115
+        ]
+      ],
+      "boss_waves": [
+        5,
+        10,
+        15
+      ],
+      "animation_messages": 96,
+      "set_stack_effect_packets": 11,
+      "stacks_injured_packets": 11,
+      "player_effects_before_last_battle": [
+        {
+          "type": "FIRE_SHIELD",
+          "val": 30
+        },
+        {
+          "type": "LIFE_DRAIN",
+          "val": 200
+        },
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "creatureDamageBoth",
+                  "type": "CREATURE_DAMAGE",
+                  "val": 2
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventAfterMove",
+          "type": "ON_COMBAT_EVENT"
+        },
+        {
+          "type": "ATTACKS_ALL_ADJACENT",
+          "val": 2
+        },
+        {
+          "subtype": "creatureDamageBoth",
+          "type": "CREATURE_DAMAGE",
+          "val": 2
+        },
+        {
+          "type": "FIRE_SHIELD",
+          "val": 30
+        },
+        {
+          "type": "LIFE_DRAIN",
+          "val": 25
+        }
+      ]
+    },
+    "fortress": {
+      "reports": [
+        [
+          1,
+          1,
+          31,
+          3
+        ],
+        [
+          2,
+          1,
+          40,
+          9
+        ],
+        [
+          3,
+          1,
+          49,
+          15
+        ],
+        [
+          4,
+          1,
+          60,
+          21
+        ],
+        [
+          5,
+          1,
+          72,
+          28
+        ],
+        [
+          6,
+          1,
+          85,
+          35
+        ],
+        [
+          7,
+          1,
+          102,
+          41
+        ],
+        [
+          8,
+          1,
+          120,
+          45
+        ],
+        [
+          9,
+          1,
+          143,
+          50
+        ],
+        [
+          10,
+          1,
+          166,
+          57
+        ],
+        [
+          11,
+          1,
+          190,
+          63
+        ],
+        [
+          12,
+          1,
+          214,
+          71
+        ],
+        [
+          13,
+          1,
+          242,
+          76
+        ],
+        [
+          14,
+          1,
+          274,
+          81
+        ],
+        [
+          15,
+          1,
+          290,
+          91
+        ]
+      ],
+      "boss_waves": [
+        5,
+        10,
+        15
+      ],
+      "animation_messages": 83,
+      "set_stack_effect_packets": 116,
+      "stacks_injured_packets": 2,
+      "player_effects_before_last_battle": [
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "primarySkill.defence",
+                  "type": "PRIMARY_SKILL",
+                  "val": 5
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventBeforeAttack",
+          "type": "ON_COMBAT_EVENT"
+        },
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "creatureDamageBoth",
+                  "type": "CREATURE_DAMAGE",
+                  "val": 3
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventAfterAttacked",
+          "type": "ON_COMBAT_EVENT"
+        },
+        {
+          "type": "ADDITIONAL_RETALIATION",
+          "val": 4
+        },
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "creatureDamageBoth",
+                  "type": "CREATURE_DAMAGE",
+                  "val": 2
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventAfterMove",
+          "type": "ON_COMBAT_EVENT"
+        },
+        {
+          "addInfo": {
+            "effect": [
+              {
+                "action": "bonus",
+                "bonus": {
+                  "duration": "ONE_BATTLE",
+                  "subtype": "primarySkill.defence",
+                  "type": "PRIMARY_SKILL",
+                  "val": 2
+                },
+                "targetEnemy": false
+              }
+            ]
+          },
+          "subtype": "combatEventBeforeAttacked",
+          "type": "ON_COMBAT_EVENT"
+        }
+      ]
+    },
+    "growth": {
+      "reports": [
+        [
+          1,
+          1,
+          31,
+          3
+        ],
+        [
+          2,
+          1,
+          38,
+          10
+        ],
+        [
+          3,
+          1,
+          48,
+          17
+        ],
+        [
+          4,
+          1,
+          61,
+          26
+        ],
+        [
+          5,
+          1,
+          76,
+          34
+        ],
+        [
+          6,
+          1,
+          90,
+          41
+        ],
+        [
+          7,
+          1,
+          107,
+          47
+        ],
+        [
+          8,
+          1,
+          127,
+          59
+        ],
+        [
+          9,
+          1,
+          147,
+          63
+        ],
+        [
+          10,
+          1,
+          169,
+          70
+        ],
+        [
+          11,
+          1,
+          196,
+          77
+        ],
+        [
+          12,
+          1,
+          220,
+          87
+        ],
+        [
+          13,
+          1,
+          249,
+          93
+        ],
+        [
+          14,
+          1,
+          263,
+          97
+        ],
+        [
+          15,
+          1,
+          285,
+          106
+        ]
+      ],
+      "boss_waves": [
+        5,
+        10,
+        15
+      ],
+      "animation_messages": 61,
+      "set_stack_effect_packets": 0,
+      "stacks_injured_packets": 4,
+      "player_effects_before_last_battle": [
+        {
+          "type": "STACKS_SPEED",
+          "val": 5
+        },
+        {
+          "type": "ATTACKS_ALL_ADJACENT",
+          "val": 3
+        },
+        {
+          "subtype": "creatureDamageBoth",
+          "type": "CREATURE_DAMAGE",
+          "val": 3
+        },
+        {
+          "subtype": "creatureDamageBoth",
+          "type": "CREATURE_DAMAGE",
+          "val": 27
+        }
+      ]
+    },
+    "defeat": {
+      "reports": [
+        [
+          1,
+          1,
+          31,
+          3
+        ],
+        [
+          2,
+          1,
+          39,
+          10
+        ],
+        [
+          3,
+          1,
+          50,
+          17
+        ],
+        [
+          4,
+          1,
+          63,
+          26
+        ],
+        [
+          5,
+          0,
+          63,
+          26
+        ]
+      ],
+      "boss_waves": [
+        5
+      ],
+      "animation_messages": 13,
+      "set_stack_effect_packets": 0,
+      "stacks_injured_packets": 0,
+      "player_effects_before_last_battle": [
+        {
+          "type": "STACK_HEALTH",
+          "val": 16
+        }
+      ]
+    }
+  },
+  "defeat_relaunch_matches": true,
+  "archive_sha256": "ad611a5f371abe241772e9e8abfadc78569be5cda6c7e57e644547c71dd39bac"
+}
