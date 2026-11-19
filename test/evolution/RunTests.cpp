@@ -176,6 +176,27 @@ int main()
 	const auto folder = std::filesystem::temp_directory_path() / ("evolution-slots-" + std::to_string(std::random_device{}()));
 	require(std::filesystem::create_directory(folder),"Isolated save test profile");
 	SaveSlots slots(folder);
+	{
+		RoguelikeRun full(17);
+		full.begin(0,{1,2,3,4},1,24);
+		for(int wave=1;wave<=16;++wave)
+		{
+			if(full.offersRecruitment()) full.recruit(static_cast<int>(full.rosterSize())+1,5);
+			slots.write(0,full);
+			full=slots.read(0);
+			require(!full.offersRecruitment(),"Reload preserves reinforcement choice");
+			full.finish(true,24,1,{"trait9","trait23","trait51"},{},false,std::vector<int>(full.rosterSize()-1,5));
+			full.pick(0,full.rosterSize()-1);
+		}
+		require(full.rosterSize()==7,"Seven independent lineages at wave sixteen");
+		std::filesystem::remove(slots.path(0));
+		RoguelikeRun solo(11);
+		solo.begin(0,{1,2,3,4},1,24);
+		solo.lastRecruitmentWave=solo.wave;
+		slots.write(0,solo);
+		require(slots.read(0).rosterSize()==1 && !slots.read(0).offersRecruitment(),"Solo run remains solo after resuming");
+		std::filesystem::remove(slots.path(0));
+	}
 	RoguelikeRun branching(12);
 	branching.begin(1,{1,2,3,4},1,24);
 	branching.recruit(2,5);

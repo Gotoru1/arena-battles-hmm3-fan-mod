@@ -296,7 +296,7 @@ void ArenaDraft::chooseEvolutionCreature()
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
-void ArenaDraft::settleEvolution(bool won, const std::array<int, 3> & survivors, int64_t casualties)
+void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties)
 {
 	if(!evolutionBattle())
 		return;
@@ -434,11 +434,17 @@ try
 	eliteFight = false;
 	if(!player().hero)
 		player().hero = createHero(HeroTypeID(run->hero));
-	if(run->rosterSize() < (run->wave >= 4 ? 3u : 2u))
+	if(run->offersRecruitment())
 	{
 		const int tier = static_cast<int>(run->rosterSize()) + 1;
 		rng.seed(run->random());
 		auto choices = offerCreatures(player(), tier);
+		choices.erase(std::remove_if(choices.begin(),choices.end(),[](const auto & candidate){
+			for(size_t slot=0;slot<run->rosterSize();++slot)
+				if(run->stack(slot).creature == candidate.first.getNum()) return true;
+			return false;
+		}),choices.end());
+		if(choices.size() > 2) choices.resize(2);
 		std::vector<ArenaOffer> cards;
 		for(auto & choice : choices)
 		{
@@ -446,11 +452,16 @@ try
 			choice.second = static_cast<int>(std::max<int64_t>(2, budget / std::max<int64_t>(1, choice.first.toCreature()->getAIValue())));
 			cards.push_back(creatureOffer(choice.first, choice.second));
 		}
+		cards.push_back(evolutionCard("Пропустить","Оставить нынешнюю армию. Новое предложение будет через три волны."));
 		auto self = shared_from_this();
-		ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Подкрепление", "Выбери новый постоянный отряд", cards,
+		ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Подкрепление", "Пополнить армию или сохранить состав?", cards,
 			[self, choices](int i){
-				const auto & choice = choices.at(i);
-				run->recruit(choice.first.getNum(), choice.second);
+				if(static_cast<size_t>(i) == choices.size()) run->lastRecruitmentWave = run->wave;
+				else
+				{
+					const auto & choice = choices.at(i);
+					run->recruit(choice.first.getNum(), choice.second);
+				}
 				self->buildEvolutionBattle();
 			}, [self](){ self->cancel(); }, nullptr);
 		return;

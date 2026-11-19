@@ -81,6 +81,12 @@ public:
 	Amount kills = 0;
 	int hero = -1;
 	std::array<int, 4> primary{};
+	Amount lastRecruitmentWave = 0;
+	bool offersRecruitment() const
+	{
+		return phase == Phase::Battle && rosterSize() < 7 && (wave - 1) % 3 == 0 && lastRecruitmentWave != wave;
+	}
+
 	Lineage army;
 	std::vector<Lineage> companions;
 	std::vector<size_t> recipients;
@@ -113,7 +119,7 @@ public:
 
 	void recruit(int creature, int count)
 	{
-		if(phase != Phase::Battle || rosterSize() >= (wave >= 4 ? 3u : 2u) || creature < 0 || count <= 0)
+		if(phase != Phase::Battle || !offersRecruitment() || creature < 0 || count <= 0)
 			throw std::logic_error("Invalid recruitment");
 		for(size_t i = 0; i < rosterSize(); ++i)
 			if(stack(i).creature == creature) throw std::logic_error("Duplicate creature");
@@ -121,6 +127,7 @@ public:
 		line.creature = creature;
 		line.count = count;
 		companions.push_back(line);
+		lastRecruitmentWave = wave;
 	}
 
 	unsigned rank(const std::string & id, size_t slot = 0) const
@@ -290,7 +297,7 @@ public:
 		if(version != "EA2")
 		{
 			size_t count;
-			if(!(in >> count) || count > 2) throw invalid;
+			if(!(in >> count) || count > 6) throw invalid;
 			for(size_t i = 0; i < count; ++i)
 			{
 				Lineage line;

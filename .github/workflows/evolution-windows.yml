@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Verify mutation catalog and battle reactions
+        run: |
+          python3 test/evolution/test_catalog.py
+          g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/BattleReactionsTests.cpp -o "$RUNNER_TEMP/reaction-tests"
+          "$RUNNER_TEMP/reaction-tests"
       - name: Install Boost headers
         shell: bash
         run: |
@@ -25,9 +30,6 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/RunTests.cpp -o "$RUNNER_TEMP/evolution-tests"
           "$RUNNER_TEMP/evolution-tests"
-          g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/BattleReactionsTests.cpp -o "$RUNNER_TEMP/reaction-tests"
-          "$RUNNER_TEMP/reaction-tests"
-          python3 test/evolution/test_catalog.py
   build:
     runs-on: windows-2025-vs2026
     timeout-minutes: 120

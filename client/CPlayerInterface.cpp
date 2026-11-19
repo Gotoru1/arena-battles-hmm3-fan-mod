@@ -842,11 +842,11 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 	{
 		auto battle = cb->getBattle(battleID);
 		const auto side = battle->battleGetMySide();
-		std::array<int, 3> survivors{};
+		std::array<int, 7> survivors{};
 		for(const auto * stack : battle->battleGetAllStacks())
 			{
 			if(stack->unitSide() != side || !stack->base || stack->isClone() || !stack->alive()) continue;
-			for(int slot = 0; slot < 3; ++slot)
+			for(int slot = 0; slot < 7; ++slot)
 				if(stack->unitSlot() == SlotID(slot))
 					survivors[slot] = std::max(0, stack->getCount() - stack->health.getResurrected());
 		}

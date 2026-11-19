@@ -30,8 +30,13 @@ public:
 	{
 		std::ifstream input(path(slot),std::ios::binary);
 		std::string signature;
-		if(!(input >> signature) || signature != "Evolution2/1") throw std::runtime_error("Несовместимая версия сохранения");
-		return RoguelikeRun::restore(input);
+		if(!(input >> signature) || (signature != "Evolution2/1" && signature != "Evolution2/2")) throw std::runtime_error("Несовместимая версия сохранения");
+		Amount last = 0;
+		if(signature == "Evolution2/2" && (!(input >> last) || last < 0)) throw std::runtime_error("Повреждено сохранение");
+		auto run = RoguelikeRun::restore(input);
+		if(last > run.wave) throw std::runtime_error("Неверная волна подкрепления");
+		run.lastRecruitmentWave = last;
+		return run;
 	}
 
 	void write(int slot, const RoguelikeRun & state) const
@@ -55,7 +60,7 @@ public:
 		{
 			std::ofstream out(temp, std::ios::binary | std::ios::trunc);
 			out.exceptions(std::ios::badbit | std::ios::failbit);
-			out << "Evolution2/1\n";
+			out << "Evolution2/2 " << state.lastRecruitmentWave << '\n';
 			state.save(out);
 			out.close();
 			std::filesystem::rename(temp, dest);
