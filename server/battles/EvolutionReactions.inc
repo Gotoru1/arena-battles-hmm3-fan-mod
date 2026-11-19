@@ -220,12 +220,12 @@ class EvolutionReactions
 		server.sendAndApply(packet);
 	}
 
-	void summon(const CStack * parent, CreatureID species, int count, BattleHex origin, bool clone)
+	const CStack * summon(const CStack * parent, CreatureID species, int count, BattleHex origin, bool clone)
 	{
 		auto charges=spellCharges(parent);
 		const int extra=static_cast<int>(std::min<size_t>(charges.size(),INT32_MAX-count));
 		auto * child = spawn(parent->unitSide(),species,count+extra,origin);
-		if(!child) return;
+		if(!child) return nullptr;
 		spend(parent,charges);
 		descend(parent,child);
 		const auto inherited = rules(parent);
@@ -244,6 +244,7 @@ class EvolutionReactions
 			adapt(child);
 		}
 		observe(child);
+		return child;
 	}
 
 	void copyProperty(const CStack * recipient,const CStack * donor)
@@ -287,6 +288,30 @@ class EvolutionReactions
 		return id;
 	}
 
+	int broodCount(const CStack * unit,int subtype) const
+	{
+		const auto stored=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(subtype));
+		return stored->empty()?0:(*stored->begin())->val;
+	}
+
+	void setBroodCount(const CStack * unit,int subtype,int value)
+	{
+		const auto stored=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(subtype));
+		std::vector<Bonus> old;
+		for(const auto & mark:*stored)old.push_back(*mark);
+		spend(unit,old);
+		if(value) remember(unit,subtype,value);
+	}
+
+	void lostLarvae(const CStack * larva,uint32_t count)
+	{
+		if(!count) return;
+		const auto mothers=larva->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500075));
+		for(const auto & mother:*mothers)
+			if(const auto * queen=battle.battleGetStackByID(mother->val,false))
+				setBroodCount(queen,500175,static_cast<int>(std::min<int64_t>(INT32_MAX-1,int64_t(broodCount(queen,500175))+count)));
+	}
+
 	bool lay(const CStack * parent, BattleHex hex)
 	{
 		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
@@ -296,6 +321,11 @@ class EvolutionReactions
 		source.type = BonusType::EVOLUTION_BROOD;
 		source.val = static_cast<int>(parent->unitId());
 		grant(egg,source);
+		if(const auto stored=broodCount(parent,500175))
+		{
+			setBroodCount(egg,500275,stored);
+			setBroodCount(parent,500175,0);
+		}
 		return true;
 	}
 
@@ -307,6 +337,7 @@ class EvolutionReactions
 		const auto side = egg->unitSide();
 		const auto hex = egg->getPosition();
 		const auto id = egg->unitId();
+		const int clutch=1+broodCount(egg,500275);
 		BattleUnitsChanged remove;
 		remove.battleID = battle.getBattle()->getBattleID();
 		remove.changedStacks.emplace_back(id,UnitChanges::EOperation::REMOVE);
@@ -314,10 +345,20 @@ class EvolutionReactions
 		auto * parent = battle.battleGetStackByID(parentId,false);
 		if(parent)
 		{
-			summon(parent,larvaType(),1,hex,false);
+			const auto * larva=summon(parent,larvaType(),clutch,hex,false);
+			if(larva && rules(parent).count(75))
+			{
+				remember(larva,500075,parent->unitId());
+				for(auto trait:rules(parent))
+					if(trait.first!=75)
+					{
+						transfer(larva,trait.first,trait.second);
+						break;
+					}
+			}
 			if(rules(parent).count(60) && lay(parent,hex)) discovery(parent,2);
 		}
-		else spawn(side,larvaType(),1,hex);
+		else spawn(side,larvaType(),clutch,hex);
 		return true;
 	}
 
@@ -480,6 +521,11 @@ class EvolutionReactions
 	{
 		auto beforeSummons = living();
 		const auto legacy=rules(corpse);
+		const auto pathogens=corpse->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500062));
+		for(const auto & germ:*pathogens)
+			if(auto * owner=battle.battleGetStackByID(germ->val,false))
+				if(auto * carrier=summon(owner,larvaType(),1,corpse->getPosition(),false))
+					remember(carrier,500162,owner->unitId());
 		if(legacy.count(22) && !marked(corpse,500022,1))
 		{
 			if(auto * shell=spawn(corpse->unitSide(),huskType(),1,corpse->getPosition()))
@@ -607,6 +653,7 @@ public:
 			switch(event.kind)
 			{
 			case evolution::ReactionKind::Loss:
+				lostLarvae(target,event.amount);
 				casualties(event.amount);
 				if(event.amount) { shed(target,event.amount); split(target); }
 				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && rules(source).count(1))
@@ -637,6 +684,24 @@ public:
 		return false;
 	}
 
+	void epidemic(const CStack * carrier)
+	{
+		const auto roots=carrier->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500162));
+		for(const auto & root:*roots)
+		{
+			const CStack * closest=nullptr;
+			for(auto * unit:living())
+			{
+				if(unit->unitSide()==carrier->unitSide() || marked(unit,500062,root->val)) continue;
+				const auto distance=BattleHex::getDistance(carrier->getPosition(),unit->getPosition());
+				if(distance<=3 && (!closest || distance<BattleHex::getDistance(carrier->getPosition(),closest->getPosition()))) closest=unit;
+			}
+			if(!closest) continue;
+			remember(closest,500062,root->val);
+			if(auto * owner=battle.battleGetStackByID(root->val,false)) attach(closest,owner,BonusType::EVOLUTION_PARASITE);
+		}
+	}
+
 	void spread(const CStack * host)
 	{
 		auto infected=host->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500026));
@@ -661,6 +726,7 @@ public:
 	void moved(const CStack * mover)
 	{
 		spread(mover);
+		epidemic(mover);
 		const auto landing=mover->getPosition();
 		for(auto * guard:living())
 		{
@@ -704,7 +770,7 @@ public:
 			const auto active = rules(unit);
 			if(!unit->alive()) continue;
 			if(!first && (awakenHusk(unit) || hatch(unit))) continue;
-			if(!first) parasites(unit);
+			if(!first) { parasites(unit); if(unit->alive()) epidemic(unit); }
 			if(!unit->alive()) continue;
 			if(active.count(32)) recycle(unit,0);
 			if(first) observe(unit);
@@ -767,6 +833,7 @@ public:
 			}
 			if(primary->alive() && active.count(9)) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
+			if(primary->alive() && active.count(62)) remember(primary,500062,source->unitId());
 			if(primary->alive() && active.count(26)) remember(primary,500026,source->unitId());
 		}
 		if(active.count(23))
