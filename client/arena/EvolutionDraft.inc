@@ -316,7 +316,7 @@ void ArenaDraft::chooseEvolutionCreature()
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
-void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries)
+void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies)
 {
 	if(!evolutionBattle())
 		return;
@@ -333,7 +333,7 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 		if(!evolutionCatalog()["discoveries"][id].isNull() && std::find(run->synergies.begin(),run->synergies.end(),id)==run->synergies.end()) run->synergies.push_back(id);
 	}
 	std::vector<int> reserves(survivors.begin()+1, survivors.begin()+run->rosterSize());
-	run->finish(won, survivors[0], casualties, std::move(pool), rarities, eliteFight, reserves);
+	run->finish(won, survivors[0], casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
 	if(won)
 	{
 		std::vector<std::string> extra;
@@ -559,6 +559,11 @@ try
 		auto & effects = player().hero->getStackPtr(SlotID(static_cast<int>(slot)))->evolutionEffects;
 		for(const auto & mutation : line.mutations)
 			appendMutation(effects, acquiredRule(data,mutation.first), mutation.second, run->alternate(slot,mutation.first));
+		if(line.borrowedTrait)
+		{
+			const auto & borrowed=data["mutations"]["trait"+std::to_string(line.borrowedTrait)];
+			if(!borrowed.isNull()) appendMutation(effects,borrowed,1);
+		}
 		if(plan.anomaly) appendEffects(effects, weather, 1);
 
 		// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
@@ -670,6 +675,11 @@ try
 			if(run->hasCombination(required,slot)) scouting += "\nСочетание: " + recipe["name"].String();
 		}
 		scouting += "\nРост за забег: " + evolution::displayAmount(line.harvest) + " очк. · Бонус урона к началу волны: +" + evolution::displayAmount(run->lineageDamage(slot));
+		if(line.borrowedTrait)
+		{
+			const auto & borrowed=data["mutations"]["trait"+std::to_string(line.borrowedTrait)];
+			if(!borrowed.isNull()) scouting+="\nТрофей на эту волну: "+rarityText(borrowed,borrowed["name"].String());
+		}
 		for(const auto & mutation : line.mutations)
 		{
 			const auto & def = acquiredRule(data,mutation.first);

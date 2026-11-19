@@ -62,6 +62,8 @@ inline Encounter encounter(const Amount & wave, unsigned seed, size_t bosses)
 
 struct Lineage
 {
+	uint32_t identity=1;
+	int borrowedTrait=0;
 	int creature = -1;
 	Amount count = 0;
 	std::map<std::string, unsigned> mutations;
@@ -87,13 +89,14 @@ public:
 		return phase == Phase::Battle && rosterSize() < 7 && (wave - 1) % 3 == 0 && lastRecruitmentWave != wave;
 	}
 
+	uint32_t nextIdentity=2;
 	Lineage army;
 	std::vector<Lineage> companions;
 	std::vector<size_t> recipients;
 	std::set<std::pair<size_t,std::string>> alternateForms;
 	bool alternate(size_t slot,const std::string & id) const
 	{
-		return alternateForms.count({slot,id}) != 0;
+		return alternateForms.count({stack(slot).identity,id}) != 0;
 	}
 	std::vector<std::string> history;
 	std::vector<std::string> synergies;
@@ -124,6 +127,8 @@ public:
 		for(size_t i = 0; i < rosterSize(); ++i)
 			if(stack(i).creature == creature) throw std::logic_error("Duplicate creature");
 		Lineage line;
+		if(nextIdentity==UINT32_MAX) throw std::overflow_error("Lineage identifier exhausted");
+		line.identity=nextIdentity++;
 		line.creature = creature;
 		line.count = count;
 		companions.push_back(line);
@@ -158,7 +163,7 @@ public:
 
 	// The battle callback reports actual surviving units (including permanent soul steals).
 	// Recruitment supplies an army floor only on victory; defeat can never be converted into a win.
-	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {}, bool elite = false, const std::vector<int> & companionSurvivors = {})
+	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {}, bool elite = false, const std::vector<int> & companionSurvivors = {}, const std::array<int,7> & trophies = {})
 	{
 		if(phase != Phase::Battle)
 			throw std::logic_error("Battle already settled");
@@ -205,6 +210,7 @@ public:
 		for(size_t i = 0; i < rosterSize(); ++i)
 		{
 			stack(i).harvest += growth[i];
+			stack(i).borrowedTrait=trophies.at(i);
 			stack(i).count = remaining[i] + recruits[i];
 			Amount reinforcement = i==0 ? Amount(5+wave*2) : Amount(1+wave/(i+1));
 			if(claimed("reward.edict.vanguard"))
@@ -273,11 +279,11 @@ public:
 			auto & level=line.mutations[id];
 			if(level==std::numeric_limits<unsigned>::max()) throw std::overflow_error("Mutation rank exceeds unsigned range");
 			if(alternateForm && level!=1) throw std::logic_error("Evolution needs rank two");
-			if(alternateForm) alternateForms.emplace(slot,id);
+			if(alternateForm) alternateForms.emplace(line.identity,id);
 			++level;
 		}
 		history.push_back(offers[index]);
-		recipients.push_back(slot);
+		recipients.push_back(line.identity);
 		offers.clear();
 		++wave;
 		phase = Phase::Battle;
@@ -289,7 +295,7 @@ public:
 	{
 		if(phase != Phase::Battle && phase != Phase::Reward)
 			throw std::logic_error("No active run");
-		out << "EA4 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+		out << "EA5 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
 			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
 		for(auto value : primary) out << value << ' ';
 		out << '\n' << random << '\n';
@@ -301,7 +307,9 @@ public:
 		out << companions.size() << '\n';
 		for(const auto & line : companions)
 			out << line.creature << ' ' << line.count << ' ' << line.harvest << '\n';
-		for(auto slot : recipients) out << slot << ' ';
+		out << nextIdentity << '\n';
+		for(size_t i=0;i<rosterSize();++i) out << stack(i).identity << ' ' << stack(i).borrowedTrait << '\n';
+		for(auto identity : recipients) out << identity << ' ';
 		out << '\n' << alternateForms.size() << '\n';
 		for(const auto & form : alternateForms)
 			out << form.first << ' ' << std::quoted(form.second) << '\n';
@@ -314,7 +322,7 @@ public:
 		std::string version;
 		RoguelikeRun result(0);
 		bool reward = false;
-		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4") || !(in >> result.seed >> reward >> result.wave >> result.kills
+		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4" && version != "EA5") || !(in >> result.seed >> reward >> result.wave >> result.kills
 			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
 			throw invalid;
 		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
@@ -346,23 +354,45 @@ public:
 				result.companions.push_back(line);
 			}
 		}
+		if(version=="EA5")
+		{
+			if(!(in>>result.nextIdentity) || result.nextIdentity<2) throw invalid;
+			std::set<uint32_t> ids;
+			for(size_t i=0;i<result.rosterSize();++i)
+			{
+				auto & line=result.stack(i);
+				if(!(in>>line.identity>>line.borrowedTrait) || !line.identity || line.identity>=result.nextIdentity
+					|| line.borrowedTrait<0 || !ids.insert(line.identity).second) throw invalid;
+			}
+		}
+		else
+		{
+			for(size_t i=0;i<result.rosterSize();++i) result.stack(i).identity=static_cast<uint32_t>(i+1);
+			result.nextIdentity=static_cast<uint32_t>(result.rosterSize()+1);
+		}
+		auto readOwner=[&](){
+			size_t encoded=0;
+			if(version!="EA2" && !(in>>encoded)) throw invalid;
+			for(size_t slot=0;slot<result.rosterSize();++slot)
+				if(encoded==(version=="EA5"?result.stack(slot).identity:slot)) return slot;
+			throw invalid;
+		};
 		for(const auto & id : result.history)
 		{
-			size_t slot = 0;
-			if(version != "EA2" && (!(in >> slot) || slot >= result.rosterSize())) throw invalid;
-			result.recipients.push_back(slot);
+			const auto slot=readOwner();
+			result.recipients.push_back(result.stack(slot).identity);
 			if(!armyReward(id)) ++result.stack(slot).mutations[id];
 		}
-		if(version == "EA4")
+		if(version == "EA4" || version == "EA5")
 		{
 			size_t count;
 			if(!(in >> count) || count > result.history.size()/2) throw invalid;
 			for(size_t i=0;i<count;++i)
 			{
-				size_t slot;
+				const auto slot=readOwner();
 				std::string id;
-				if(!(in >> slot >> std::quoted(id)) || slot >= result.rosterSize() || result.rank(id,slot) < 2
-					|| !result.alternateForms.emplace(slot,id).second) throw invalid;
+				if(!(in >> std::quoted(id)) || result.rank(id,slot) < 2
+					|| !result.alternateForms.emplace(result.stack(slot).identity,id).second) throw invalid;
 			}
 		}
 		result.phase = reward ? Phase::Reward : Phase::Battle;

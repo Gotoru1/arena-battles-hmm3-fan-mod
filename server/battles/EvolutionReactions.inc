@@ -10,6 +10,7 @@ class EvolutionReactions
 	evolution::BattleChain chain;
 	std::function<void(const CStack *,const CStack *)> strike;
 	std::map<uint32_t,uint32_t> origins;
+	mutable std::map<std::pair<uint32_t,bool>,Rules> ruleCache;
 
 	uint32_t lineageRoot(uint32_t id) const
 	{
@@ -17,7 +18,7 @@ class EvolutionReactions
 		return it==origins.end()?id:it->second;
 	}
 
-	static Rules rules(const CStack * unit, bool temporaryOnly = false)
+	static Rules readRules(const CStack * unit, bool temporaryOnly = false)
 	{
 		Rules result;
 		auto markers = unit->getBonusesOfType(BonusType::EVOLUTION_TRAIT);
@@ -30,6 +31,20 @@ class EvolutionReactions
 		const auto muted=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500050));
 		for(const auto & mark:*muted) result.erase(mark->val);
 		return result;
+	}
+
+	Rules rules(const CStack * unit,bool temporaryOnly=false) const
+	{
+		auto key=std::make_pair(unit->unitId(),temporaryOnly);
+		auto it=ruleCache.find(key);
+		if(it==ruleCache.end()) it=ruleCache.emplace(key,readRules(unit,temporaryOnly)).first;
+		return it->second;
+	}
+
+	void invalidate(const CStack * unit)
+	{
+		ruleCache.erase({unit->unitId(),false});
+		ruleCache.erase({unit->unitId(),true});
 	}
 
 	std::vector<const CStack *> living() const
@@ -53,6 +68,7 @@ class EvolutionReactions
 
 	void grant(const CStack * unit, Bonus bonus)
 	{
+		if(bonus.type==BonusType::EVOLUTION_TRAIT || (bonus.type==BonusType::NONE && bonus.subtype==BonusCustomSubtype(500050))) invalidate(unit);
 		bonus.duration = BonusDuration::ONE_BATTLE;
 		SetStackEffect packet;
 		packet.battleID = battle.getBattle()->getBattleID();
@@ -521,6 +537,17 @@ class EvolutionReactions
 	{
 		auto beforeSummons = living();
 		const auto legacy=rules(corpse);
+		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(41)
+			&& source->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500041))->empty())
+		{
+			const auto owned=rules(source);
+			for(auto trait:legacy)
+				if(trait.first!=41 && trait.first!=88 && !owned.count(trait.first))
+				{
+					remember(source,500041,trait.first);
+					break;
+				}
+		}
 		const auto pathogens=corpse->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500062));
 		for(const auto & germ:*pathogens)
 			if(auto * owner=battle.battleGetStackByID(germ->val,false))
@@ -677,7 +704,7 @@ public:
 
 	static bool threatens(const CStack * mover,BattleHex hex,const CStack * guard)
 	{
-		if(!guard->alive() || guard->unitSide()==mover->unitSide() || !rules(guard).count(20)) return false;
+		if(!guard->alive() || guard->unitSide()==mover->unitSide() || !readRules(guard).count(20)) return false;
 		for(auto a:guard->getHexes())
 			for(auto b:mover->getHexes(hex))
 				if(BattleHex::getDistance(a,b)==1) return true;
@@ -879,11 +906,12 @@ void BattleActionProcessor::withEvolution(const CBattleInfoCallback & battle,con
 
 void BattleActionProcessor::evolutionRound(const CBattleInfoCallback & battle, bool first)
 {
-	withEvolution(battle,[&](auto & context){context.round(first);});
+	if(evolutionEnabled()) withEvolution(battle,[&](auto & context){context.round(first);});
 }
 
 void BattleActionProcessor::evolutionAttack(const CBattleInfoCallback & battle,const CStack * source,const CStack * target,const BattleAttack & attack)
 {
+	if(!evolutionEnabled()) return;
 	withEvolution(battle,[&](auto & reactions){
 		reactions.attack(source,target,attack);
 		const auto destination=reactions.pursue(source,target);

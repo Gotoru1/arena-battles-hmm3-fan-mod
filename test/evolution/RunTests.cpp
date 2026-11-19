@@ -121,7 +121,7 @@ int main()
 	std::stringstream legacy;
 	legacy << "EA2 1 0 2 0 2 1 24 0\n1 1 1 1\n" << team.random << "\n1\n\"mass\"\n0\n0\n";
 	auto migrated = RoguelikeRun::restore(legacy);
-	require(migrated.rank("mass") == 1 && migrated.recipients == std::vector<size_t>{0}, "EA2 migration");
+	require(migrated.rank("mass") == 1 && migrated.recipients == std::vector<size_t>{migrated.army.identity}, "EA2 migration");
 	RoguelikeRun hive(83);
 	hive.begin(1,{1,1,1,1},1,24);
 	hive.recruit(2,6);
@@ -176,6 +176,25 @@ int main()
 	const auto folder = std::filesystem::temp_directory_path() / ("evolution-slots-" + std::to_string(std::random_device{}()));
 	require(std::filesystem::create_directory(folder),"Isolated save test profile");
 	SaveSlots slots(folder);
+	{
+		RoguelikeRun trophies(30);
+		trophies.begin(0,{1,2,3,4},1,20);
+		trophies.recruit(2,4);
+		const auto id=trophies.stack(1).identity;
+		std::array<int,7> gain{};gain[1]=23;
+		trophies.finish(true,20,0,{"trait9","trait18","trait41"},{},false,{4},gain);
+		slots.write(0,trophies);
+		trophies=slots.read(0);
+		require(trophies.stack(1).identity==id && id!=trophies.stack(0).identity && trophies.stack(1).borrowedTrait==23,"Saved trophy belongs to a persistent lineage");
+		trophies.pick(0,1);
+		std::swap(trophies.army,trophies.companions[0]);
+		slots.write(0,trophies);
+		trophies=slots.read(0);
+		require(trophies.army.identity==id && trophies.rank(trophies.history.back(),0)==1,"Changing formation keeps draft ownership");
+		trophies.finish(true,20,0,{"trait9","trait18","trait41"},{},false,{4});
+		require(!trophies.army.borrowedTrait,"Trophy expires after its wave");
+		std::filesystem::remove(slots.path(0));
+	}
 	{
 		RoguelikeRun campaign(45);
 		campaign.begin(0,{1,2,3,4},1,15);

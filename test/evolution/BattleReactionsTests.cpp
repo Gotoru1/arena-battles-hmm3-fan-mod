@@ -132,6 +132,7 @@ namespace evolution_server {class EvolutionReactions;}
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
 	evolution_server::EvolutionReactions * activeReaction=nullptr;
+	bool evolutionEnabled() const{return true;}
 	bool evolutionThreatened(const CBattleInfoCallback &,const CStack *,BattleHex);
 	void evolutionMoved(const CBattleInfoCallback &,const CStack *);
 	void evolutionDamage(const CBattleInfoCallback &,const StacksInjured &);
@@ -336,9 +337,18 @@ int main(){
 	magicActions.evolutionAttack(magic,&magic.units.at(1),&magic.units.at(2),{{{2,1,10,false,0}}});
 	assert(magic.units.at(2).data.health==38 && magic.units.at(1).bonuses.size()==1);
 	magic.units.at(1).bonuses.push_back(trait(18));
+	magic.units.at(1).bonuses.push_back(trait(41));
+	magic.units.at(2).bonuses.push_back(trait(19));
 	magic.units.at(2).data.health=0;
 	magicActions.evolutionDamage(magic,{1,{{2,-1,38,true,4}}});
 	assert(magic.units.size()==3);
+	// A hero spell has no creature killer; it cannot award a personal trophy.
+	assert(magic.units.at(1).getBonusesOfType(BonusType::NONE,500041)->empty());
+	magic.units.at(2).data.health=10;
+	magic.units.at(2).data.pos={8};
+	magic.units.at(2).data.health=0;
+	magicActions.evolutionAttack(magic,&magic.units.at(1),&magic.units.at(2),{{{2,1,10,true,1}}});
+	assert(magic.units.at(1).getBonusesOfType(BonusType::NONE,500041)->front()->val==19);
 	CBattleInfoCallback oath;
 	CGameHandler oathServer{oath,{}};
 	BattleActionProcessor oathActions{&oathServer};

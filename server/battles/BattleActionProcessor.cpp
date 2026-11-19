@@ -44,6 +44,11 @@ BattleActionProcessor::BattleActionProcessor(BattleProcessor * owner, CGameHandl
 {
 }
 
+bool BattleActionProcessor::evolutionEnabled() const
+{
+	return gameHandler->gameState().getMap().evolutionSeed != 0;
+}
+
 bool BattleActionProcessor::doEmptyAction(const CBattleInfoCallback & battle, const BattleAction & ba)
 {
 	return true;
@@ -755,7 +760,7 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 		assert(battle.isInTacticRange(dest));
 	}
 
-	const bool arenaMovement = gameHandler->gameState().getMap().evolutionSeed && !battle.battleGetTacticDist();
+	const bool arenaMovement = evolutionEnabled() && !battle.battleGetTacticDist();
 	auto start = currentUnit->getPosition();
 	if (start == dest)
 		return { 0, false, false };

@@ -842,14 +842,14 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 	{
 		auto battle = cb->getBattle(battleID);
 		const auto side = battle->battleGetMySide();
-		std::array<int, 7> survivors{};
+		std::array<int, 7> survivors{},trophies{};
 		std::set<int> discoveries;
 		for(const auto * stack : battle->battleGetAllStacks())
 		{
 			if(stack->unitSide() != side) continue;
 			const auto learned=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500501));
 			for(const auto & event:*learned) discoveries.insert(event->val);
-			if(stack->isClone() || !stack->alive()) continue;
+			if(stack->isClone()) continue;
 			const CStack * origin = stack;
 			if(!origin->base)
 			{
@@ -861,6 +861,9 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 			for(int slot=0;slot<7;++slot)
 				if(origin->unitSlot()==SlotID(slot))
 				{
+					const auto traits=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500041));
+					if(!traits->empty() && !trophies[slot]) trophies[slot]=(*traits->begin())->val;
+					if(!stack->alive()) break;
 					auto living=std::max(0,stack->getCount()-stack->health.getResurrected());
 					survivors[slot]=static_cast<int>(std::min<int64_t>(INT32_MAX,int64_t(survivors[slot])+living));
 				}
@@ -869,7 +872,7 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 		for(const auto & entry : br->casualties[enemy])
 			casualties += std::max(0, entry.second);
-		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties, discoveries);
+		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties, discoveries, trophies);
 	}
 	if(isAutoFightOn || autofightingAI)
 	{
