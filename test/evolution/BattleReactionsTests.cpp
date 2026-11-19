@@ -2,14 +2,15 @@
 // Exercise the production reaction dispatcher with a small packet-applying battlefield.
 #include <algorithm>
 #include <cassert>
+#include <string>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <vector>
-enum class BonusType { EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
+enum class BonusType { EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
 struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; };
-struct CreatureID { int value; CreatureID(int v=0):value(v){} int getNum() const{return value;} operator int() const{return value;} };
+struct CreatureID { int value; CreatureID(int v=0):value(v){} static int decode(std::string s){return s=="arenabattles:evolutionEgg"?500:501;} int getNum() const{return value;} operator int() const{return value;} };
 enum class BattleSide { LEFT, RIGHT };
 struct BattleHex {
 	int pos=-1;
@@ -26,11 +27,11 @@ namespace battle {
 struct UnitInfo {int id{}, type{}, count{}; BattleHex position; BattleSide side{};bool summoned=false;
 	void save(Data & out){out={type,count,count*10,position,side};}
 };}
-struct UnitChanges {enum class EOperation {ADD, RESET_STATE};int id; EOperation op; Data data;
+struct UnitChanges {enum class EOperation {ADD, RESET_STATE, REMOVE};int id; EOperation op; Data data;
 	UnitChanges(int id,EOperation op):id(id),op(op){}
 };
 struct BattleStackAttacked {
-	int stackAttacked{},attackerID{}; int64_t damageAmount{};bool dead=false;bool killed() const{return dead;}
+	int stackAttacked{},attackerID{}; int64_t damageAmount{};bool dead=false;int killedAmount=0;bool killed() const{return dead;}
 };
 struct BattleAttack {std::vector<BattleStackAttacked> bsa;};
 struct CStack {
@@ -83,6 +84,7 @@ struct CGameHandler {
 	void sendAndApply(const StacksInjured & p){for(auto & h:p.stacks)field.units.at(h.stackAttacked).data.health-=int(h.damageAmount);}
 	void sendAndApply(const BattleUnitsChanged & p){for(auto & c:p.changedStacks){
 		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}});
+		else if(c.op==UnitChanges::EOperation::REMOVE) field.units.erase(c.id);
 		else field.units.at(c.id).data=c.data;
 	}}
 	void sendAndApply(const BattleStackMoved & p){field.units.at(p.stack).data.pos=p.tilesToMove.back();}
@@ -143,4 +145,39 @@ int main(){
 	auto rootRules=root.getBonusesOfType(BonusType::EVOLUTION_TRAIT);
 	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==9;}));
 	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==1047;}));
+	CBattleInfoCallback nest;
+	CGameHandler nestServer{nest,{}};
+	BattleActionProcessor nestActions{&nestServer};
+	nest.units.emplace(1,CStack{1,{1,5,50,{5},BattleSide::LEFT},{}});
+	nest.units.emplace(2,CStack{2,{2,2,20,{8},BattleSide::RIGHT},{}});
+	for(int m:{1,39,60,87}) nest.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,false,1}}});
+	assert(nest.units.at(3).data.species==500);
+	nestActions.evolutionRound(nest,false);
+	assert(nest.units.size()==4);
+	assert(std::any_of(nest.units.begin(),nest.units.end(),[](const auto & u){return u.second.data.species==501 && u.second.bonuses.size()>=5;}));
+	// A killed egg never hatches. A living carrier can leave a cocoon on an infected corpse.
+	for(auto & pair : nest.units) if(pair.second.data.species==500) pair.second.data.health=0;
+	auto n=nest.units.size();
+	nestActions.evolutionRound(nest,false);
+	assert(nest.units.size()==n);
+	nest.units.at(2).bonuses.push_back({BonusType::EVOLUTION_PARASITE,1});
+	nest.units.at(2).data.health=0;
+	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,true,0}}});
+	assert(nest.units.size()==n+1);
+	for(int i=0;i<250;++i)
+	{
+		nest.round++;
+		nestActions.evolutionRound(nest,false);
+		std::vector<int> occupied;
+		for(const auto & pair:nest.units)
+		{
+			if(!pair.second.alive())continue;
+			assert(pair.second.unitSide()==BattleSide::LEFT);
+			occupied.push_back(pair.second.data.pos.pos);
+		}
+		std::sort(occupied.begin(),occupied.end());
+		assert(std::adjacent_find(occupied.begin(),occupied.end())==occupied.end());
+		assert(occupied.size()<=21);
+	}
 }

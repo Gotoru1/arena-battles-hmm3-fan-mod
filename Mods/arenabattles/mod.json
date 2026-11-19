@@ -7,6 +7,8 @@
 	"modType" : "Interface",
 	"language" : "english",
 
+	"creatures" : [ "config/evolutionCreatures.json" ],
+
 	"compatibility" : {
 		"min" : "1.7.0"
 	},

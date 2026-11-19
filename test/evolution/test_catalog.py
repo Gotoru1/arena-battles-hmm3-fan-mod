@@ -51,6 +51,15 @@ class CatalogTests(unittest.TestCase):
             for field in ("name", "text", "rarity"):
                 self.assertEqual(original[field], entry[field])
 
+    def test_brood_creatures(self):
+        mod = ROOT / "Mods/arenabattles"
+        path, = json.loads((mod/"mod.json").read_text(encoding="utf-8"))["creatures"]
+        defs = json.loads((mod/"Content"/path).read_text(encoding="utf-8"))
+        self.assertEqual(defs["evolutionEgg"]["hitPoints"], 1)
+        self.assertEqual(defs["evolutionEgg"]["abilities"]["incubation"]["type"], "NOT_ACTIVE")
+        self.assertGreater(defs["evolutionLarva"]["speed"], 0)
+        self.assertTrue(all(creature["special"] for creature in defs.values()))
+
     def test_encounter_catalog(self):
         self.assertFalse(DATA["synergies"])
         for pair in DATA["schools"]:

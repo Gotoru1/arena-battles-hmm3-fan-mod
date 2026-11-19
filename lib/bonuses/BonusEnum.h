@@ -208,6 +208,7 @@ class JsonNode;
 	BONUS_NAME(EVOLUTION_WOUND) /* source unit id */ \
 	BONUS_NAME(EVOLUTION_FAMILY) /* original body id */ \
 	BONUS_NAME(EVOLUTION_SEEN) /* copied creature species */ \
+	BONUS_NAME(EVOLUTION_BROOD) /* egg parent id */ \
 	BONUS_NAME(EVOLUTION_TRAIT) /* Evolution Arena catalog key and rank */ \
 
 	/* end of list */

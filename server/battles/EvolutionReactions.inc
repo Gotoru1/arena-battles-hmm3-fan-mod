@@ -105,15 +105,15 @@ class EvolutionReactions
 		if(!pool.empty()) transfer(unit, pool[server.getRandomGenerator().nextInt(0,static_cast<int>(pool.size())-1)], 1);
 	}
 
-	void summon(const CStack * parent, CreatureID species, int count, BattleHex origin, bool clone)
+	const CStack * spawn(BattleSide side, CreatureID species, int count, BattleHex origin)
 	{
-		auto hex = battle.getAvailableHex(species,parent->unitSide(),origin.toInt());
-		if(!hex.isValid()) return;
+		auto hex = battle.getAvailableHex(species,side,origin.toInt());
+		if(!hex.isValid()) return nullptr;
 		battle::UnitInfo info;
 		info.id = battle.battleNextUnitId();
 		info.type = species;
 		info.count = count;
-		info.side = parent->unitSide();
+		info.side = side;
 		info.position = hex;
 		info.summoned = true;
 		BattleUnitsChanged packet;
@@ -121,7 +121,12 @@ class EvolutionReactions
 		packet.changedStacks.emplace_back(info.id,UnitChanges::EOperation::ADD);
 		info.save(packet.changedStacks.back().data);
 		server.sendAndApply(packet);
-		auto * child = battle.battleGetStackByID(info.id);
+		return battle.battleGetStackByID(info.id);
+	}
+
+	void summon(const CStack * parent, CreatureID species, int count, BattleHex origin, bool clone)
+	{
+		auto * child = spawn(parent->unitSide(),species,count,origin);
 		if(!child) return;
 		const auto inherited = rules(parent);
 		if(clone)
@@ -170,9 +175,59 @@ class EvolutionReactions
 		}
 	}
 
+	static CreatureID eggType()
+	{
+		static const CreatureID id(CreatureID::decode("arenabattles:evolutionEgg"));
+		return id;
+	}
+
+	static CreatureID larvaType()
+	{
+		static const CreatureID id(CreatureID::decode("arenabattles:evolutionLarva"));
+		return id;
+	}
+
+	void lay(const CStack * parent, BattleHex hex)
+	{
+		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
+		if(!egg) return;
+		Bonus source;
+		source.type = BonusType::EVOLUTION_BROOD;
+		source.val = static_cast<int>(parent->unitId());
+		grant(egg,source);
+	}
+
+	bool hatch(const CStack * egg)
+	{
+		auto brood = egg->getBonusesOfType(BonusType::EVOLUTION_BROOD);
+		if(brood->empty()) return false;
+		const auto parentId = (*brood->begin())->val;
+		const auto side = egg->unitSide();
+		const auto hex = egg->getPosition();
+		const auto id = egg->unitId();
+		BattleUnitsChanged remove;
+		remove.battleID = battle.getBattle()->getBattleID();
+		remove.changedStacks.emplace_back(id,UnitChanges::EOperation::REMOVE);
+		server.sendAndApply(remove);
+		auto * parent = battle.battleGetStackByID(parentId,false);
+		if(parent)
+		{
+			summon(parent,larvaType(),1,hex,false);
+			if(rules(parent).count(60)) lay(parent,hex);
+		}
+		else spawn(side,larvaType(),1,hex);
+		return true;
+	}
+
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
+		const auto infection = corpse->getBonusesOfType(BonusType::EVOLUTION_PARASITE);
+		for(const auto & mark : *infection)
+		{
+			auto * carrier = battle.battleGetStackByID(mark->val,false);
+			if(carrier && rules(carrier).count(39)) lay(carrier,corpse->getPosition());
+		}
 		for(int id : {10,25})
 		{
 			const auto all = rules(corpse);
@@ -249,6 +304,7 @@ public:
 		{
 			const auto active = rules(unit);
 			if(!unit->alive()) continue;
+			if(!first && hatch(unit)) continue;
 			if(!first) parasites(unit);
 			if(!unit->alive()) continue;
 			if(first) observe(unit);
@@ -273,6 +329,8 @@ public:
 		for(const auto & hit : packet.bsa)
 		{
 			auto * unit = battle.battleGetStackByID(hit.stackAttacked,false);
+			if(unit && hit.killedAmount > 0 && source->alive() && unit->unitSide() != source->unitSide() && active.count(1))
+				lay(source,unit->getPosition());
 			if(unit && hit.killed() && !unit->alive()) fallen(source,unit);
 		}
 		if(!primary || !source->alive() || primary->unitSide() == source->unitSide()) return;
