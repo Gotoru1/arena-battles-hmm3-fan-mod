@@ -29,6 +29,14 @@ namespace
 		return data;
 	}
 
+	const JsonNode & acquiredRule(const JsonNode & data,const std::string & id)
+	{
+		if(id == data["boss"]["law"].String()) return data["boss"];
+		for(const auto & boss : data["otherBosses"].Vector())
+			if(id == boss["law"].String()) return boss;
+		return data["mutations"][id];
+	}
+
 	ArenaOffer evolutionCard(std::string title, std::string detail, ColorRGBA color = Colors::YELLOW)
 	{
 		ArenaOffer card;
@@ -346,25 +354,52 @@ void ArenaDraft::afterEvolutionGame()
 	}
 }
 
-void ArenaDraft::chooseEvolutionReward()
+void ArenaDraft::chooseEvolutionReward(size_t offset)
 {
 	if(verifying && run->rosterSize() == 1) { showEvolutionCards(0); return; }
 	std::vector<ArenaOffer> options;
-	for(size_t i = 0; i < run->rosterSize(); ++i)
+	const auto total = run->rosterSize();
+	const auto end = total <= 3 ? total : std::min(total,offset + 2);
+	for(size_t i = offset; i < end; ++i)
 	{
 		const auto & line = run->stack(i);
 		if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
 		else options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated(), evolution::displayAmount(line.count)));
 	}
+	if(total > 3) options.push_back(evolutionCard("Другие отряды","Перелистнуть список. Сейчас показаны отряды " + std::to_string(offset+1) + "–" + std::to_string(end) + " из " + std::to_string(total) + "."));
 	choosingRecipient = true;
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Кого развивать?", "Выбери отряд для мутации", options,
-		[self](int i){ self->showEvolutionCards(i); }, [self](){ self->cancel(); }, nullptr,
+		[self,offset,end,total](int i){
+			const auto slot = offset + i;
+			if(slot < end) self->showEvolutionCards(slot);
+			else self->chooseEvolutionReward(end == total ? 0 : end);
+		}, [self](){ self->cancel(); }, nullptr,
 		[self](){ self->saveEvolutionAndExit(*run); });
 }
 
-void ArenaDraft::showEvolutionCards(size_t slot)
+void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 {
+	if(!mutationsOnly && run->boss() && run->rank("trait88",slot))
+	{
+		const auto & data = evolutionCatalog();
+		const auto & others = data["otherBosses"].Vector();
+		const auto index = evolution::encounter(run->wave,0,others.size()+1).bossIndex;
+		const auto & boss = index ? others.at(index-1) : data["boss"];
+		const auto law = boss["law"].String();
+		if(!run->rank(law,slot))
+		{
+			auto self = shared_from_this();
+			std::vector<ArenaOffer> cards{evolutionCard("Поглотить закон",boss["name"].String() + "\n\n" + boss["text"].String(),Colors::ORANGE),
+				evolutionCard("Выбрать мутацию","Открыть три обычные карточки награды.")};
+			ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Пожиратель законов","Что забрать у поверженного босса?",cards,
+				[self,slot,law](int i){
+					if(i) self->showEvolutionCards(slot,true);
+					else { run->takeBossLaw(slot,law); self->buildEvolutionBattle(); }
+				},[self](){self->chooseEvolutionReward();},nullptr);
+			return;
+		}
+	}
 	choosingRecipient = false;
 	std::vector<ArenaOffer> cards;
 	const auto & catalog = evolutionCatalog()["mutations"];
@@ -485,7 +520,7 @@ try
 		giveCreature(player(), static_cast<int>(slot)+1, creature, evolution::engineInt(line.count));
 		auto & effects = player().hero->getStackPtr(SlotID(static_cast<int>(slot)))->evolutionEffects;
 		for(const auto & mutation : line.mutations)
-			appendMutation(effects, data["mutations"][mutation.first], mutation.second, run->alternate(slot,mutation.first));
+			appendMutation(effects, acquiredRule(data,mutation.first), mutation.second, run->alternate(slot,mutation.first));
 		if(plan.anomaly) appendEffects(effects, weather, 1);
 
 		// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
@@ -599,7 +634,7 @@ try
 		scouting += "\nРост за забег: " + evolution::displayAmount(line.harvest) + " очк. · Бонус урона к началу волны: +" + evolution::displayAmount(run->lineageDamage(slot));
 		for(const auto & mutation : line.mutations)
 		{
-			const auto & def = data["mutations"][mutation.first];
+			const auto & def = acquiredRule(data,mutation.first);
 			scouting += "\n" + def["name"].String() + " × " + std::to_string(mutation.second);
 			if(mutation.second >= 2 && !def["alternate"].isNull())
 				scouting += " · " + def[run->alternate(slot,mutation.first) ? "alternate" : "awaken"]["name"].String();

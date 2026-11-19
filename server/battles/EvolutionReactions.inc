@@ -219,6 +219,60 @@ class EvolutionReactions
 		return true;
 	}
 
+	void recycle(const CStack * carrier, uint32_t casualties)
+	{
+		// Eight bodies yield one skeleton. A blocked summon stays banked in battle bonuses.
+		const auto key = BonusCustomSubtype(500032);
+		auto saved = carrier->getBonusesOfType(BonusType::NONE,key);
+		uint64_t total = casualties;
+		std::vector<Bonus> old;
+		for(const auto & mark : *saved)
+		{
+			total += static_cast<uint32_t>(mark->val);
+			old.push_back(*mark);
+		}
+		if(!casualties && total < 8) return;
+		const int bones = static_cast<int>(std::min<uint64_t>(total/8,INT32_MAX));
+		if(bones)
+		{
+			static const CreatureID skeleton(CreatureID::decode("core:skeleton"));
+			if(auto * child = spawn(carrier->unitSide(),skeleton,bones,carrier->getPosition()))
+			{
+				total -= uint64_t(bones)*8;
+				if(rules(carrier).count(87))
+				{
+					for(auto entry : rules(carrier)) transfer(child,entry.first,entry.second);
+					adapt(child);
+				}
+				observe(child);
+			}
+			else if(!casualties) return;
+		}
+		SetStackEffect packet;
+		packet.battleID = battle.getBattle()->getBattleID();
+		if(!old.empty()) packet.toRemove.emplace_back(carrier->unitId(),old);
+		std::vector<Bonus> reserve;
+		while(total)
+		{
+			Bonus mark;
+			mark.duration=BonusDuration::ONE_BATTLE;
+			mark.type=BonusType::NONE;
+			mark.subtype=key;
+			mark.val=static_cast<int>(std::min<uint64_t>(total,INT32_MAX));
+			total-=mark.val;
+			reserve.push_back(mark);
+		}
+		if(!reserve.empty()) packet.toAdd.emplace_back(carrier->unitId(),reserve);
+		if(!old.empty() || !reserve.empty()) server.sendAndApply(packet);
+	}
+
+	void casualties(uint32_t count)
+	{
+		if(!count) return;
+		for(auto * carrier : living())
+			if(rules(carrier).count(32)) recycle(carrier,count);
+	}
+
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
@@ -274,6 +328,7 @@ class EvolutionReactions
 		packet.battleID = battle.getBattle()->getBattleID();
 		packet.stacks.push_back(hit);
 		server.sendAndApply(packet);
+		casualties(hit.killedAmount);
 		if(hit.killed() && !target->alive()) fallen(owner,target);
 		return amount;
 	}
@@ -307,6 +362,7 @@ public:
 			if(!first && hatch(unit)) continue;
 			if(!first) parasites(unit);
 			if(!unit->alive()) continue;
+			if(active.count(32)) recycle(unit,0);
 			if(first) observe(unit);
 			if(first && active.count(59))
 				for(auto * ally : living())
@@ -321,6 +377,18 @@ public:
 		}
 	}
 
+	BattleHex pursue(const CStack * source,const CStack * victim) const
+	{
+		const BattleHex start = source->getPosition();
+		if(!source->alive() || !victim || victim->alive() || victim->unitSide()==source->unitSide() || !rules(source).count(15)) return start;
+		auto * prey=nearest(source,victim->unitSide());
+		if(!prey) return start;
+		BattleHex best=start;
+		for(auto hex : battle.battleGetAvailableHexes(source,true))
+			if(BattleHex::getDistance(hex,prey->getPosition()) < BattleHex::getDistance(best,prey->getPosition())) best=hex;
+		return best;
+	}
+
 	void attack(const CStack * source,const CStack * primary,const BattleAttack & packet)
 	{
 		const auto active = rules(source);
@@ -329,6 +397,7 @@ public:
 		for(const auto & hit : packet.bsa)
 		{
 			auto * unit = battle.battleGetStackByID(hit.stackAttacked,false);
+			casualties(hit.killedAmount);
 			if(unit && hit.killedAmount > 0 && source->alive() && unit->unitSide() != source->unitSide() && active.count(1))
 				lay(source,unit->getPosition());
 			if(unit && hit.killed() && !unit->alive()) fallen(source,unit);
@@ -382,5 +451,8 @@ void BattleActionProcessor::evolutionRound(const CBattleInfoCallback & battle, b
 
 void BattleActionProcessor::evolutionAttack(const CBattleInfoCallback & battle,const CStack * source,const CStack * target,const BattleAttack & attack)
 {
-	EvolutionReactions(*gameHandler,battle).attack(source,target,attack);
+	EvolutionReactions reactions(*gameHandler,battle);
+	reactions.attack(source,target,attack);
+	const auto destination = reactions.pursue(source,target);
+	if(destination != source->getPosition()) moveStack(battle,source->unitId(),destination);
 }

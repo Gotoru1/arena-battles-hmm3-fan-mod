@@ -145,8 +145,8 @@ private:
 	void newEvolutionRun();
 	void saveEvolutionAndExit(const evolution::RoguelikeRun & snapshot);
 	void chooseEvolutionCreature();
-	void chooseEvolutionReward();
-	void showEvolutionCards(size_t slot);
+	void chooseEvolutionReward(size_t offset = 0);
+	void showEvolutionCards(size_t slot, bool mutationsOnly = false);
 	void buildEvolutionBattle();
 	void stepDifficulty(); // PvE only, before the hero
 	void stepChooseHero();

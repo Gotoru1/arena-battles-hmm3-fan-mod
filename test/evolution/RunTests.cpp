@@ -177,6 +177,24 @@ int main()
 	require(std::filesystem::create_directory(folder),"Isolated save test profile");
 	SaveSlots slots(folder);
 	{
+		RoguelikeRun laws(913);
+		laws.begin(0,{1,2,3,4},1,20);
+		for(int wave=1;wave<=5;++wave)
+		{
+			laws.finish(true,20,1,{"trait88","trait18","trait23"});
+			if(wave < 5)
+			{
+				mustFail([&]{laws.takeBossLaw(0,"law.iron");});
+				laws.pick(std::find(laws.offers.begin(),laws.offers.end(),"trait88")-laws.offers.begin());
+			}
+			else laws.takeBossLaw(0,"law.iron");
+		}
+		slots.write(0,laws);
+		auto copy=slots.read(0);
+		require(copy.rank("law.iron",0)==1 && copy.wave==6,"Boss rule acquisition is permanent for its owner");
+		std::filesystem::remove(slots.path(0));
+	}
+	{
 		RoguelikeRun full(17);
 		full.begin(0,{1,2,3,4},1,24);
 		for(int wave=1;wave<=16;++wave)

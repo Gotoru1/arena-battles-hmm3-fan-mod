@@ -227,6 +227,14 @@ public:
 		phase = Phase::Reward;
 	}
 
+	void takeBossLaw(size_t slot,const std::string & law)
+	{
+		if(phase != Phase::Reward || !boss() || !rank("trait88",slot) || law.rfind("law.",0) != 0 || rank(law,slot))
+			throw std::logic_error("Этому отряду недоступен закон босса");
+		offers.at(0)=law;
+		pick(0,slot);
+	}
+
 	void pick(size_t index, size_t slot = 0, bool alternateForm = false)
 	{
 		if(phase != Phase::Reward || index >= offers.size())

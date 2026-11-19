@@ -7,15 +7,17 @@
 #include <map>
 #include <memory>
 #include <vector>
-enum class BonusType { EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
+using BonusCustomSubtype=int;
+enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
-struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; };
+struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; int subtype=0; };
 struct CreatureID { int value; CreatureID(int v=0):value(v){} static int decode(std::string s){return s=="arenabattles:evolutionEgg"?500:501;} int getNum() const{return value;} operator int() const{return value;} };
 enum class BattleSide { LEFT, RIGHT };
 struct BattleHex {
 	int pos=-1;
 	bool isValid() const {return pos>=0 && pos<21;}
 	int toInt() const {return pos;}
+	bool operator!=(BattleHex other) const {return pos!=other.pos;}
 	bool operator==(BattleHex other) const {return pos==other.pos;}
 	std::vector<BattleHex> getNeighbouringTiles() const {return {{pos-1},{pos+1}};}
 	static int getDistance(BattleHex a,BattleHex b){return std::abs(a.pos-b.pos);}
@@ -45,6 +47,11 @@ struct CStack {
 		for(auto b:bonuses) if(b.type==t)result->push_back(std::make_shared<Bonus>(b));
 		return result;
 	}
+	auto getBonusesOfType(BonusType t,int subtype) const {
+		auto all=getBonusesOfType(t);
+		all->erase(std::remove_if(all->begin(),all->end(),[&](auto b){return b->subtype!=subtype;}),all->end());
+		return all;
+	}
 	bool hasBonusOfType(BonusType t) const{return !getBonusesOfType(t)->empty();}
 	void prepareAttacked(BattleStackAttacked & hit,int &) const{hit.dead=hit.damageAmount>=data.health;}
 	auto acquireState() const{return std::make_shared<CStack>(*this);}
@@ -55,7 +62,7 @@ struct Hexes : std::vector<BattleHex>{void insert(BattleHex h){push_back(h);}};
 struct BattleStackMoved {int battleID{},stack{};bool teleporting=false;Hexes tilesToMove;};
 struct BattleUnitsChanged {int battleID{}; std::vector<UnitChanges> changedStacks;};
 struct StacksInjured {int battleID{};std::vector<BattleStackAttacked> stacks;};
-struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd;};
+struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd,toRemove;};
 struct CBattleInfoCallback {
 	std::map<int,CStack> units;int round=1;
 	int getBattleID() const{return 1;}auto getBattle() const{return this;}
@@ -69,6 +76,11 @@ struct CBattleInfoCallback {
 		for(auto & e:units)if(e.second.alive()&&e.second.data.pos==h)return false;
 		return true;
 	}
+	auto battleGetAvailableHexes(const CStack * unit,bool) const{
+		std::vector<BattleHex> result;
+		for(auto h:unit->getPosition().getNeighbouringTiles()) if(accessible(h,unit)) result.push_back(h);
+		return result;
+	}
 	const auto & getAccessibility(const CStack*) const{return *this;}
 	BattleHex getAvailableHex(int,BattleSide,int near) const{
 		for(int d=0;d<21;++d)for(int p:{near+d,near-d})if(accessible({p},nullptr))return {p};
@@ -80,7 +92,10 @@ struct Rng {int value=0;int nextInt(int lo,int hi){return lo+(value++%(hi-lo+1))
 struct CGameHandler {
 	CBattleInfoCallback & field;Rng rng;
 	Rng & getRandomGenerator(){return rng;}
-	void sendAndApply(const SetStackEffect & p){for(auto & v:p.toAdd)for(auto b:v.second)field.units.at(v.first).bonuses.push_back(b);}
+	void sendAndApply(const SetStackEffect & p){for(auto & v:p.toRemove) for(auto b:v.second) {
+		auto & dest=field.units.at(v.first).bonuses;
+		dest.erase(std::remove_if(dest.begin(),dest.end(),[&](auto orig){return orig.type==b.type && orig.subtype==b.subtype && orig.val==b.val;}),dest.end());
+	} for(auto & v:p.toAdd)for(auto b:v.second)field.units.at(v.first).bonuses.push_back(b);}
 	void sendAndApply(const StacksInjured & p){for(auto & h:p.stacks)field.units.at(h.stackAttacked).data.health-=int(h.damageAmount);}
 	void sendAndApply(const BattleUnitsChanged & p){for(auto & c:p.changedStacks){
 		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}});
@@ -91,6 +106,7 @@ struct CGameHandler {
 };
 namespace evolution {int64_t damageProduct(int64_t a,int b,int c){return a*b/c;}}
 struct BattleActionProcessor {CGameHandler * gameHandler;
+	void moveStack(const CBattleInfoCallback &,int id,BattleHex h){gameHandler->field.units.at(id).data.pos=h;}
 	void evolutionRound(const CBattleInfoCallback &,bool);
 	void evolutionAttack(const CBattleInfoCallback &,const CStack *,const CStack *,const BattleAttack &);
 };
@@ -180,4 +196,18 @@ int main(){
 		assert(std::adjacent_find(occupied.begin(),occupied.end())==occupied.end());
 		assert(occupied.size()<=21);
 	}
+	CBattleInfoCallback hunt;
+	CGameHandler huntServer{hunt,{}};
+	BattleActionProcessor huntActions{&huntServer};
+	hunt.units.emplace(1,CStack{1,{1,5,50,{3},BattleSide::LEFT},{}});
+	hunt.units.emplace(2,CStack{2,{2,2,20,{4},BattleSide::RIGHT},{}});
+	hunt.units.emplace(3,CStack{3,{3,2,20,{7},BattleSide::RIGHT},{}});
+	for(int m:{15,32}) hunt.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	huntActions.evolutionAttack(hunt,&hunt.units.at(1),&hunt.units.at(2),{{{2,1,20,false,7}}});
+	assert(hunt.units.size()==3);
+	hunt.units.at(2).data.health=0;
+	huntActions.evolutionAttack(hunt,&hunt.units.at(1),&hunt.units.at(2),{{{2,1,10,true,2}}});
+	assert(hunt.units.size()==4 && hunt.units.at(4).getCount()==1);
+	assert(hunt.units.at(1).getBonusesOfType(BonusType::NONE,500032)->front()->val==1);
+	assert(hunt.units.at(1).data.pos.pos>=3);
 }
