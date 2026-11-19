@@ -40,7 +40,7 @@ namespace battle {
 struct UnitInfo {int id{}, type{}, count{}; BattleHex position; BattleSide side{};bool summoned=false;
 	void save(Data & out){out={type,count,count*10,position,side};}
 };}
-struct UnitChanges {enum class EOperation {ADD, RESET_STATE, REMOVE};int id; EOperation op; Data data;
+struct UnitChanges {enum class EOperation {ADD, RESET_STATE, REMOVE};int id; EOperation op; Data data;int64_t healthDelta=0;
 	UnitChanges(int id,EOperation op):id(id),op(op){}
 };
 struct BattleStackAttacked {
@@ -367,4 +367,22 @@ int main(){
 	borderActions.evolutionAttack(border,&border.units.at(1),&border.units.at(3),{{{3,1,1,false,0}}});
 	borderActions.evolutionMoved(border,&border.units.at(3));
 	assert(border.units.at(4).getBonusesOfType(BonusType::EVOLUTION_PARASITE)->front()->val==1);
+	CBattleInfoCallback colony;
+	CGameHandler colonyServer{colony,{}};
+	BattleActionProcessor colonyActions{&colonyServer};
+	colony.units.emplace(1,CStack{1,{1,8,80,{6},BattleSide::LEFT},{}});
+	colony.units.emplace(2,CStack{2,{2,6,60,{9},BattleSide::RIGHT},{}});
+	for(int id:{7,22,78,95})colony.units.at(1).bonuses.push_back(trait(id));
+	colonyActions.evolutionRound(colony,true);
+	colony.units.at(1).bonuses.push_back(trait(23));
+	colony.units.at(1).data.health=50;
+	colonyActions.evolutionAttack(colony,&colony.units.at(2),&colony.units.at(1),{{{1,2,30,false,3}}});
+	assert(colony.units.at(1).data.pos.pos!=6 && colony.units.size()==4);
+	colony.units.at(1).data.health=0;
+	colonyActions.evolutionAttack(colony,&colony.units.at(2),&colony.units.at(1),{{{1,2,50,true,5}}});
+	auto heirTraits=colony.units.at(3).getBonusesOfType(BonusType::EVOLUTION_TRAIT);
+	assert(std::any_of(heirTraits->begin(),heirTraits->end(),[](auto b){return b->subtype==23;}));
+	assert(!colony.units.at(1).alive() && colony.units.size()==5);
+	colonyActions.evolutionRound(colony,false);
+	assert(colony.units.at(1).getCount()==2 && colony.units.size()==4);
 }

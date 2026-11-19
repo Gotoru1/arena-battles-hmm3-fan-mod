@@ -118,6 +118,14 @@ class EvolutionReactions
 		}
 	}
 
+	void descend(const CStack * parent,const CStack * child)
+	{
+		origins[child->unitId()]=lineageRoot(parent->unitId());
+		auto roots=parent->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500095));
+		for(const auto & root:*roots) remember(child,500095,root->val);
+		if(rules(parent).count(95)) remember(child,500095,parent->unitId());
+	}
+
 	void putTrait(const CStack * unit, int id, int rank)
 	{
 		if(rules(unit)[id] >= rank) return;
@@ -219,7 +227,7 @@ class EvolutionReactions
 		auto * child = spawn(parent->unitSide(),species,count+extra,origin);
 		if(!child) return;
 		spend(parent,charges);
-		origins[child->unitId()]=lineageRoot(parent->unitId());
+		descend(parent,child);
 		const auto inherited = rules(parent);
 		if(clone)
 		{
@@ -332,7 +340,7 @@ class EvolutionReactions
 			static const CreatureID skeleton(CreatureID::decode("core:skeleton"));
 			if(auto * child = spawn(carrier->unitSide(),skeleton,bones,carrier->getPosition()))
 			{
-				origins[child->unitId()]=lineageRoot(carrier->unitId());
+				descend(carrier,child);
 				total -= uint64_t(bones)*8;
 				if(rules(carrier).count(87))
 				{
@@ -370,7 +378,7 @@ class EvolutionReactions
 		const int count = unit->getCount()/2;
 		auto * child=spawn(unit->unitSide(),unit->creatureId(),count,unit->getPosition());
 		if(!child) return;
-		origins[child->unitId()]=lineageRoot(unit->unitId());
+		descend(unit,child);
 		// Reserve full individuals for the new body. The wounded front individual stays here.
 		const int temporary=std::min(count,unit->health.getResurrected());
 		auto state=unit->acquireState();
@@ -407,9 +415,92 @@ class EvolutionReactions
 			if(rules(carrier).count(32)) recycle(carrier,count);
 	}
 
+	static CreatureID huskType()
+	{
+		static const CreatureID id(CreatureID::decode("arenabattles:evolutionHusk"));
+		return id;
+	}
+
+	void shed(const CStack * unit,unsigned losses)
+	{
+		if(!unit || !unit->alive() || !losses || uint64_t(losses)*4 < uint64_t(unit->unitBaseAmount()) || !rules(unit).count(7) || marked(unit,500007,1)) return;
+		const auto old=unit->getPosition();
+		const auto access=battle.getAccessibility(unit);
+		for(auto hex:old.getNeighbouringTiles())
+		{
+			if(!access.accessible(hex,unit)) continue;
+			// Keep the old front cell free for the shell of a double-wide creature.
+			const auto & occupied=unit->getHexes(hex);
+			if(std::find(occupied.begin(),occupied.end(),old)!=occupied.end()) continue;
+			BattleStackMoved move;
+			move.battleID=battle.getBattle()->getBattleID();
+			move.stack=unit->unitId();
+			move.teleporting=true;
+			move.tilesToMove.insert(hex);
+			server.sendAndApply(move);
+			remember(unit,500007,1);
+			spawn(unit->unitSide(),huskType(),1,old);
+			return;
+		}
+	}
+
+	bool awakenHusk(const CStack * shell)
+	{
+		auto incubating=shell->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500122));
+		if(incubating->empty()) return false;
+		auto * original=battle.battleGetStackByID((*incubating->begin())->val,false);
+		if(!original) return true;
+		if(!original->alive())
+		{
+			for(auto occupied:original->getHexes())
+				for(auto * body:living())
+					if(body!=shell)
+					{
+						const auto & cells=body->getHexes();
+						if(std::find(cells.begin(),cells.end(),occupied)!=cells.end()) return true;
+					}
+		}
+		BattleUnitsChanged packet;
+		packet.battleID=battle.getBattle()->getBattleID();
+		packet.changedStacks.emplace_back(shell->unitId(),UnitChanges::EOperation::REMOVE);
+		if(!original->alive())
+		{
+			auto restored=original->acquireState();
+			int64_t hp=int64_t(std::max(1,original->unitBaseAmount()/4))*original->getMaxHealth();
+			restored->heal(hp,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			packet.changedStacks.emplace_back(original->unitId(),UnitChanges::EOperation::RESET_STATE);
+			packet.changedStacks.back().healthDelta=restored->getAvailableHealth();
+			restored->save(packet.changedStacks.back().data);
+		}
+		server.sendAndApply(packet);
+		return true;
+	}
+
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
+		const auto legacy=rules(corpse);
+		if(legacy.count(22) && !marked(corpse,500022,1))
+		{
+			if(auto * shell=spawn(corpse->unitSide(),huskType(),1,corpse->getPosition()))
+			{
+				remember(corpse,500022,1);
+				remember(shell,500122,corpse->unitId());
+			}
+		}
+		if(legacy.count(95))
+		{
+			auto previous=corpse->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500095));
+			for(auto * heir:beforeSummons)
+			{
+				if(heir->unitSide()!=corpse->unitSide()) continue;
+				bool related=marked(heir,500095,corpse->unitId());
+				for(const auto & root:*previous) related |= marked(heir,500095,root->val);
+				if(!related) continue;
+				for(auto rule:legacy) transfer(heir,rule.first,rule.second);
+				break;
+			}
+		}
 		if(source && source->unitSide()!=corpse->unitSide())
 			for(auto * witness:beforeSummons)
 				if(witness->unitSide()==corpse->unitSide() && rules(witness).count(8)) remember(witness,500008,source->unitId());
@@ -418,7 +509,7 @@ class EvolutionReactions
 			static const CreatureID ghost(CreatureID::decode("core:wight"));
 			if(auto * hunter=spawn(source->unitSide(),ghost,1,corpse->getPosition()))
 			{
-				origins[hunter->unitId()]=lineageRoot(source->unitId());
+				descend(source,hunter);
 				transfer(hunter,68,1);
 				if(rules(source).count(87))
 				{
@@ -517,7 +608,7 @@ public:
 			{
 			case evolution::ReactionKind::Loss:
 				casualties(event.amount);
-				if(event.amount) split(target);
+				if(event.amount) { shed(target,event.amount); split(target); }
 				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && rules(source).count(1))
 					lay(source,target->getPosition());
 				if(event.destroyed && !target->alive()) chain.post(evolution::ReactionKind::Death,event.source,event.target);
@@ -612,7 +703,7 @@ public:
 		{
 			const auto active = rules(unit);
 			if(!unit->alive()) continue;
-			if(!first && hatch(unit)) continue;
+			if(!first && (awakenHusk(unit) || hatch(unit))) continue;
 			if(!first) parasites(unit);
 			if(!unit->alive()) continue;
 			if(active.count(32)) recycle(unit,0);
