@@ -206,8 +206,11 @@ public:
 		{
 			stack(i).harvest += growth[i];
 			stack(i).count = remaining[i] + recruits[i];
-			if(i == 0) stack(i).count += 5 + wave * 2;
-			else stack(i).count += 1 + wave / (i + 1);
+			Amount reinforcement = i==0 ? Amount(5+wave*2) : Amount(1+wave/(i+1));
+			if(claimed("reward.edict.vanguard"))
+				reinforcement = i==0 ? Amount(reinforcement*2) : Amount((reinforcement+1)/2);
+			if(claimed("reward.edict.supply")) reinforcement+=1+wave/2;
+			stack(i).count+=reinforcement;
 		}
 		offers.clear();
 		for(int slot = 0; slot < 3; ++slot)
@@ -227,6 +230,19 @@ public:
 		phase = Phase::Reward;
 	}
 
+	static bool armyReward(const std::string & id) {return id.rfind("reward.",0)==0;}
+	bool claimed(const std::string & id) const {return std::find(history.begin(),history.end(),id)!=history.end();}
+
+	void offerArmyReward(std::vector<std::string> extras)
+	{
+		if(phase!=Phase::Reward || offers.size()!=3) return;
+		extras.erase(std::remove_if(extras.begin(),extras.end(),[&](const std::string & id){
+			return !armyReward(id) || (id.rfind("reward.stat.",0)!=0 && claimed(id));
+		}),extras.end());
+		if(extras.empty() || (wave%3!=0 && std::uniform_int_distribution<int>(0,2)(random)!=0)) return;
+		offers.back()=extras[std::uniform_int_distribution<size_t>(0,extras.size()-1)(random)];
+	}
+
 	void takeBossLaw(size_t slot,const std::string & law)
 	{
 		if(phase != Phase::Reward || !boss() || !rank("trait88",slot) || law.rfind("law.",0) != 0 || rank(law,slot))
@@ -239,12 +255,27 @@ public:
 	{
 		if(phase != Phase::Reward || index >= offers.size())
 			throw std::logic_error("Invalid reward selection");
-		auto & level = stack(slot).mutations[offers[index]];
-		if(level == std::numeric_limits<unsigned>::max())
-			throw std::overflow_error("Mutation rank exceeds unsigned range");
-		if(alternateForm && level != 1) throw std::logic_error("Evolution needs rank two");
-		if(alternateForm) alternateForms.emplace(slot,offers[index]);
-		++level;
+		const auto & id=offers[index];
+		auto & line=stack(slot);
+		if(armyReward(id))
+		{
+			if(alternateForm) throw std::logic_error("Invalid army reward form");
+			if(id.rfind("reward.stat.",0)==0)
+			{
+				if(id.size()!=13 || id.back()<'0' || id.back()>'3') throw std::logic_error("Unknown primary skill");
+				auto & stat=primary.at(id.back()-'0');
+				if(stat>INT32_MAX-2) throw std::overflow_error("Hero stat exceeds engine range");
+				stat+=2;
+			}
+		}
+		else
+		{
+			auto & level=line.mutations[id];
+			if(level==std::numeric_limits<unsigned>::max()) throw std::overflow_error("Mutation rank exceeds unsigned range");
+			if(alternateForm && level!=1) throw std::logic_error("Evolution needs rank two");
+			if(alternateForm) alternateForms.emplace(slot,id);
+			++level;
+		}
 		history.push_back(offers[index]);
 		recipients.push_back(slot);
 		offers.clear();
@@ -320,7 +351,7 @@ public:
 			size_t slot = 0;
 			if(version != "EA2" && (!(in >> slot) || slot >= result.rosterSize())) throw invalid;
 			result.recipients.push_back(slot);
-			++result.stack(slot).mutations[id];
+			if(!armyReward(id)) ++result.stack(slot).mutations[id];
 		}
 		if(version == "EA4")
 		{

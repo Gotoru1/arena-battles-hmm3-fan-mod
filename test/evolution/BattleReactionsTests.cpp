@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cassert>
 #include <functional>
+#include <random>
+#include <string>
 #include "../../lib/battle/EvolutionChain.h"
 #include <string>
 #include <cstdint>
@@ -41,6 +43,7 @@ struct BattleAttack {std::vector<BattleStackAttacked> bsa;};
 struct CStack {
 	int id;Data data;std::vector<Bonus> bonuses;
 	struct TemporaryHealth{int getResurrected() const{return 0;}} health;
+	bool base=true;
 	int unitId() const{return id;} bool alive() const{return data.health>0;}
 	int getCount() const{return (data.health+9)/10;}
 	int getMaxHealth() const{return 10;}
@@ -72,8 +75,9 @@ struct StacksInjured {int battleID{};std::vector<BattleStackAttacked> stacks;};
 struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd,toRemove;};
 struct CBattleInfoCallback {
 	std::map<int,CStack> units;int round=1;
+	mutable int lastId=0;
 	int getBattleID() const{return 1;}auto getBattle() const{return this;}
-	int battleNextUnitId() const{return units.empty()?1:units.rbegin()->first+1;}
+	int battleNextUnitId() const{return lastId=std::max(lastId,units.empty()?0:units.rbegin()->first)+1;}
 	auto battleGetStackByID(int id,bool alive=true) const{
 		auto p=units.find(id);return p==units.end()||(alive&&!p->second.alive())?nullptr:&p->second;
 	}
@@ -105,7 +109,7 @@ struct CGameHandler {
 	} for(auto & v:p.toAdd)for(auto b:v.second)field.units.at(v.first).bonuses.push_back(b);}
 	void sendAndApply(const StacksInjured & p){for(auto & h:p.stacks)field.units.at(h.stackAttacked).data.health-=int(h.damageAmount);}
 	void sendAndApply(const BattleUnitsChanged & p){for(auto & c:p.changedStacks){
-		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}});
+		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}, {}, false});
 		else if(c.op==UnitChanges::EOperation::REMOVE) field.units.erase(c.id);
 		else field.units.at(c.id).data=c.data;
 	}}
@@ -130,7 +134,53 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 };
 #include "../../server/battles/EvolutionReactions.inc"
 
+static std::vector<int> randomRun(unsigned seed)
+{
+	std::mt19937 random(seed);
+	const std::vector<int> traits{1,3,9,10,15,18,19,21,23,25,27,32,39,51,56,57,59,60,61,67,68,78,87};
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	for(int id=1;id<=4;++id)
+	{
+		auto & unit=field.units.emplace(id,CStack{id,{id,6,60,{id*4},id<3?BattleSide::LEFT:BattleSide::RIGHT},{}}).first->second;
+		for(int pick=0;pick<5;++pick)unit.bonuses.push_back({BonusType::EVOLUTION_TRAIT,traits[random()%traits.size()]});
+	}
+	actions.evolutionRound(field,true);
+	for(int step=0;step<45;++step)
+	{
+		std::vector<int> left,right;
+		std::set<int> occupied;
+		for(const auto & entry:field.units)
+		{
+			const auto & unit=entry.second;
+			assert(unit.data.health>=0 && unit.id==entry.first);
+			if(!unit.alive()) continue;
+			assert(unit.getPosition().isValid() && occupied.insert(unit.getPosition().pos).second);
+			(unit.unitSide()==BattleSide::LEFT?left:right).push_back(unit.id);
+		}
+		if(left.empty()||right.empty()) break;
+		if(step%2) left.swap(right);
+		auto & from=field.units.at(left[random()%left.size()]);
+		auto & to=field.units.at(right[random()%right.size()]);
+		const auto before=to.getCount();
+		const auto damage=std::min(to.data.health,static_cast<int>(1+random()%36));
+		to.data.health-=damage;
+		actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,damage,!to.alive(),before-to.getCount()}}});
+		if(step%3==2){++field.round;actions.evolutionRound(field,false);}
+	}
+	std::vector<int> fingerprint;
+	for(const auto & entry:field.units)
+	{
+		const auto & u=entry.second;
+		fingerprint.insert(fingerprint.end(),{u.id,u.data.species,u.data.health,u.data.pos.pos,static_cast<int>(u.data.side)});
+		for(const auto & b:u.bonuses) fingerprint.insert(fingerprint.end(),{static_cast<int>(b.type),b.subtype,b.val});
+	}
+	return fingerprint;
+}
+
 int main(){
+	for(unsigned seed=1;seed<=120;++seed) assert(randomRun(seed)==randomRun(seed));
 	CBattleInfoCallback field;
 	auto add=[&](int pos,BattleSide side,std::vector<int> mutations)->CStack &{
 		int id=field.battleNextUnitId();
@@ -176,6 +226,7 @@ int main(){
 	familyActions.evolutionRound(family,true);
 	assert(root.hasBonusOfType(BonusType::NO_MELEE_PENALTY) && root.hasBonusOfType(BonusType::FLYING));
 	assert(family.units.at(4).hasBonusOfType(BonusType::EVOLUTION_FAMILY));
+	assert(root.getBonusesOfType(BonusType::NONE,500501)->front()->val==1);
 	auto rootRules=root.getBonusesOfType(BonusType::EVOLUTION_TRAIT);
 	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==9;}));
 	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==1047;}));
@@ -189,6 +240,7 @@ int main(){
 	assert(nest.units.at(3).data.species==500);
 	nestActions.evolutionRound(nest,false);
 	assert(nest.units.size()==4);
+	assert(nest.units.at(1).getBonusesOfType(BonusType::NONE,500501)->front()->val==2);
 	assert(std::any_of(nest.units.begin(),nest.units.end(),[](const auto & u){return u.second.data.species==501 && u.second.bonuses.size()>=5;}));
 	// A killed egg never hatches. A living carrier can leave a cocoon on an infected corpse.
 	for(auto & pair : nest.units) if(pair.second.data.species==500) pair.second.data.health=0;

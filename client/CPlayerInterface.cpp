@@ -843,9 +843,13 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 		auto battle = cb->getBattle(battleID);
 		const auto side = battle->battleGetMySide();
 		std::array<int, 7> survivors{};
+		std::set<int> discoveries;
 		for(const auto * stack : battle->battleGetAllStacks())
 		{
-			if(stack->unitSide() != side || stack->isClone() || !stack->alive()) continue;
+			if(stack->unitSide() != side) continue;
+			const auto learned=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500501));
+			for(const auto & event:*learned) discoveries.insert(event->val);
+			if(stack->isClone() || !stack->alive()) continue;
 			const CStack * origin = stack;
 			if(!origin->base)
 			{
@@ -865,7 +869,7 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 		for(const auto & entry : br->casualties[enemy])
 			casualties += std::max(0, entry.second);
-		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties);
+		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties, discoveries);
 	}
 	if(isAutoFightOn || autofightingAI)
 	{

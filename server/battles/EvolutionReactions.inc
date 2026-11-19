@@ -58,6 +58,22 @@ class EvolutionReactions
 		server.sendAndApply(packet);
 	}
 
+	void discovery(const CStack * actor,int combo)
+	{
+		// Record on an original body so that dismissing an egg or copy cannot erase the discovery.
+		const CStack * anchor=actor;
+		for(auto * unit:battle.battleGetAllStacks())
+			if(unit->unitSide()==actor->unitSide() && unit->base && (!anchor->base || unit->unitId()<anchor->unitId())) anchor=unit;
+		const auto key=BonusCustomSubtype(500501);
+		auto known=anchor->getBonusesOfType(BonusType::NONE,key);
+		if(std::any_of(known->begin(),known->end(),[&](const auto & mark){return mark->val==combo;})) return;
+		Bonus mark;
+		mark.type=BonusType::NONE;
+		mark.subtype=key;
+		mark.val=combo;
+		grant(anchor,mark);
+	}
+
 	void putTrait(const CStack * unit, int id, int rank)
 	{
 		if(rules(unit)[id] >= rank) return;
@@ -94,6 +110,7 @@ class EvolutionReactions
 			auto prior = rules(target);
 			if(prior[id] >= rank) continue;
 			putTrait(target,id,rank);
+			if(target!=unit) discovery(unit,1);
 			if(!prior.count(61) || prior.at(61) <= 0 || prior[id] != 0) continue;
 			// A rank increase is not an acquisition. It cannot reactivate the catalyst.
 			for(auto entry : prior)
@@ -217,15 +234,16 @@ class EvolutionReactions
 		return id;
 	}
 
-	void lay(const CStack * parent, BattleHex hex)
+	bool lay(const CStack * parent, BattleHex hex)
 	{
 		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
-		if(!egg) return;
+		if(!egg) return false;
 		origins[egg->unitId()]=lineageRoot(parent->unitId());
 		Bonus source;
 		source.type = BonusType::EVOLUTION_BROOD;
 		source.val = static_cast<int>(parent->unitId());
 		grant(egg,source);
+		return true;
 	}
 
 	bool hatch(const CStack * egg)
@@ -244,7 +262,7 @@ class EvolutionReactions
 		if(parent)
 		{
 			summon(parent,larvaType(),1,hex,false);
-			if(rules(parent).count(60)) lay(parent,hex);
+			if(rules(parent).count(60) && lay(parent,hex)) discovery(parent,2);
 		}
 		else spawn(side,larvaType(),1,hex);
 		return true;
@@ -275,6 +293,7 @@ class EvolutionReactions
 				{
 					for(auto entry : rules(carrier)) transfer(child,entry.first,entry.second);
 					adapt(child);
+					discovery(carrier,3);
 				}
 				observe(child);
 			}

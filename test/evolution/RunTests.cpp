@@ -177,6 +177,24 @@ int main()
 	require(std::filesystem::create_directory(folder),"Isolated save test profile");
 	SaveSlots slots(folder);
 	{
+		RoguelikeRun campaign(45);
+		campaign.begin(0,{1,2,3,4},1,15);
+		std::array<std::string,3> prizes{"reward.stat.0","reward.artifact.centaurAxe","reward.edict.supply"};
+		for(const auto & id:prizes)
+		{
+			campaign.finish(true,10,0,{"trait9","trait18","trait23"});
+			campaign.offers.back()=id;
+			campaign.pick(2);
+			slots.write(0,campaign);
+			campaign=slots.read(0);
+			require(campaign.claimed(id) && !campaign.rank(id),"Global reward survives without attaching to any lineage");
+		}
+		require(campaign.primary[0]==3,"Training applies exactly once across saves");
+		campaign.finish(true,10,0,{"trait9","trait18","trait23"});
+		require(campaign.army.count==26,"Supply doctrine increases actual reinforcement");
+		std::filesystem::remove(slots.path(0));
+	}
+	{
 		RoguelikeRun laws(913);
 		laws.begin(0,{1,2,3,4},1,20);
 		for(int wave=1;wave<=5;++wave)

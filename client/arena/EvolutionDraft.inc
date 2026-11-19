@@ -24,8 +24,8 @@ namespace
 	const JsonNode & evolutionCatalog()
 	{
 		static const JsonNode data(JsonPath::builtin("config/evolution"));
-		if(data["mutations"].Struct().size() < 3)
-			throw std::runtime_error("Evolution mutation catalog missing or incomplete");
+		if(data["catalogVersion"].Integer() != 2 || data["mutations"].Struct().size() < 3)
+			throw std::runtime_error("Нужен каталог Evolution Arena 2 из того же архива, что и клиент.");
 		return data;
 	}
 
@@ -242,7 +242,14 @@ void ArenaDraft::newEvolutionRun()
 			throw std::out_of_range("EVOLUTION_SEED exceeds 32 bits");
 		seed = static_cast<uint32_t>(number);
 	}
-	evolutionCatalog();
+	try { evolutionCatalog(); }
+	catch(const std::exception & error)
+	{
+		if(verifying) throw;
+		cancel();
+		CInfoWindow::showInfoDialog(error.what(),{});
+		return;
+	}
 	run = std::make_unique<evolution::RoguelikeRun>(seed);
 	rng.seed(run->random());
 	stepChooseHero();
@@ -304,7 +311,7 @@ void ArenaDraft::chooseEvolutionCreature()
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
-void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties)
+void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries)
 {
 	if(!evolutionBattle())
 		return;
@@ -315,8 +322,19 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 		pool.push_back(entry.first);
 		rarities.emplace(entry.first, static_cast<unsigned>(entry.second["rarity"].Integer()));
 	}
+	for(auto key:discoveries)
+	{
+		const auto id=std::to_string(key);
+		if(!evolutionCatalog()["discoveries"][id].isNull() && std::find(run->synergies.begin(),run->synergies.end(),id)==run->synergies.end()) run->synergies.push_back(id);
+	}
 	std::vector<int> reserves(survivors.begin()+1, survivors.begin()+run->rosterSize());
 	run->finish(won, survivors[0], casualties, std::move(pool), rarities, eliteFight, reserves);
+	if(won)
+	{
+		std::vector<std::string> extra;
+		for(const auto & entry:evolutionCatalog()["rewards"].Struct()) extra.push_back(entry.first);
+		run->offerArmyReward(std::move(extra));
+	}
 	try { checkpoint(); } catch(const std::exception & e) { logGlobal->error("Evolution checkpoint: %s", e.what()); }
 }
 
@@ -405,9 +423,15 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 	const auto & catalog = evolutionCatalog()["mutations"];
 	for(const auto & id : run->offers)
 	{
-		const auto & entry = catalog[id];
+		const bool armyReward=evolution::RoguelikeRun::armyReward(id);
+		const auto & entry = armyReward ? evolutionCatalog()["rewards"][id] : catalog[id];
 		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
 		const std::array<ColorRGBA,4> colors{{{195,195,195,255},{95,165,255,255},{199,120,255,255},{255,158,55,255}}};
+		if(armyReward)
+		{
+			cards.push_back(evolutionCard(entry["name"].String(),entry["category"].String()+"\n"+labels.at(entry["rarity"].Integer())+"\n\n"+entry["text"].String(),colors.at(entry["rarity"].Integer())));
+			continue;
+		}
 		std::string hint;
 		if(!run->rank(id, slot))
 			for(const auto & combo : evolutionCatalog()["synergies"].Vector())
@@ -431,7 +455,7 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 		[self, slot](int index)
 		{
 			const auto & id = run->offers.at(index);
-			const auto & entry = evolutionCatalog()["mutations"][id];
+			const auto & entry = evolution::RoguelikeRun::armyReward(id) ? evolutionCatalog()["rewards"][id] : evolutionCatalog()["mutations"][id];
 			if(run->rank(id,slot) != 1 || entry["alternate"].isNull())
 			{
 				run->pick(index,slot);
@@ -510,6 +534,16 @@ try
 	const auto & weather = storms.at((map->evolutionSeed / 7u) % storms.size());
 	const auto & schools = data["schools"].Vector();
 	const size_t firstSchool = randomInt(0,static_cast<int>(schools.size())-1);
+	for(const auto & reward:run->history)
+		if(reward.rfind("reward.artifact.",0)==0)
+		{
+			const ArtifactID art(ArtifactID::decode("core:"+reward.substr(16)));
+			if(!vstd::contains(player().draftedArtifacts,art))
+			{
+				const auto position=ArtifactUtils::getArtAnyPosition(player().hero.get(),art);
+				if(position!=ArtifactPosition::PRE_FIRST) giveArtifact(player(),art,position);
+			}
+		}
 	player().primary = run->primary;
 	std::string discoveries;
 	std::string roster;
@@ -641,6 +675,11 @@ try
 		}
 	}
 	auto self = shared_from_this();
+	for(const auto & id:run->synergies)
+	{
+		const auto & learned=data["discoveries"][id];
+		if(!learned.isNull()) scouting+="\n"+learned["name"].String()+" — "+learned["text"].String();
+	}
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
 	if(eliteAvailable)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));

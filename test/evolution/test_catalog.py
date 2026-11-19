@@ -51,6 +51,15 @@ class CatalogTests(unittest.TestCase):
             for field in ("name", "text", "rarity"):
                 self.assertEqual(original[field], entry[field])
 
+    def test_army_rewards(self):
+        self.assertEqual(len(DATA["rewards"]),10)
+        native = (ROOT/"config/artifacts.json").read_text(encoding="utf-8")
+        for key, rule in DATA["rewards"].items():
+            self.assertTrue(key.startswith("reward.") and key not in DATA["mutations"])
+            self.assertTrue(rule["name"] and rule["text"] and rule["category"])
+            if key.startswith("reward.artifact."):
+                self.assertRegex(native, r'"'+re.escape(key.split(".")[-1])+r'"\s*:')
+
     def test_brood_creatures(self):
         mod = ROOT / "Mods/arenabattles"
         path, = json.loads((mod/"mod.json").read_text(encoding="utf-8"))["creatures"]
