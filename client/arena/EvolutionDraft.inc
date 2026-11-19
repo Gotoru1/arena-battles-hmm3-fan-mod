@@ -342,12 +342,23 @@ void ArenaDraft::buildEvolutionBattle()
 	std::string detail = "Твой отряд: " + run->army.count.str() + " " + creature.toCreature()->getNamePluralTranslated();
 	if(run->boss())
 		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
+	std::string scouting = "Армия противника";
+	for(int i = 0; i < slots; ++i)
+	{
+		const auto * enemyStack = enemy().hero->getStackPtr(SlotID(i));
+		scouting += "\n" + enemyStack->getName() + " × " + std::to_string(enemyStack->getCount());
+		if(!run->boss() && run->wave % 3 == 0)
+			scouting += "  (элита: " + evolution::Amount((evolution::Amount(enemyStack->getCount()) * 8 + 4) / 5).str() + ")";
+	}
+	scouting += "\n\nТвой отряд: " + run->army.count.str();
+	for(const auto & mutation : run->army.mutations)
+		scouting += "\n" + data["mutations"][mutation.first]["name"].String() + " × " + std::to_string(mutation.second);
 	auto self = shared_from_this();
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
 	if(!run->boss() && run->wave % 3 == 0)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
-		"В свой ход нажми A для автобоя с анимацией", cards, [self, slots](int pick)
+		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots](int pick)
 		{
 			eliteFight = pick == 1;
 			if(eliteFight)
@@ -359,5 +370,5 @@ void ArenaDraft::buildEvolutionBattle()
 				}
 			self->startBattle();
 		},
-		[self]() { self->cancel(); }, nullptr);
+		[self]() { self->cancel(); }, [scouting]() { CInfoWindow::showInfoDialog(scouting, {}); });
 }

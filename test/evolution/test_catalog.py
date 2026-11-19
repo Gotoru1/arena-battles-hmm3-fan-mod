@@ -55,6 +55,16 @@ class CatalogTests(unittest.TestCase):
                 for e in effects:
                     self.check_effect(e)
 
+    def test_rotation_and_recipe_effects(self):
+        bosses = [DATA["boss"], *DATA["otherBosses"]]
+        self.assertEqual(len({b["name"] for b in bosses}), 3)
+        for entry in bosses + DATA["synergies"]:
+            for effect in entry["effects"]:
+                self.check_effect(effect)
+        for recipe in DATA["synergies"]:
+            self.assertTrue(set(recipe["requires"]) <= DATA["mutations"].keys())
+        self.assertEqual(len({tuple(sorted(s["requires"])) for s in DATA["synergies"]}), 7)
+
     def test_boss_ramps_after_hit(self):
         effect, = DATA["boss"]["effects"]
         self.check_effect(effect)
