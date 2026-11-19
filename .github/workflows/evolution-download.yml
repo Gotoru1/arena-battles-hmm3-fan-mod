@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: evolution-arena
+          ref: 2f9986474778fabcfac39931368bb5ca29d79e79
           fetch-depth: 0
       - name: Test the current rules with undefined behavior checks
         shell: bash
@@ -77,6 +77,11 @@ jobs:
           foreach ($name in $required) {
             if (!(Test-Path -LiteralPath $name -PathType Leaf)) { throw "Missing $name" }
           }
+          $catalog = Get-Content Mods/arenabattles/Content/config/evolution.json -Raw -Encoding utf8 | ConvertFrom-Json
+          foreach ($name in 'ossuary','nursery','kinship','underdog','wait','forge','acid') {
+            if (!$catalog.mutations.$name) { throw "Missing mutation $name" }
+          }
+          if ($catalog.synergies.Count -lt 9) { throw 'Missing squad combinations' }
           $legacy = Get-ChildItem -Recurse -File | Where-Object Extension -in '.lod','.snd','.vid'
           if ($legacy) { throw "Unexpected legacy game archive: $($legacy.Name)" }
           $profile = (Get-Content config/dirs.json -Raw | ConvertFrom-Json).userDataPath
@@ -97,7 +102,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
         with:
-          ref: 6e91e239e67e8fdac588c45c2287cc3f7a8aa443
+          ref: 2f9986474778fabcfac39931368bb5ca29d79e79
           path: gameplay
       - run: sudo apt-get update -qq && sudo apt-get install -y libboost-dev
       - run: g++ -std=c++17 -I gameplay test/evolution/RarityDistribution.cpp -o "$RUNNER_TEMP/rarity" && "$RUNNER_TEMP/rarity"
