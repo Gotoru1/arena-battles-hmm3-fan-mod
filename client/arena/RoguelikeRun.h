@@ -81,7 +81,7 @@ public:
 
 	// The battle callback reports actual surviving units (including permanent soul steals).
 	// Recruitment supplies an army floor only on victory; defeat can never be converted into a win.
-	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool)
+	void finish(bool won, const Amount & survivors, const Amount & casualties, std::vector<std::string> pool, const std::map<std::string, unsigned> & rarities = {})
 	{
 		if(phase != Phase::Battle)
 			throw std::logic_error("Battle already settled");
@@ -91,6 +91,9 @@ public:
 		pool.erase(std::unique(pool.begin(), pool.end()), pool.end());
 		if(won && pool.size() < 3)
 			throw std::invalid_argument("Reward pool needs at least three distinct mutations");
+		std::array<std::vector<std::string>, 4> groups;
+		for(const auto & id : pool)
+			groups.at(rarities.empty() ? 0 : rarities.at(id)).push_back(id);
 		kills += casualties;
 		if(!won)
 		{
@@ -99,8 +102,19 @@ public:
 		}
 		army.harvest += casualties * rank("harvest");
 		army.count = survivors + 5 + wave * 2;
-		std::shuffle(pool.begin(), pool.end(), random);
-		offers.assign(pool.begin(), pool.begin() + 3);
+		offers.clear();
+		for(int slot = 0; slot < 3; ++slot)
+		{
+			const std::array<int, 4> chances = boss() ? std::array<int,4>{35, 37, 23, 5} : std::array<int,4>{53, 32, 13, 2};
+			std::array<int,4> weights = chances;
+			for(size_t tier = 0; tier < groups.size(); ++tier)
+				if(groups[tier].empty()) weights[tier] = 0;
+			const auto tier = std::discrete_distribution<int>(weights.begin(), weights.end())(random);
+			auto & group = groups[tier];
+			auto index = std::uniform_int_distribution<size_t>(0, group.size()-1)(random);
+			offers.push_back(group[index]);
+			group.erase(group.begin()+index);
+		}
 		phase = Phase::Reward;
 	}
 
@@ -121,7 +135,7 @@ public:
 	Amount threat() const
 	{
 		// AI value budget, not unit count. After the introductory waves the quadratic term dominates.
-		return (210 + 75 * wave + 8 * wave * wave) * (boss() ? 3 : 2) / 2;
+		return (600 + 230 * wave + 40 * wave * wave) * (boss() ? 3 : 2) / 2;
 	}
 };
 }

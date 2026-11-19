@@ -1,44 +1,48 @@
 {
 	"mutations": {
 		"flurry": {
-			"name": "Flurry",
-			"text": "One extra strike per rank.",
+			"name": "Двойной удар",
+			"text": "Ещё одна атака за каждый ранг.",
 			"effects": [
 				{
 					"type": "ADDITIONAL_ATTACK",
 					"val": 1
 				}
-			]
+			],
+			"rarity": 2
 		},
 		"harvest": {
-			"name": "Harvest",
-			"text": "Each enemy casualty banks growth. Every ten banked points add one damage per unit in future waves.",
-			"effects": []
+			"name": "Жатва",
+			"text": "Потери врага приносят очки роста. Каждые 10 очков дают +1 к урону бойца со следующей волны.",
+			"effects": [],
+			"rarity": 2
 		},
 		"fission": {
-			"name": "Fission",
-			"text": "Each living enemy killed in a physical hit adds one permanent copy per rank.",
+			"name": "Деление",
+			"text": "Каждый убитый физическим ударом живой враг добавляет в отряд по одной постоянной копии за ранг.",
 			"effects": [
 				{
 					"type": "SOUL_STEAL",
 					"val": 1,
 					"subtype": "soulStealPermanent"
 				}
-			]
+			],
+			"rarity": 3
 		},
 		"leech": {
-			"name": "Leech",
-			"text": "Recover health equal to 25% of damage to living targets per rank.",
+			"name": "Кровопийца",
+			"text": "Удары по живым целям восстанавливают здоровье на 25% нанесённого урона за ранг.",
 			"effects": [
 				{
 					"type": "LIFE_DRAIN",
 					"val": 25
 				}
-			]
+			],
+			"rarity": 1
 		},
 		"sweep": {
-			"name": "Scythe",
-			"text": "Strike adjacent enemies in melee. Each rank also grants +1 damage per unit.",
+			"name": "Коса",
+			"text": "Бей всех соседних врагов в ближнем бою. Каждый ранг также даёт +1 к урону.",
 			"effects": [
 				{
 					"type": "ATTACKS_ALL_ADJACENT",
@@ -49,31 +53,34 @@
 					"val": 1,
 					"subtype": "creatureDamageBoth"
 				}
-			]
+			],
+			"rarity": 2
 		},
 		"barbs": {
-			"name": "Barbs",
-			"text": "Return 15% of eligible melee damage per rank.",
+			"name": "Шипы",
+			"text": "Верни атакующему 15% урона подходящей атаки ближнего боя за ранг.",
 			"effects": [
 				{
 					"type": "FIRE_SHIELD",
 					"val": 15
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"riposte": {
-			"name": "Riposte",
-			"text": "One extra retaliation per round per rank.",
+			"name": "Ответный выпад",
+			"text": "Ещё один ответный удар в каждом раунде за ранг.",
 			"effects": [
 				{
 					"type": "ADDITIONAL_RETALIATION",
 					"val": 1
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"carapace": {
-			"name": "Carapace",
-			"text": "Before attacking, gain +1 defense per rank for this battle.",
+			"name": "Панцирь",
+			"text": "Перед своей атакой получай +1 к защите за ранг до конца боя.",
 			"effects": [
 				{
 					"type": "ON_COMBAT_EVENT",
@@ -93,11 +100,12 @@
 						]
 					}
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"rage": {
-			"name": "Scar Tissue",
-			"text": "Surviving a hit from a surviving enemy adds +1 damage per unit per rank for the battle.",
+			"name": "Рубцы",
+			"text": "После пережитого удара от выжившего врага получай +1 к урону за ранг до конца боя.",
 			"effects": [
 				{
 					"type": "ON_COMBAT_EVENT",
@@ -117,11 +125,12 @@
 						]
 					}
 				}
-			]
+			],
+			"rarity": 1
 		},
 		"stride": {
-			"name": "Momentum",
-			"text": "Moving builds +1 damage per unit per rank for this battle.",
+			"name": "Разгон",
+			"text": "После перемещения получай +1 к урону за ранг до конца боя.",
 			"effects": [
 				{
 					"type": "ON_COMBAT_EVENT",
@@ -141,48 +150,326 @@
 						]
 					}
 				}
-			]
+			],
+			"rarity": 1
 		},
 		"haste": {
-			"name": "Quickening",
-			"text": "Gain one speed per rank.",
+			"name": "Проворство",
+			"text": "+1 к скорости за ранг.",
 			"effects": [
 				{
 					"type": "STACKS_SPEED",
 					"val": 1
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"vigor": {
-			"name": "Iron Heart",
-			"text": "Gain four hit points per unit per rank.",
+			"name": "Железное сердце",
+			"text": "+4 здоровья каждому бойцу за ранг.",
 			"effects": [
 				{
 					"type": "STACK_HEALTH",
 					"val": 4
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"impact": {
-			"name": "Impact",
-			"text": "Gain three damage per unit per rank.",
+			"name": "Тяжёлый удар",
+			"text": "+3 к урону каждого бойца за ранг.",
 			"effects": [
 				{
 					"type": "CREATURE_DAMAGE",
 					"val": 3,
 					"subtype": "creatureDamageBoth"
 				}
-			]
+			],
+			"rarity": 0
 		},
 		"mass": {
-			"name": "Critical Mass",
-			"text": "Each 15 units at wave entry add one damage per unit per rank.",
-			"effects": []
+			"name": "Критическая масса",
+			"text": "В начале волны каждые 15 бойцов дают всему отряду +1 к урону бойца за ранг.",
+			"effects": [],
+			"rarity": 2
+		},
+		"charge": {
+			"name": "Кавалерийский наскок",
+			"text": "Каждая пройденная клетка усиливает атаку с разбега на 8% за ранг.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "JOUSTING",
+					"val": 8
+				}
+			]
+		},
+		"wings": {
+			"name": "Крылатая стая",
+			"text": "Отряд летает через препятствия. Каждый ранг даёт +1 к скорости.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "FLYING",
+					"val": 1
+				},
+				{
+					"type": "STACKS_SPEED",
+					"val": 1
+				}
+			]
+		},
+		"pierce": {
+			"name": "Сквозное дыхание",
+			"text": "Удар достаёт и до бойцов за целью. Каждый ранг даёт +2 к урону.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "TWO_HEX_ATTACK_BREATH",
+					"val": 1
+				},
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 2,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"ambush": {
+			"name": "Засада",
+			"text": "В ближнем бою отряд может ответить раньше атакующего. +2 к урону за ранг.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "FIRST_STRIKE",
+					"val": 1
+				},
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 2,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"venom": {
+			"name": "Безмолвный клинок",
+			"text": "Твоя атака лишает врага ответа. +1 к урону за ранг.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "BLOCKS_RETALIATION",
+					"val": 1
+				},
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 1,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"coin": {
+			"name": "Счастливый клык",
+			"text": "Каждый ранг даёт 15% шанса удвоить урон удара.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "DOUBLE_DAMAGE_CHANCE",
+					"val": 15
+				}
+			]
+		},
+		"dance": {
+			"name": "Танец гарпии",
+			"text": "После атаки в ближнем бою отряд возвращается на исходную клетку. +1 к скорости за ранг.",
+			"rarity": 2,
+			"effects": [
+				{
+					"type": "RETURN_AFTER_STRIKE",
+					"val": 1
+				},
+				{
+					"type": "STACKS_SPEED",
+					"val": 1
+				}
+			]
+		},
+		"bastion": {
+			"name": "Тысячерукий страж",
+			"text": "Неограниченные ответные удары. Перед каждой полученной атакой растёт урон до конца боя: +2 за ранг.",
+			"rarity": 3,
+			"effects": [
+				{
+					"type": "UNLIMITED_RETALIATIONS",
+					"val": 1
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventBeforeAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 2,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"dragon": {
+			"name": "Драконий вихрь",
+			"text": "Полёт и удар по соседним врагам. Каждое перемещение даёт +3 к урону за ранг до конца боя.",
+			"rarity": 3,
+			"effects": [
+				{
+					"type": "FLYING",
+					"val": 1
+				},
+				{
+					"type": "ATTACKS_ALL_ADJACENT",
+					"val": 1
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 3,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"predator": {
+			"name": "Хищный рой",
+			"text": "После потери хотя бы одного бойца у цели — ещё один удар в ближнем бою. +10% вампиризма за ранг.",
+			"rarity": 3,
+			"effects": [
+				{
+					"type": "FEROCITY",
+					"val": 1,
+					"addInfo": 1
+				},
+				{
+					"type": "LIFE_DRAIN",
+					"val": 10
+				}
+			]
+		},
+		"steady": {
+			"name": "Верная рука",
+			"text": "Базовый урон всегда максимальный. +1 к урону за ранг.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "ALWAYS_MAXIMUM_DAMAGE",
+					"val": 1
+				},
+				{
+					"type": "CREATURE_DAMAGE",
+					"val": 1,
+					"subtype": "creatureDamageBoth"
+				}
+			]
+		},
+		"duelist": {
+			"name": "Боевая закалка",
+			"text": "Перед каждым своим ударом получай +1 к атаке за ранг до конца боя.",
+			"rarity": 0,
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventBeforeAttack",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 1,
+									"subtype": "primarySkill.attack",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"ward": {
+			"name": "Живая броня",
+			"text": "+6 здоровья за ранг. После перемещения отряд получает +1 к защите за ранг до конца боя.",
+			"rarity": 1,
+			"effects": [
+				{
+					"type": "STACK_HEALTH",
+					"val": 6
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 1,
+									"subtype": "primarySkill.defence",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"pike": {
+			"name": "Копья второй линии",
+			"text": "После пережитой атаки от выжившего врага растёт атака отряда: +2 за ранг до конца боя.",
+			"rarity": 0,
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 2,
+									"subtype": "primarySkill.attack",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
 		}
 	},
 	"synergies": [
 		{
-			"name": "Feeding Frenzy",
+			"name": "Пир хищников",
 			"requires": [
 				"fission",
 				"flurry"
@@ -196,7 +483,7 @@
 			]
 		},
 		{
-			"name": "Blood Mirror",
+			"name": "Кровавое зеркало",
 			"requires": [
 				"leech",
 				"barbs"
@@ -213,7 +500,7 @@
 			]
 		},
 		{
-			"name": "Living Fortress",
+			"name": "Живая крепость",
 			"requires": [
 				"riposte",
 				"carapace"
@@ -241,8 +528,8 @@
 		}
 	],
 	"boss": {
-		"name": "The Retort",
-		"text": "Each hit the boss survives from a surviving attacker adds damage for the rest of the battle. Its escorts have no such power.",
+		"name": "Возмездие",
+		"text": "Каждый пережитый удар от выжившего атакующего даёт боссу +3 к урону каждого бойца до конца боя.",
 		"effects": [
 			{
 				"type": "ON_COMBAT_EVENT",

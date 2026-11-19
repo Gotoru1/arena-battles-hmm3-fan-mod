@@ -116,9 +116,9 @@ void ArenaDraft::chooseMode()
 {
 	auto self = shared_from_this();
 	std::vector<ArenaOffer> cards{
-		evolutionCard("Evolution Arena", "Choose a hero and a creature. Fight, mutate, and survive every fifth wave."),
-		evolutionCard("Single Arena", "Play the original one-battle draft.")};
-	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("PvE Arena", "Choose a mode", cards,
+		evolutionCard("Evolution Arena", "Выбери героя и отряд. После победы получай мутации. Каждая пятая волна — босс."),
+		evolutionCard("Одиночная арена", "Подготовь армию для одного боя.")};
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Арена против компьютера", "Выбери режим", cards,
 		[self](int pick)
 		{
 			if(pick == 1)
@@ -151,7 +151,7 @@ void ArenaDraft::chooseEvolutionCreature()
 	for(const auto & choice : choices)
 		cards.push_back(creatureOffer(choice.first, 24));
 	auto self = shared_from_this();
-	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Found a lineage", "Seed " + std::to_string(run->seed),
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Выбери стартовый отряд", "Зерно " + std::to_string(run->seed),
 		cards, [self, choices](int index)
 		{
 			run->begin(self->player().hero->getHeroTypeID().getNum(), self->player().primary,
@@ -165,9 +165,13 @@ void ArenaDraft::settleEvolution(bool won, int survivors, int64_t casualties)
 	if(!evolutionBattle())
 		return;
 	std::vector<std::string> pool;
+	std::map<std::string, unsigned> rarities;
 	for(const auto & entry : evolutionCatalog()["mutations"].Struct())
+	{
 		pool.push_back(entry.first);
-	run->finish(won, survivors, casualties, std::move(pool));
+		rarities.emplace(entry.first, static_cast<unsigned>(entry.second["rarity"].Integer()));
+	}
+	run->finish(won, survivors, casualties, std::move(pool), rarities);
 }
 
 void ArenaDraft::afterEvolutionGame()
@@ -195,10 +199,10 @@ void ArenaDraft::afterEvolutionGame()
 	}
 	else
 	{
-		const auto summary = "Evolution Arena - run ended\nWave " + run->wave.str()
-			+ "   Enemy casualties: " + run->kills.str() + "\nMutations: "
-			+ std::to_string(run->history.size()) + "   Synergies: " + std::to_string(run->synergies.size())
-			+ "\nSeed: " + std::to_string(run->seed);
+		const auto summary = "Забег окончен\nВолна " + run->wave.str()
+			+ "   Потери врага: " + run->kills.str() + "\nМутации: "
+			+ std::to_string(run->history.size()) + "   Сочетания: " + std::to_string(run->synergies.size())
+			+ "\nЗерно: " + std::to_string(run->seed);
 		run.reset();
 		CInfoWindow::showInfoDialog(summary, {});
 	}
@@ -211,12 +215,13 @@ void ArenaDraft::chooseEvolutionReward()
 	for(const auto & id : run->offers)
 	{
 		const auto & entry = catalog[id];
-		cards.push_back(evolutionCard(entry["name"].String(), entry["text"].String()
-			+ "\n\nCurrent rank: " + std::to_string(run->rank(id))));
+		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
+		cards.push_back(evolutionCard(entry["name"].String(), labels.at(entry["rarity"].Integer()) + "\n\n" + entry["text"].String()
+			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id))));
 	}
 	auto self = shared_from_this();
-	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Wave " + run->wave.str() + " cleared",
-		"Choose one mutation for your lineage", cards,
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",
+		"Выбери одну мутацию для отряда", cards,
 		[self](int index) { run->pick(index); self->buildEvolutionBattle(); },
 		[self]() { self->cancel(); }, nullptr);
 }
@@ -259,7 +264,7 @@ void ArenaDraft::buildEvolutionBattle()
 		if(std::find(run->synergies.begin(), run->synergies.end(), name) == run->synergies.end())
 		{
 			run->synergies.push_back(name);
-			discoveries += "\nDiscovered: " + name;
+			discoveries += "\nОткрыто сочетание: " + name;
 		}
 	}
 	auto heroes = offerHeroes(player().hero->getHeroTypeID());
@@ -267,25 +272,25 @@ void ArenaDraft::buildEvolutionBattle()
 	const auto & initial = enemy().hero->getHeroClass()->primarySkillInitial;
 	std::copy_n(initial.begin(), 4, enemy().primary.begin());
 	const int tier = run->wave >= 25 ? 7 : 1 + (evolution::engineInt(run->wave)-1) / 4;
-	const int slots = run->wave < 3 ? 1 : 3;
+	const int slots = run->wave < 3 ? 3 : (run->wave < 8 ? 4 : 5);
 	for(int slot = 0; slot < slots; ++slot)
 	{
 		auto pool = ArenaRules::creaturePool(slot == 0 ? tier : std::max(1, tier-1));
 		auto id = pool.at(randomInt(0, static_cast<int>(pool.size()) - 1));
-		const int share = slots == 1 ? 100 : (slot == 0 ? 60 : 20);
+		const int share = slot == 0 ? 40 : 60 / (slots-1);
 		auto cost = std::max<int64_t>(1, id.toCreature()->getAIValue());
-		int amount = std::max(1, evolution::engineInt(run->threat() * share / (100 * cost)));
+		int amount = evolution::engineInt(2 + run->wave / (slot == 0 ? 1 : 3) + run->threat() * share / (100 * cost));
 		giveCreature(enemy(), slot+1, id, amount);
 		if(run->boss() && slot == 0)
 			appendEffects(enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects, data["boss"], 1);
 	}
 
-	std::string detail = "Lineage: " + run->army.count.str() + " " + creature.toCreature()->getNamePluralTranslated();
+	std::string detail = "Твой отряд: " + run->army.count.str() + " " + creature.toCreature()->getNamePluralTranslated();
 	if(run->boss())
-		detail += "\nBoss: " + enemy().hero->getStackPtr(SlotID(0))->getName() + ". " + data["boss"]["text"].String();
+		detail += "\nБосс: " + enemy().hero->getStackPtr(SlotID(0))->getName() + ". " + data["boss"]["text"].String();
 	auto self = shared_from_this();
-	std::vector<ArenaOffer> cards{evolutionCard("Enter battle", detail + discoveries)};
-	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Wave " + run->wave.str(),
-		"Use Auto Combat on the battlefield to watch the AI", cards, [self](int) { self->startBattle(); },
+	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
+		"В свой ход нажми A для автобоя с анимацией", cards, [self](int) { self->startBattle(); },
 		[self]() { self->cancel(); }, nullptr);
 }

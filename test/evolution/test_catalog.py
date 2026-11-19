@@ -34,7 +34,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_mutations(self):
         mutations = DATA["mutations"]
-        self.assertGreaterEqual(len(mutations), 12)
+        self.assertGreaterEqual(len(mutations), 28)
+        self.assertEqual({entry['rarity'] for entry in mutations.values()}, {0, 1, 2, 3})
         for key, entry in mutations.items():
             with self.subTest(mutation=key):
                 self.assertTrue(entry["effects"] or key in {"mass", "harvest"})
