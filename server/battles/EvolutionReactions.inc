@@ -266,6 +266,43 @@ class EvolutionReactions
 		if(!old.empty() || !reserve.empty()) server.sendAndApply(packet);
 	}
 
+	void split(const CStack * unit)
+	{
+		if(!unit || !unit->alive() || unit->getCount()<2 || int64_t(unit->getCount())*2>unit->unitBaseAmount() || !rules(unit).count(3)) return;
+		const auto key = BonusCustomSubtype(500003);
+		if(!unit->getBonusesOfType(BonusType::NONE,key)->empty()) return;
+		const int count = unit->getCount()/2;
+		auto * child=spawn(unit->unitSide(),unit->creatureId(),count,unit->getPosition());
+		if(!child) return;
+		// Reserve full individuals for the new body. The wounded front individual stays here.
+		const int temporary=std::min(count,unit->health.getResurrected());
+		auto state=unit->acquireState();
+		auto health=int64_t(count)*unit->getMaxHealth();
+		state->damage(health);
+		BattleUnitsChanged packet;
+		packet.battleID=battle.getBattle()->getBattleID();
+		packet.changedStacks.emplace_back(unit->unitId(),UnitChanges::EOperation::RESET_STATE);
+		state->save(packet.changedStacks.back().data);
+		if(temporary)
+		{
+			auto detached=child->acquireState();
+			auto temporaryHP=int64_t(temporary)*child->getMaxHealth();
+			detached->damage(temporaryHP);
+			detached->heal(temporaryHP,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			packet.changedStacks.emplace_back(child->unitId(),UnitChanges::EOperation::RESET_STATE);
+			detached->save(packet.changedStacks.back().data);
+		}
+		server.sendAndApply(packet);
+		Bonus origin;
+		origin.type=BonusType::NONE;
+		origin.subtype=key;
+		origin.val=static_cast<int>(unit->unitId());
+		grant(unit,origin);
+		grant(child,origin);
+		for(auto trait:rules(unit)) transfer(child,trait.first,trait.second);
+		observe(child);
+	}
+
 	void casualties(uint32_t count)
 	{
 		if(!count) return;
@@ -329,6 +366,7 @@ class EvolutionReactions
 		packet.stacks.push_back(hit);
 		server.sendAndApply(packet);
 		casualties(hit.killedAmount);
+		split(target);
 		if(hit.killed() && !target->alive()) fallen(owner,target);
 		return amount;
 	}
@@ -398,6 +436,7 @@ public:
 		{
 			auto * unit = battle.battleGetStackByID(hit.stackAttacked,false);
 			casualties(hit.killedAmount);
+			if(hit.killedAmount) split(unit);
 			if(unit && hit.killedAmount > 0 && source->alive() && unit->unitSide() != source->unitSide() && active.count(1))
 				lay(source,unit->getPosition());
 			if(unit && hit.killed() && !unit->alive()) fallen(source,unit);

@@ -38,8 +38,12 @@ struct BattleStackAttacked {
 struct BattleAttack {std::vector<BattleStackAttacked> bsa;};
 struct CStack {
 	int id;Data data;std::vector<Bonus> bonuses;
+	struct TemporaryHealth{int getResurrected() const{return 0;}} health;
 	int unitId() const{return id;} bool alive() const{return data.health>0;}
 	int getCount() const{return (data.health+9)/10;}
+	int getMaxHealth() const{return 10;}
+	int unitBaseAmount() const{return data.count;}
+	void damage(int64_t & n){data.health-=int(n);}
 	auto unitSide() const{return data.side;} auto creatureId() const{return CreatureID(data.species);}
 	auto getPosition() const{return data.pos;} int getAvailableHealth() const{return data.health;}
 	auto getBonusesOfType(BonusType t) const{
@@ -210,4 +214,16 @@ int main(){
 	assert(hunt.units.size()==4 && hunt.units.at(4).getCount()==1);
 	assert(hunt.units.at(1).getBonusesOfType(BonusType::NONE,500032)->front()->val==1);
 	assert(hunt.units.at(1).data.pos.pos>=3);
+	CBattleInfoCallback partition;
+	CGameHandler splitServer{partition,{}};
+	BattleActionProcessor splitActions{&splitServer};
+	partition.units.emplace(1,CStack{1,{1,10,49,{5},BattleSide::LEFT},{}});
+	partition.units.emplace(2,CStack{2,{2,4,40,{8},BattleSide::RIGHT},{}});
+	for(int m:{3,23}) partition.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	splitActions.evolutionAttack(partition,&partition.units.at(2),&partition.units.at(1),{{{1,2,11,false,1}}});
+	assert(partition.units.size()==3 && partition.units.at(1).data.health+partition.units.at(3).data.health==49);
+	assert(partition.units.at(1).getCount()+partition.units.at(3).getCount()==5);
+	assert(partition.units.at(3).getBonusesOfType(BonusType::NONE,500003)->front()->val==1);
+	splitActions.evolutionAttack(partition,&partition.units.at(2),&partition.units.at(1),{{{1,2,1,false,1}}});
+	assert(partition.units.size()==3);
 }

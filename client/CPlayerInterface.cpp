@@ -844,11 +844,22 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 		const auto side = battle->battleGetMySide();
 		std::array<int, 7> survivors{};
 		for(const auto * stack : battle->battleGetAllStacks())
+		{
+			if(stack->unitSide() != side || stack->isClone() || !stack->alive()) continue;
+			const CStack * origin = stack;
+			if(!origin->base)
 			{
-			if(stack->unitSide() != side || !stack->base || stack->isClone() || !stack->alive()) continue;
-			for(int slot = 0; slot < 7; ++slot)
-				if(stack->unitSlot() == SlotID(slot))
-					survivors[slot] = std::max(0, stack->getCount() - stack->health.getResurrected());
+				const auto markers = stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500003));
+				if(markers->empty()) continue;
+				origin = battle->battleGetStackByID((*markers->begin())->val,false);
+				if(!origin || !origin->base || origin->unitSide()!=side) continue;
+			}
+			for(int slot=0;slot<7;++slot)
+				if(origin->unitSlot()==SlotID(slot))
+				{
+					auto living=std::max(0,stack->getCount()-stack->health.getResurrected());
+					survivors[slot]=static_cast<int>(std::min<int64_t>(INT32_MAX,int64_t(survivors[slot])+living));
+				}
 		}
 		int64_t casualties = 0;
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
