@@ -149,7 +149,7 @@ namespace
 }
 
 ArenaChoiceWindow::ArenaChoiceWindow(const std::string & titleText, const std::string & subtitleText, std::vector<ArenaOffer> offersList,
-	std::function<void(int)> onPickCallback, std::function<void()> onCancel, std::function<void()> onShowHero)
+	std::function<void(int)> onPickCallback, std::function<void()> onCancel, std::function<void()> onShowHero, std::function<void()> onSave)
 	: CWindowObject(BORDERED)
 	, offers(std::move(offersList))
 	, onPick(std::move(onPickCallback))
@@ -206,6 +206,16 @@ ArenaChoiceWindow::ArenaChoiceWindow(const std::string & titleText, const std::s
 
 	description->setText(clickHint());
 
+	if(onSave)
+	{
+		buttonSave = std::make_shared<CButton>(Point(476,535), AnimationPath::builtin("GSPBUT2"),
+			CButton::tooltip("Сохранить забег в выбранную ячейку и выйти"), [this,onSave](){
+				auto save = onSave;
+				close();
+				arenaSafeCall(save);
+			});
+		buttonSave->setTextOverlay("Сохранить и выйти",FONT_SMALL,Colors::WHITE);
+	}
 	if(onShowHero)
 	{
 		buttonHero = std::make_shared<CButton>(Point(pos.w - 40 - 128, 535), AnimationPath::builtin("GSPBUT2"),

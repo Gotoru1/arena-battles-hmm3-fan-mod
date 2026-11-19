@@ -90,6 +90,7 @@ class ArenaChoiceWindow : public CWindowObject
 	std::shared_ptr<CButton> buttonChoose;
 	std::shared_ptr<CButton> buttonCancel;
 	std::shared_ptr<CButton> buttonRandom;
+	std::shared_ptr<CButton> buttonSave;
 	std::shared_ptr<CButton> buttonHero;
 	std::shared_ptr<CLabel> labelHero;
 
@@ -104,7 +105,7 @@ class ArenaChoiceWindow : public CWindowObject
 
 public:
 	ArenaChoiceWindow(const std::string & titleText, const std::string & subtitleText, std::vector<ArenaOffer> offers,
-		std::function<void(int)> onPick, std::function<void()> onCancel, std::function<void()> onShowHero);
+		std::function<void(int)> onPick, std::function<void()> onCancel, std::function<void()> onShowHero, std::function<void()> onSave = {});
 
 	/// selects a card before the player clicks (e.g. the last used difficulty)
 	void preselect(int index);

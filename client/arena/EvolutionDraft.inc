@@ -348,11 +348,11 @@ void ArenaDraft::chooseEvolutionReward()
 		if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
 		else options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated(), evolution::displayAmount(line.count)));
 	}
-	if(!verifying) options.push_back(evolutionCard("Сохранить и выйти","Оставить забег на выборе награды. После загрузки вернутся те же три карты."));
 	choosingRecipient = true;
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Кого развивать?", "Выбери отряд для мутации", options,
-		[self](int i){ if(size_t(i)==run->rosterSize()) self->saveEvolutionAndExit(*run); else self->showEvolutionCards(i); }, [self](){ self->cancel(); }, nullptr);
+		[self](int i){ self->showEvolutionCards(i); }, [self](){ self->cancel(); }, nullptr,
+		[self](){ self->saveEvolutionAndExit(*run); });
 }
 
 void ArenaDraft::showEvolutionCards(size_t slot)
@@ -403,7 +403,7 @@ void ArenaDraft::showEvolutionCards(size_t slot)
 				[self,index,slot](int form){ run->pick(index,slot,form==1); self->buildEvolutionBattle(); },
 				[self,slot](){ self->showEvolutionCards(slot); },nullptr);
 		},
-		[self]() { self->cancel(); }, nullptr);
+		[self]() { self->cancel(); }, nullptr, [self](){ self->saveEvolutionAndExit(*run); });
 }
 
 void ArenaDraft::buildEvolutionBattle()
@@ -589,12 +589,9 @@ try
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
 	if(eliteAvailable)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
-	const auto exitCard = cards.size();
-	if(!verifying) cards.push_back(evolutionCard("Сохранить и выйти","Продолжить с начала этой же волны через New PvE → Продолжить."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
-		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots, exitCard, waveStart](int pick)
+		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots](int pick)
 		{
-			if(size_t(pick)==exitCard) { self->saveEvolutionAndExit(*waveStart); return; }
 			eliteFight = pick == 1;
 			if(eliteFight)
 				for(int i = 0; i < slots; ++i)
@@ -607,7 +604,8 @@ try
 				}
 			self->startBattle();
 		},
-		[self]() { self->cancel(); }, [scouting]() { CInfoWindow::showInfoDialog(scouting, {}); });
+		[self]() { self->cancel(); }, [scouting]() { CInfoWindow::showInfoDialog(scouting, {}); },
+		[self,waveStart](){ self->saveEvolutionAndExit(*waveStart); });
 }
 catch(const std::overflow_error &)
 {
