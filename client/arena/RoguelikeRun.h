@@ -9,6 +9,7 @@
 #include <istream>
 #include <ostream>
 #include <random>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -83,6 +84,11 @@ public:
 	Lineage army;
 	std::vector<Lineage> companions;
 	std::vector<size_t> recipients;
+	std::set<std::pair<size_t,std::string>> alternateForms;
+	bool alternate(size_t slot,const std::string & id) const
+	{
+		return alternateForms.count({slot,id}) != 0;
+	}
 	std::vector<std::string> history;
 	std::vector<std::string> synergies;
 	std::vector<std::string> offers;
@@ -214,13 +220,15 @@ public:
 		phase = Phase::Reward;
 	}
 
-	void pick(size_t index, size_t slot = 0)
+	void pick(size_t index, size_t slot = 0, bool alternateForm = false)
 	{
 		if(phase != Phase::Reward || index >= offers.size())
 			throw std::logic_error("Invalid reward selection");
 		auto & level = stack(slot).mutations[offers[index]];
 		if(level == std::numeric_limits<unsigned>::max())
 			throw std::overflow_error("Mutation rank exceeds unsigned range");
+		if(alternateForm && level != 1) throw std::logic_error("Evolution needs rank two");
+		if(alternateForm) alternateForms.emplace(slot,offers[index]);
 		++level;
 		history.push_back(offers[index]);
 		recipients.push_back(slot);
@@ -235,7 +243,7 @@ public:
 	{
 		if(phase != Phase::Battle && phase != Phase::Reward)
 			throw std::logic_error("No active run");
-		out << "EA3 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+		out << "EA4 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
 			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
 		for(auto value : primary) out << value << ' ';
 		out << '\n' << random << '\n';
@@ -248,7 +256,9 @@ public:
 		for(const auto & line : companions)
 			out << line.creature << ' ' << line.count << ' ' << line.harvest << '\n';
 		for(auto slot : recipients) out << slot << ' ';
-		out << '\n';
+		out << '\n' << alternateForms.size() << '\n';
+		for(const auto & form : alternateForms)
+			out << form.first << ' ' << std::quoted(form.second) << '\n';
 		if(!out) throw std::runtime_error("Не удалось записать забег");
 	}
 
@@ -258,7 +268,7 @@ public:
 		std::string version;
 		RoguelikeRun result(0);
 		bool reward = false;
-		if(!(in >> version) || (version != "EA2" && version != "EA3") || !(in >> result.seed >> reward >> result.wave >> result.kills
+		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4") || !(in >> result.seed >> reward >> result.wave >> result.kills
 			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
 			throw invalid;
 		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
@@ -277,7 +287,7 @@ public:
 			}
 		}
 		if(result.wave != Amount(result.history.size()) + 1 || result.offers.size() != (reward ? 3u : 0u)) throw invalid;
-		if(version == "EA3")
+		if(version != "EA2")
 		{
 			size_t count;
 			if(!(in >> count) || count > 2) throw invalid;
@@ -293,9 +303,21 @@ public:
 		for(const auto & id : result.history)
 		{
 			size_t slot = 0;
-			if(version == "EA3" && (!(in >> slot) || slot >= result.rosterSize())) throw invalid;
+			if(version != "EA2" && (!(in >> slot) || slot >= result.rosterSize())) throw invalid;
 			result.recipients.push_back(slot);
 			++result.stack(slot).mutations[id];
+		}
+		if(version == "EA4")
+		{
+			size_t count;
+			if(!(in >> count) || count > result.history.size()/2) throw invalid;
+			for(size_t i=0;i<count;++i)
+			{
+				size_t slot;
+				std::string id;
+				if(!(in >> slot >> std::quoted(id)) || slot >= result.rosterSize() || result.rank(id,slot) < 2
+					|| !result.alternateForms.emplace(slot,id).second) throw invalid;
+			}
 		}
 		result.phase = reward ? Phase::Reward : Phase::Battle;
 		return result;

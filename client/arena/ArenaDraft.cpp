@@ -8,7 +8,7 @@
 #include "StdInc.h"
 #include "ArenaDraft.h"
 #include "ArenaWindows.h"
-#include "RoguelikeRun.h"
+#include "EvolutionSaves.h"
 #include "../mainmenu/CMainMenu.h"
 #include "../../lib/mapObjects/army/CStackInstance.h"
 #include <cstdlib>

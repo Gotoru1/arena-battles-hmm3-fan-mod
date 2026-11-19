@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "../../client/arena/RoguelikeRun.h"
+#include "../../client/arena/EvolutionSaves.h"
 #include "../../lib/battle/EvolutionSignals.h"
 #include "../../lib/battle/EvolutionDamage.h"
 #include <iostream>
@@ -173,6 +173,44 @@ int main()
 		}
 		require(simulation.wave==stop+1 && bosses.size()==std::min(stop/5,10),"Long simulation with scripted survivors");
 	}
+	const auto folder = std::filesystem::temp_directory_path() / ("evolution-slots-" + std::to_string(std::random_device{}()));
+	require(std::filesystem::create_directory(folder),"Isolated save test profile");
+	SaveSlots slots(folder);
+	RoguelikeRun branching(12);
+	branching.begin(1,{1,2,3,4},1,24);
+	branching.recruit(2,5);
+	for(int wave=1;wave<=2;++wave)
+	{
+		branching.finish(true,20,4,{"wingbud","lens","quill"},{},false,{5});
+		const size_t pick=std::find(branching.offers.begin(),branching.offers.end(),"wingbud")-branching.offers.begin();
+		if(wave==2)
+		{
+			slots.write(1,branching);
+			auto restored=slots.read(1);
+			require(restored.offers==branching.offers && restored.phase==Phase::Reward,"Stable reward checkpoint");
+		}
+		branching.pick(pick,1,wave==2);
+		slots.write(0,branching);
+	}
+	auto resumed=slots.read(0);
+	require(resumed.alternate(1,"wingbud") && !resumed.alternate(0,"wingbud") && resumed.rank("wingbud",1)==2
+		&& resumed.random==branching.random && resumed.stack(1).count==branching.stack(1).count,"Branch ownership across restarts");
+	slots.write(2,resumed);
+	RoguelikeRun invalid(5);
+	mustFail([&]{slots.write(0,invalid);});
+	require(slots.read(0).wave==3,"Failed replacement preserves last good save");
+	resumed.finish(false,0,0,pool,{},false,{0});
+	slots.write(0,resumed);
+	require(!slots.exists(0) && slots.read(1).phase==Phase::Reward && slots.read(2).alternate(1,"wingbud"),"Permadeath is isolated to one slot");
+	std::istringstream previousFormat("EA3 12 0 1 0 1 2 24 0\n1 2 3 4\n");
+	mustFail([&]{RoguelikeRun::restore(previousFormat);});
+	std::ostringstream oldCheckpoint;
+	oldCheckpoint << "EA3 12 0 1 0 1 2 24 0\n1 2 3 4\n" << branching.random << "\n0\n0\n0\n0\n";
+	std::istringstream oldInput(oldCheckpoint.str());
+	require(RoguelikeRun::restore(oldInput).alternateForms.empty(),"EA3 migration");
+	std::filesystem::remove(slots.path(1));
+	std::filesystem::remove(slots.path(2));
+	require(std::filesystem::remove(folder),"No partial save files left behind");
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

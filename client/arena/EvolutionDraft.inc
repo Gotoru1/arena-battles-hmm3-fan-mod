@@ -8,28 +8,16 @@ namespace
 	unsigned verificationWaves = 15;
 	bool choosingRecipient = false;
 
-	std::filesystem::path checkpointPath()
+	int activeSlot = 0;
+
+	evolution::SaveSlots saves()
 	{
-		return std::filesystem::path(VCMIDirs::get().userDataPath().native()) / "evolution-run.sav";
+		return evolution::SaveSlots(std::filesystem::path(VCMIDirs::get().userDataPath().native()));
 	}
 
 	void checkpoint()
 	{
-		if(verifying) return;
-		const auto dest = checkpointPath();
-		if(run->phase == evolution::Phase::Defeat)
-		{
-			std::filesystem::remove(dest);
-			return;
-		}
-		std::filesystem::create_directories(dest.parent_path());
-		auto temp = dest;
-		temp += ".tmp";
-		std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-		out.exceptions(std::ios::badbit | std::ios::failbit);
-		run->save(out);
-		out.close();
-		std::filesystem::rename(temp, dest);
+		if(!verifying) saves().write(activeSlot,*run);
 	}
 	int verificationResult = -1;
 
@@ -80,12 +68,12 @@ namespace
 			target.Vector().push_back(std::move(effect));
 		}
 	}
-	void appendMutation(JsonNode & effects, const JsonNode & def, unsigned rank)
+	void appendMutation(JsonNode & effects, const JsonNode & def, unsigned rank, bool alternate = false)
 	{
 		appendEffects(effects, def, rank);
 		const auto & evolution = def["awaken"];
 		if(!evolution.isNull() && rank >= evolution["rank"].Integer())
-			appendEffects(effects, evolution, 1);
+			appendEffects(effects, alternate ? def["alternate"] : evolution, 1);
 	}
 }
 
@@ -161,40 +149,110 @@ void ArenaDraft::chooseMode()
 	std::vector<ArenaOffer> cards{
 		evolutionCard("Evolution Arena", "Выбери героя и отряд. После победы получай мутации. Каждая пятая волна — босс."),
 		evolutionCard("Одиночная арена", "Подготовь армию для одного боя.")};
-	if(!verifying && std::filesystem::exists(checkpointPath()))
-		cards.push_back(evolutionCard("Продолжить", "Вернуться к последней волне или к тем же трём картам награды. Новый забег заменит сохранение после выбора стартового отряда."));
+	if(!verifying)
+		cards.push_back(evolutionCard("Продолжить", "Открыть список сохранённых забегов."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Арена против компьютера", "Выбери режим", cards,
 		[self](int pick)
 		{
-			if(pick == 2)
-			{
-				std::ifstream in(checkpointPath(), std::ios::binary);
-				run = std::make_unique<evolution::RoguelikeRun>(evolution::RoguelikeRun::restore(in));
-				if(run->phase == evolution::Phase::Reward) self->chooseEvolutionReward();
-				else self->buildEvolutionBattle();
-				return;
-			}
-			if(pick == 1)
-			{
-				self->stepDifficulty();
-				return;
-			}
-			auto seed = verifying ? 2048u : std::random_device{}();
-			if(const char * value = std::getenv("EVOLUTION_SEED"))
-			{
-				std::string input(value);
-				if(input.empty() || input.find_first_not_of("0123456789") != std::string::npos)
-					throw std::invalid_argument("EVOLUTION_SEED must be an unsigned 32-bit integer");
-				auto number = std::stoull(input);
-				if(number > UINT32_MAX)
-					throw std::out_of_range("EVOLUTION_SEED exceeds 32 bits");
-				seed = static_cast<uint32_t>(number);
-			}
-			evolutionCatalog();
-			run = std::make_unique<evolution::RoguelikeRun>(seed);
-			self->rng.seed(run->random());
-			self->stepChooseHero();
+			if(pick == 1) self->stepDifficulty();
+			else if(verifying) self->newEvolutionRun();
+			else self->chooseEvolutionSlot(pick == 2);
 		}, [self]() { self->cancel(); }, nullptr);
+}
+
+void ArenaDraft::chooseEvolutionSlot(bool loading)
+{
+	std::vector<ArenaOffer> cards;
+	for(int slot=0;slot<3;++slot)
+	{
+		std::string description = "Свободно";
+		try
+		{
+			if(saves().exists(slot))
+			{
+				const auto saved = saves().read(slot);
+				description = "Волна " + saved.wave.str() + (saved.phase == evolution::Phase::Reward ? "\nВыбор награды" : "\nПеред боем")
+					+ "\nОтрядов: " + std::to_string(saved.rosterSize()) + "\nМутаций: " + std::to_string(saved.history.size())
+					+ "\nЗерно: " + std::to_string(saved.seed);
+			}
+		}
+		catch(const std::exception &) { description = "Сохранение не читается"; }
+		cards.push_back(evolutionCard("Ячейка " + std::to_string(slot+1),description));
+	}
+	auto self=shared_from_this();
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>(loading ? "Загрузить забег" : "Новый забег", "Выбери ячейку",cards,
+		[self,loading](int slot)
+		{
+			activeSlot=slot;
+			try
+			{
+				if(loading)
+				{
+					if(!saves().exists(slot)) throw std::runtime_error("В этой ячейке ещё нет забега.");
+					run = std::make_unique<evolution::RoguelikeRun>(saves().read(slot));
+					if(run->phase == evolution::Phase::Reward) self->chooseEvolutionReward();
+					else self->buildEvolutionBattle();
+				}
+				else if(saves().exists(slot))
+				{
+					std::vector<ArenaOffer> choices{
+						evolutionCard("Назад","Вернуться к выбору ячейки."),
+						evolutionCard("Заменить забег","Предыдущий забег в этой ячейке будет заменён после выбора условий старта.")};
+					ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Занятая ячейка " + std::to_string(slot+1),"Подтверди выбор",choices,
+						[self](int i){ if(i) self->newEvolutionRun(); else self->chooseEvolutionSlot(false); },
+						[self](){ self->chooseEvolutionSlot(false); },nullptr);
+				}
+				else self->newEvolutionRun();
+			}
+			catch(const std::exception & e)
+			{
+				logGlobal->error("Evolution save slot: %s", e.what());
+				self->chooseEvolutionSlot(loading);
+				CInfoWindow::showInfoDialog("Ячейка пуста или сохранение недоступно. Выбери другую ячейку.",{});
+			}
+		}, [self](){ self->chooseMode(); }, nullptr);
+}
+
+void ArenaDraft::newEvolutionRun()
+{
+	auto seed = verifying ? 2048u : std::random_device{}();
+	if(const char * value = std::getenv("EVOLUTION_SEED"))
+	{
+		std::string input(value);
+		if(input.empty() || input.find_first_not_of("0123456789") != std::string::npos)
+			throw std::invalid_argument("EVOLUTION_SEED must be an unsigned 32-bit integer");
+		auto number = std::stoull(input);
+		if(number > UINT32_MAX)
+			throw std::out_of_range("EVOLUTION_SEED exceeds 32 bits");
+		seed = static_cast<uint32_t>(number);
+	}
+	evolutionCatalog();
+	run = std::make_unique<evolution::RoguelikeRun>(seed);
+	rng.seed(run->random());
+	stepChooseHero();
+}
+
+void ArenaDraft::saveEvolutionAndExit(const evolution::RoguelikeRun & snapshot)
+{
+	try
+	{
+		saves().write(activeSlot,snapshot);
+	}
+	catch(const std::exception & e)
+	{
+		logGlobal->error("Evolution save failed: %s",e.what());
+		auto self = shared_from_this();
+		auto copy = std::make_shared<const evolution::RoguelikeRun>(snapshot);
+		std::vector<ArenaOffer> actions{evolutionCard("Повторить","Ещё раз записать эту ячейку."),
+			evolutionCard("Продолжить игру",snapshot.phase == evolution::Phase::Reward ? "Вернуться к выбору награды." : "Начать обычный бой.")};
+		ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Не удалось сохранить", "Проверь место на диске и права профиля.",actions,
+			[self,copy](int i){ if(!i) self->saveEvolutionAndExit(*copy); else if(copy->phase == evolution::Phase::Reward) self->chooseEvolutionReward(); else self->startBattle(); },
+			[self,copy](){ self->saveEvolutionAndExit(*copy); },nullptr);
+		return;
+	}
+	const auto message = "Забег сохранён в ячейку " + std::to_string(activeSlot+1) + ". Волна " + snapshot.wave.str() + ".";
+	cancel();
+	CInfoWindow::showInfoDialog(message,{});
 }
 
 void ArenaDraft::chooseEvolutionCreature()
@@ -282,7 +340,7 @@ void ArenaDraft::afterEvolutionGame()
 
 void ArenaDraft::chooseEvolutionReward()
 {
-	if(run->rosterSize() == 1) { showEvolutionCards(0); return; }
+	if(verifying && run->rosterSize() == 1) { showEvolutionCards(0); return; }
 	std::vector<ArenaOffer> options;
 	for(size_t i = 0; i < run->rosterSize(); ++i)
 	{
@@ -290,10 +348,11 @@ void ArenaDraft::chooseEvolutionReward()
 		if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
 		else options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated(), evolution::displayAmount(line.count)));
 	}
+	if(!verifying) options.push_back(evolutionCard("Сохранить и выйти","Оставить забег на выборе награды. После загрузки вернутся те же три карты."));
 	choosingRecipient = true;
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Кого развивать?", "Выбери отряд для мутации", options,
-		[self](int i){ self->showEvolutionCards(i); }, [self](){ self->cancel(); }, nullptr);
+		[self](int i){ if(size_t(i)==run->rosterSize()) self->saveEvolutionAndExit(*run); else self->showEvolutionCards(i); }, [self](){ self->cancel(); }, nullptr);
 }
 
 void ArenaDraft::showEvolutionCards(size_t slot)
@@ -325,7 +384,25 @@ void ArenaDraft::showEvolutionCards(size_t slot)
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",
 		"Мутация для отряда: " + CreatureID(run->stack(slot).creature).toCreature()->getNamePluralTranslated(), cards,
-		[self, slot](int index) { run->pick(index, slot); self->buildEvolutionBattle(); },
+		[self, slot](int index)
+		{
+			const auto & id = run->offers.at(index);
+			const auto & entry = evolutionCatalog()["mutations"][id];
+			if(run->rank(id,slot) != 1 || entry["alternate"].isNull())
+			{
+				run->pick(index,slot);
+				self->buildEvolutionBattle();
+				return;
+			}
+			std::vector<ArenaOffer> forms;
+			for(const char * key : {"awaken","alternate"})
+				forms.push_back(evolutionCard(entry[key]["name"].String(),entry[key]["text"].String()));
+			choosingRecipient = true;
+			ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Эволюция: " + entry["name"].String(),
+				"Выбери форму для этого отряда до конца забега",forms,
+				[self,index,slot](int form){ run->pick(index,slot,form==1); self->buildEvolutionBattle(); },
+				[self,slot](){ self->showEvolutionCards(slot); },nullptr);
+		},
 		[self]() { self->cancel(); }, nullptr);
 }
 
@@ -333,9 +410,20 @@ void ArenaDraft::buildEvolutionBattle()
 try
 {
 	const auto & data = evolutionCatalog();
-	checkpoint(); // before consuming the RNG, so resuming recreates the same opponent
+	const auto waveStart = std::make_shared<const evolution::RoguelikeRun>(*run);
+	try { checkpoint(); } // Preserve the RNG before building the opponent.
+	catch(const std::exception & e)
+	{
+		logGlobal->error("Evolution checkpoint: %s",e.what());
+		auto self = shared_from_this();
+		std::vector<ArenaOffer> actions{evolutionCard("Повторить","Проверь место на диске и права профиля."),
+			evolutionCard("Выйти","Оставить предыдущую запись в ячейке.")};
+		ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Не удалось сохранить волну","Выбери действие",actions,
+			[self](int i){ if(i) self->cancel(); else self->buildEvolutionBattle(); }, [self](){ self->cancel(); },nullptr);
+		return;
+	}
 	eliteFight = false;
-		if(!player().hero)
+	if(!player().hero)
 		player().hero = createHero(HeroTypeID(run->hero));
 	if(run->rosterSize() < (run->wave >= 4 ? 3u : 2u))
 	{
@@ -377,7 +465,7 @@ try
 		giveCreature(player(), static_cast<int>(slot)+1, creature, evolution::engineInt(line.count));
 		auto & effects = player().hero->getStackPtr(SlotID(static_cast<int>(slot)))->evolutionEffects;
 		for(const auto & mutation : line.mutations)
-			appendMutation(effects, data["mutations"][mutation.first], mutation.second);
+			appendMutation(effects, data["mutations"][mutation.first], mutation.second, run->alternate(slot,mutation.first));
 		if(plan.anomaly) appendEffects(effects, weather, 1);
 
 		// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
@@ -490,15 +578,23 @@ try
 		}
 		scouting += "\nРост за забег: " + evolution::displayAmount(line.harvest) + " очк. · Бонус урона к началу волны: +" + evolution::displayAmount(run->lineageDamage(slot));
 		for(const auto & mutation : line.mutations)
-			scouting += "\n" + data["mutations"][mutation.first]["name"].String() + " × " + std::to_string(mutation.second);
+		{
+			const auto & def = data["mutations"][mutation.first];
+			scouting += "\n" + def["name"].String() + " × " + std::to_string(mutation.second);
+			if(mutation.second >= 2 && !def["alternate"].isNull())
+				scouting += " · " + def[run->alternate(slot,mutation.first) ? "alternate" : "awaken"]["name"].String();
+		}
 	}
 	auto self = shared_from_this();
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
 	if(eliteAvailable)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
+	const auto exitCard = cards.size();
+	if(!verifying) cards.push_back(evolutionCard("Сохранить и выйти","Продолжить с начала этой же волны через New PvE → Продолжить."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
-		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots](int pick)
+		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots, exitCard, waveStart](int pick)
 		{
+			if(size_t(pick)==exitCard) { self->saveEvolutionAndExit(*waveStart); return; }
 			eliteFight = pick == 1;
 			if(eliteFight)
 				for(int i = 0; i < slots; ++i)

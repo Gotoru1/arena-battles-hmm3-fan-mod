@@ -12,6 +12,7 @@
 #include "../../lib/constants/EntityIdentifiers.h"
 
 class ArenaBackdrop;
+namespace evolution { class RoguelikeRun; }
 
 #include <random>
 
@@ -140,6 +141,9 @@ private:
 
 	// player steps
 	void chooseMode();
+	void chooseEvolutionSlot(bool loading);
+	void newEvolutionRun();
+	void saveEvolutionAndExit(const evolution::RoguelikeRun & snapshot);
 	void chooseEvolutionCreature();
 	void chooseEvolutionReward();
 	void showEvolutionCards(size_t slot);

@@ -46,7 +46,9 @@ class CatalogTests(unittest.TestCase):
                 self.assertTrue(entry["name"] and entry["text"])
                 if "awaken" in entry:
                     self.assertEqual(entry["awaken"]["rank"], 2)
-                for effect in entry["effects"] + entry.get("awaken", {}).get("effects", []):
+                    self.assertTrue(entry["alternate"]["effects"] and entry["alternate"]["text"])
+                    self.assertNotEqual(entry["alternate"]["name"], entry["awaken"]["name"])
+                for effect in entry["effects"] + entry.get("awaken", {}).get("effects", []) + entry.get("alternate", {}).get("effects", []):
                     self.check_effect(effect)
 
     def test_hidden_combinations(self):
