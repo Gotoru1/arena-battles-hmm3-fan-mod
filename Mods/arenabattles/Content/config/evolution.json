@@ -7,7 +7,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 10
+          "val": 1,
+          "subtype": "10"
         }
       ]
     },
@@ -18,7 +19,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 18
+          "val": 1,
+          "subtype": "18"
         }
       ]
     },
@@ -29,7 +31,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 23
+          "val": 1,
+          "subtype": "23"
         }
       ]
     },
@@ -40,7 +43,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 25
+          "val": 1,
+          "subtype": "25"
         }
       ]
     },
@@ -51,7 +55,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 27
+          "val": 1,
+          "subtype": "27"
         }
       ]
     },
@@ -62,7 +67,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 51
+          "val": 1,
+          "subtype": "51"
         }
       ]
     },
@@ -73,7 +79,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 57
+          "val": 1,
+          "subtype": "57"
         }
       ]
     },
@@ -84,7 +91,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 78
+          "val": 1,
+          "subtype": "78"
         }
       ]
     },
@@ -95,7 +103,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 87
+          "val": 1,
+          "subtype": "87"
         }
       ]
     },
@@ -106,7 +115,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 9
+          "val": 1,
+          "subtype": "9"
         }
       ]
     },
@@ -117,7 +127,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 19
+          "val": 1,
+          "subtype": "19"
         }
       ]
     },
@@ -128,7 +139,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 56
+          "val": 1,
+          "subtype": "56"
         }
       ]
     },
@@ -139,7 +151,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 59
+          "val": 1,
+          "subtype": "59"
         }
       ]
     },
@@ -150,7 +163,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 61
+          "val": 1,
+          "subtype": "61"
         }
       ]
     },
@@ -161,7 +175,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 67
+          "val": 1,
+          "subtype": "67"
         }
       ]
     },
@@ -172,7 +187,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 1
+          "val": 1,
+          "subtype": "1"
         }
       ]
     },
@@ -183,7 +199,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 39
+          "val": 1,
+          "subtype": "39"
         }
       ]
     },
@@ -194,7 +211,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 60
+          "val": 1,
+          "subtype": "60"
         }
       ]
     },
@@ -205,7 +223,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 88
+          "val": 1,
+          "subtype": "88"
         }
       ]
     },
@@ -216,7 +235,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 15
+          "val": 1,
+          "subtype": "15"
         }
       ]
     },
@@ -227,7 +247,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 32
+          "val": 1,
+          "subtype": "32"
         }
       ]
     },
@@ -238,7 +259,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 3
+          "val": 1,
+          "subtype": "3"
         }
       ]
     },
@@ -249,7 +271,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 68
+          "val": 1,
+          "subtype": "68"
         }
       ]
     },
@@ -260,7 +283,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 21
+          "val": 1,
+          "subtype": "21"
         }
       ]
     },
@@ -271,7 +295,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 8
+          "val": 1,
+          "subtype": "8"
         }
       ]
     },
@@ -282,7 +307,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 50
+          "val": 1,
+          "subtype": "50"
         }
       ]
     },
@@ -293,7 +319,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 20
+          "val": 1,
+          "subtype": "20"
         }
       ]
     },
@@ -304,7 +331,8 @@
       "effects": [
         {
           "type": "EVOLUTION_TRAIT",
-          "val": 26
+          "val": 1,
+          "subtype": "26"
         }
       ]
     }

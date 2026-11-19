@@ -24,8 +24,8 @@ class EvolutionReactions
 		for(const auto & marker : *markers)
 		{
 			if(temporaryOnly && marker->duration != BonusDuration::ONE_BATTLE) continue;
-			int key = marker->val % 1024;
-			result[key] = std::max(result[key], 1 + marker->val / 1024);
+			const int key=marker->subtype.getNum();
+			if(key>0 && marker->val>0) result[key]=std::max(result[key],marker->val);
 		}
 		const auto muted=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500050));
 		for(const auto & mark:*muted) result.erase(mark->val);
@@ -123,7 +123,8 @@ class EvolutionReactions
 		if(rules(unit)[id] >= rank) return;
 		Bonus marker;
 		marker.type = BonusType::EVOLUTION_TRAIT;
-		marker.val = id + 1024 * (rank-1);
+		marker.subtype=BonusCustomSubtype(id);
+		marker.val=rank;
 		grant(unit, marker);
 	}
 
@@ -158,7 +159,7 @@ class EvolutionReactions
 			if(!prior.count(61) || prior.at(61) <= 0 || prior[id] != 0) continue;
 			// A rank increase is not an acquisition. It cannot reactivate the catalyst.
 			for(auto entry : prior)
-				if(entry.first != id && entry.first != 61 && entry.second < INT32_MAX/1024)
+				if(entry.first != id && entry.first != 61 && entry.second < INT32_MAX)
 				{
 					putTrait(target,entry.first,entry.second+1);
 					break;

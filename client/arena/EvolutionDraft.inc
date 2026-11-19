@@ -55,13 +55,7 @@ namespace
 	{
 		for(auto effect : definition["effects"].Vector())
 		{
-			if(effect["type"].String() == "EVOLUTION_TRAIT")
-			{
-				// Low ten bits identify the behavior, upper bits hold the repeat rank.
-				auto & key = effect["val"].Integer();
-				key += 1024LL * std::min<unsigned>(rank - 1, INT32_MAX / 1024 - 1);
-			}
-			else if(effect["type"].String() == "ON_COMBAT_EVENT")
+			if(effect["type"].String() == "ON_COMBAT_EVENT")
 			{
 				// Event payloads grant terminal bonuses. Team echoes use the server queue.
 				for(auto & action : effect["addInfo"]["effect"].Vector())

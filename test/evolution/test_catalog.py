@@ -22,6 +22,8 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(any(re.search(r'^\s*"' + re.escape(name) + r'"\s*:', p.read_text(encoding="utf-8"), re.M) for p in (ROOT/"config/spells").glob("*.json")))
         elif effect["type"] == "PRIMARY_SKILL":
             self.assertIn(subtype, {"primarySkill.attack", "primarySkill.defence"})
+        elif effect["type"] == "EVOLUTION_TRAIT":
+            self.assertTrue(subtype.isdecimal() and int(subtype) > 0)
         elif subtype:
             self.assertIn(subtype, SUBTYPES)
         if inside_event:
@@ -46,8 +48,8 @@ class CatalogTests(unittest.TestCase):
             effect, = entry["effects"]
             self.check_effect(effect)
             self.assertEqual(effect["type"], "EVOLUTION_TRAIT")
-            self.assertEqual(key, "trait" + str(effect["val"]))
-            original = design[effect["val"] - 1]
+            self.assertEqual(key, "trait" + effect["subtype"])
+            original = design[int(effect["subtype"]) - 1]
             for field in ("name", "text", "rarity"):
                 self.assertEqual(original[field], entry[field])
 

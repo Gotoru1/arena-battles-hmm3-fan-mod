@@ -14,7 +14,13 @@
 using BonusCustomSubtype=int;
 enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
-struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; int subtype=0; };
+struct NumericSubtype {
+	int value;
+	NumericSubtype(int n=0):value(n){}
+	int getNum() const{return value;}
+	operator int() const{return value;}
+};
+struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; NumericSubtype subtype{}; };
 struct CreatureID { int value; CreatureID(int v=0):value(v){} static int decode(std::string s){return s=="arenabattles:evolutionEgg"?500:501;} int getNum() const{return value;} operator int() const{return value;} };
 enum class BattleSide { LEFT, RIGHT };
 struct BattleHex {
@@ -26,6 +32,7 @@ struct BattleHex {
 	std::vector<BattleHex> getNeighbouringTiles() const {return {{pos-1},{pos+1}};}
 	static int getDistance(BattleHex a,BattleHex b){return std::abs(a.pos-b.pos);}
 };
+static Bonus trait(int id){return {BonusType::EVOLUTION_TRAIT,1,BonusDuration::PERMANENT,id};}
 enum class EHealLevel { RESURRECT };
 enum class EHealPower { ONE_BATTLE };
 struct Data {int species{}, count{}, health{}; BattleHex pos; BattleSide side{};};
@@ -148,7 +155,7 @@ static std::vector<int> randomRun(unsigned seed)
 	for(int id=1;id<=4;++id)
 	{
 		auto & unit=field.units.emplace(id,CStack{id,{id,6,60,{id*4},id<3?BattleSide::LEFT:BattleSide::RIGHT},{}}).first->second;
-		for(int pick=0;pick<5;++pick)unit.bonuses.push_back({BonusType::EVOLUTION_TRAIT,traits[random()%traits.size()]});
+		for(int pick=0;pick<5;++pick)unit.bonuses.push_back(trait(traits[random()%traits.size()]));
 	}
 	actions.evolutionRound(field,true);
 	for(int step=0;step<45;++step)
@@ -178,7 +185,7 @@ static std::vector<int> randomRun(unsigned seed)
 	{
 		const auto & u=entry.second;
 		fingerprint.insert(fingerprint.end(),{u.id,u.data.species,u.data.health,u.data.pos.pos,static_cast<int>(u.data.side)});
-		for(const auto & b:u.bonuses) fingerprint.insert(fingerprint.end(),{static_cast<int>(b.type),b.subtype,b.val});
+		for(const auto & b:u.bonuses) fingerprint.insert(fingerprint.end(),{static_cast<int>(b.type),b.subtype.getNum(),b.val});
 	}
 	return fingerprint;
 }
@@ -189,7 +196,7 @@ int main(){
 	auto add=[&](int pos,BattleSide side,std::vector<int> mutations)->CStack &{
 		int id=field.battleNextUnitId();
 		auto & u=field.units.emplace(id,CStack{id,{id,10,100,{pos},side},{}}).first->second;
-		for(int m:mutations)u.bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+		for(int m:mutations)u.bonuses.push_back(trait(m));
 		return u;
 	};
 	CGameHandler server{field,{}};
@@ -216,7 +223,7 @@ int main(){
 	assert(field.units.size()==6 && field.units.at(6).data.side==BattleSide::LEFT);
 	assert(field.units.at(6).bonuses.size()>=7);
 	ally.data.health=0;actions.evolutionAttack(field,&secondary,&ally,{{{ally.id,secondary.id,30,true}}});
-	assert(std::any_of(carrier.bonuses.begin(),carrier.bonuses.end(),[](Bonus b){return b.type==BonusType::EVOLUTION_TRAIT && b.val==25;}));
+	assert(std::any_of(carrier.bonuses.begin(),carrier.bonuses.end(),[](Bonus b){return b.type==BonusType::EVOLUTION_TRAIT && b.subtype==25 && b.val==1;}));
 	CBattleInfoCallback family;
 	CGameHandler familyServer{family,{}};
 	BattleActionProcessor familyActions{&familyServer};
@@ -224,7 +231,7 @@ int main(){
 	family.units.emplace(2,CStack{2,{2,4,40,{4},BattleSide::LEFT},{}});
 	family.units.emplace(3,CStack{3,{3,4,40,{9},BattleSide::RIGHT},{}});
 	auto & root=family.units.at(1);
-	for(int m:{23,56,59,61,67,78}) root.bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	for(int m:{23,56,59,61,67,78}) root.bonuses.push_back(trait(m));
 	family.units.at(2).bonuses.push_back({BonusType::NO_MELEE_PENALTY,1});
 	family.units.at(3).bonuses.push_back({BonusType::FLYING,1});
 	familyActions.evolutionRound(family,true);
@@ -232,14 +239,14 @@ int main(){
 	assert(family.units.at(4).hasBonusOfType(BonusType::EVOLUTION_FAMILY));
 	assert(root.getBonusesOfType(BonusType::NONE,500501)->front()->val==1);
 	auto rootRules=root.getBonusesOfType(BonusType::EVOLUTION_TRAIT);
-	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==9;}));
-	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==1047;}));
+	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->subtype==9 && b->val==1;}));
+	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->subtype==23 && b->val==2;}));
 	CBattleInfoCallback nest;
 	CGameHandler nestServer{nest,{}};
 	BattleActionProcessor nestActions{&nestServer};
 	nest.units.emplace(1,CStack{1,{1,5,50,{5},BattleSide::LEFT},{}});
 	nest.units.emplace(2,CStack{2,{2,2,20,{8},BattleSide::RIGHT},{}});
-	for(int m:{1,39,60,87}) nest.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	for(int m:{1,39,60,87}) nest.units.at(1).bonuses.push_back(trait(m));
 	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,false,1}}});
 	assert(nest.units.at(3).data.species==500);
 	nestActions.evolutionRound(nest,false);
@@ -276,7 +283,7 @@ int main(){
 	hunt.units.emplace(1,CStack{1,{1,5,50,{3},BattleSide::LEFT},{}});
 	hunt.units.emplace(2,CStack{2,{2,2,20,{4},BattleSide::RIGHT},{}});
 	hunt.units.emplace(3,CStack{3,{3,2,20,{7},BattleSide::RIGHT},{}});
-	for(int m:{15,32}) hunt.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	for(int m:{15,32}) hunt.units.at(1).bonuses.push_back(trait(m));
 	huntActions.evolutionAttack(hunt,&hunt.units.at(1),&hunt.units.at(2),{{{2,1,20,false,7}}});
 	assert(hunt.units.size()==3);
 	hunt.units.at(2).data.health=0;
@@ -289,7 +296,7 @@ int main(){
 	BattleActionProcessor splitActions{&splitServer};
 	partition.units.emplace(1,CStack{1,{1,10,49,{5},BattleSide::LEFT},{}});
 	partition.units.emplace(2,CStack{2,{2,4,40,{8},BattleSide::RIGHT},{}});
-	for(int m:{3,23}) partition.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	for(int m:{3,23}) partition.units.at(1).bonuses.push_back(trait(m));
 	splitActions.evolutionAttack(partition,&partition.units.at(2),&partition.units.at(1),{{{1,2,11,false,1}}});
 	assert(partition.units.size()==3 && partition.units.at(1).data.health+partition.units.at(3).data.health==49);
 	assert(partition.units.at(1).getCount()+partition.units.at(3).getCount()==5);
@@ -308,7 +315,7 @@ int main(){
 	CGameHandler ghostServer{ghosts,{}};
 	BattleActionProcessor ghostActions{&ghostServer};
 	ghosts.units.emplace(1,CStack{1,{1,1,10,{1},BattleSide::LEFT},{}});
-	ghosts.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,68});
+	ghosts.units.at(1).bonuses.push_back(trait(68));
 	for(int i=2;i<=9;++i) ghosts.units.emplace(i,CStack{i,{2,1,i==2?0:10,{i+1},BattleSide::RIGHT},{}});
 	ghostActions.evolutionAttack(ghosts,&ghosts.units.at(1),&ghosts.units.at(2),{{{2,1,10,true,1}}});
 	for(int i=2;i<=9;++i) assert(!ghosts.units.at(i).alive());
@@ -318,14 +325,14 @@ int main(){
 	BattleActionProcessor magicActions{&magicServer};
 	magic.units.emplace(1,CStack{1,{1,12,120,{4},BattleSide::LEFT},{}});
 	magic.units.emplace(2,CStack{2,{2,5,50,{5},BattleSide::RIGHT},{}});
-	magic.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,21});
+	magic.units.at(1).bonuses.push_back(trait(21));
 	magicActions.evolutionSpell(magic,{BattleSide::LEFT,{1},{}});
 	magicActions.evolutionSpell(magic,{BattleSide::RIGHT,{1},{1}});
 	assert(magic.units.at(1).bonuses.size()==1);
 	magicActions.evolutionSpell(magic,{BattleSide::RIGHT,{1},{}});
 	magicActions.evolutionAttack(magic,&magic.units.at(1),&magic.units.at(2),{{{2,1,10,false,0}}});
 	assert(magic.units.at(2).data.health==38 && magic.units.at(1).bonuses.size()==1);
-	magic.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,18});
+	magic.units.at(1).bonuses.push_back(trait(18));
 	magic.units.at(2).data.health=0;
 	magicActions.evolutionDamage(magic,{1,{{2,-1,38,true,4}}});
 	assert(magic.units.size()==3);
@@ -333,9 +340,9 @@ int main(){
 	CGameHandler oathServer{oath,{}};
 	BattleActionProcessor oathActions{&oathServer};
 	for(int i=1;i<=4;++i) oath.units.emplace(i,CStack{i,{i,10,100,{i*3},i<4?BattleSide::LEFT:BattleSide::RIGHT},{}});
-	oath.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,8});
-	oath.units.at(2).bonuses.push_back({BonusType::EVOLUTION_TRAIT,50});
-	oath.units.at(2).bonuses.push_back({BonusType::EVOLUTION_TRAIT,23});
+	oath.units.at(1).bonuses.push_back(trait(8));
+	oath.units.at(2).bonuses.push_back(trait(50));
+	oath.units.at(2).bonuses.push_back(trait(23));
 	oathActions.evolutionRound(oath,true);
 	// Unit two has traded its spark for Blood Debt and is the only witness that marks the killer.
 	oath.units.at(3).data.health=0;
@@ -350,13 +357,13 @@ int main(){
 	CGameHandler borderServer{border,{}};
 	BattleActionProcessor borderActions{&borderServer};
 	for(int i=1;i<=4;++i)border.units.emplace(i,CStack{i,{i,4,40,{i+3},i==1?BattleSide::LEFT:BattleSide::RIGHT},{}});
-	border.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,20});
+	border.units.at(1).bonuses.push_back(trait(20));
 	assert(borderActions.evolutionThreatened(border,&border.units.at(2),{5}));
 	borderActions.evolutionMoved(border,&border.units.at(2));
 	assert(!border.units.at(2).alive() && !borderActions.evolutionThreatened(border,&border.units.at(3),{5}));
 	border.round++;
 	assert(borderActions.evolutionThreatened(border,&border.units.at(3),{5}));
-	for(int id:{9,26}) border.units.at(1).bonuses.push_back({BonusType::EVOLUTION_TRAIT,id});
+	for(int id:{9,26}) border.units.at(1).bonuses.push_back(trait(id));
 	borderActions.evolutionAttack(border,&border.units.at(1),&border.units.at(3),{{{3,1,1,false,0}}});
 	borderActions.evolutionMoved(border,&border.units.at(3));
 	assert(border.units.at(4).getBonusesOfType(BonusType::EVOLUTION_PARASITE)->front()->val==1);

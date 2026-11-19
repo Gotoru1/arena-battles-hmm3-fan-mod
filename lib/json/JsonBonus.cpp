@@ -63,6 +63,18 @@ static void loadBonusSubtype(BonusSubtypeID & subtype, BonusType type, const Jso
 		return;
 	}
 
+	// Arena trait IDs are positive decimal strings. Ranks use the full native bonus value.
+	if(type == BonusType::EVOLUTION_TRAIT && node.isString())
+	{
+		const auto & id=node.String();
+		if(id.empty() || id.find_first_not_of("0123456789")!=std::string::npos)
+			throw std::invalid_argument("Invalid Evolution trait ID");
+		const auto val=std::stoll(id);
+		if(val<1 || val>INT32_MAX) throw std::out_of_range("Evolution trait ID exceeds native range");
+		subtype=BonusCustomSubtype(static_cast<int>(val));
+		return;
+	}
+
 	if (node.isNumber()) // Compatibility code for 1.3 or older
 	{
 		logMod->warn("Bonus subtype must be string! (%s)", node.getModScope());
