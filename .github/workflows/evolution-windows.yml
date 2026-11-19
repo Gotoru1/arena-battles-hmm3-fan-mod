@@ -65,6 +65,13 @@ jobs:
           & ./conan-generated/conanrun.ps1
           cmake --preset windows-msvc-ninja-release -DENABLE_EDITOR=OFF -DENABLE_EVOLUTION_TESTS=ON
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $buildDir = 'out/build/windows-msvc-ninja-release'
+          $targets = @(ninja -C $buildDir -t targets all | ForEach-Object {
+            if ($_ -match '^(.+[\\/](BattleActionProcessor|BattleProcessor|BattleFlowProcessor|ArenaDraft|CPlayerInterface|JsonBonus|ServerSpellCastEnvironment|Damage)\.cpp\.obj):') { $Matches[1] }
+          })
+          if (!$targets.Count) { throw 'Missing native integration targets in Ninja project' }
+          ninja -C $buildDir @targets
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build --preset windows-msvc-ninja-release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Push-Location out/build/windows-msvc-ninja-release
