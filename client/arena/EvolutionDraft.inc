@@ -37,6 +37,17 @@ namespace
 		return data["mutations"][id];
 	}
 
+	const ColorRGBA & rarityColor(const JsonNode & entry)
+	{
+		static const std::array<ColorRGBA,4> palette{{{195,195,195,255},{95,165,255,255},{199,120,255,255},{255,158,55,255}}};
+		return palette.at(entry["rarity"].Integer());
+	}
+
+	std::string rarityText(const JsonNode & entry,const std::string & words)
+	{
+		return "{"+Colors::colorToHexString(rarityColor(entry))+"|"+words+"}";
+	}
+
 	ArenaOffer evolutionCard(std::string title, std::string detail, ColorRGBA color = Colors::YELLOW)
 	{
 		ArenaOffer card;
@@ -420,10 +431,9 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 		const bool armyReward=evolution::RoguelikeRun::armyReward(id);
 		const auto & entry = armyReward ? evolutionCatalog()["rewards"][id] : catalog[id];
 		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
-		const std::array<ColorRGBA,4> colors{{{195,195,195,255},{95,165,255,255},{199,120,255,255},{255,158,55,255}}};
 		if(armyReward)
 		{
-			cards.push_back(evolutionCard(entry["name"].String(),entry["category"].String()+"\n"+labels.at(entry["rarity"].Integer())+"\n\n"+entry["text"].String(),colors.at(entry["rarity"].Integer())));
+			cards.push_back(evolutionCard(entry["name"].String(),entry["category"].String()+"\n"+rarityText(entry,labels.at(entry["rarity"].Integer()))+"\n\n"+entry["text"].String(),rarityColor(entry)));
 			continue;
 		}
 		std::string hint;
@@ -440,8 +450,8 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 				if(includesCard && otherRanksReady)
 					hint += "\nОткроет: " + combo["name"].String();
 			}
-		cards.push_back(evolutionCard(entry["name"].String(), labels.at(entry["rarity"].Integer()) + "\n\n" + entry["text"].String()
-			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id, slot)) + hint, colors.at(entry["rarity"].Integer())));
+		cards.push_back(evolutionCard(entry["name"].String(), rarityText(entry,labels.at(entry["rarity"].Integer())) + "\n\n" + entry["text"].String()
+			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id, slot)) + hint, rarityColor(entry)));
 	}
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",
@@ -612,7 +622,7 @@ try
 				const auto & id = pair.at(n).String();
 				const auto & entry = data["mutations"][id];
 				appendMutation(effects, entry, plan.mutationRank);
-				traits[slot] += " · " + entry["name"].String() + " " + std::to_string(plan.mutationRank);
+				traits[slot] += " · " + rarityText(entry,entry["name"].String()) + " " + std::to_string(plan.mutationRank);
 				ids.push_back(id);
 			}
 			if(plan.recipe)
@@ -663,7 +673,7 @@ try
 		for(const auto & mutation : line.mutations)
 		{
 			const auto & def = acquiredRule(data,mutation.first);
-			scouting += "\n" + def["name"].String() + " × " + std::to_string(mutation.second);
+			scouting += "\n" + (def["rarity"].isNull() ? def["name"].String() : rarityText(def,def["name"].String())) + " × " + std::to_string(mutation.second);
 			if(mutation.second >= 2 && !def["alternate"].isNull())
 				scouting += " · " + def[run->alternate(slot,mutation.first) ? "alternate" : "awaken"]["name"].String();
 		}
