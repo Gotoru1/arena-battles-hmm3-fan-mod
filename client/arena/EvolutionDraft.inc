@@ -5,6 +5,7 @@ namespace
 	std::unique_ptr<evolution::RoguelikeRun> run;
 	bool verifying = false;
 	bool eliteFight = false;
+	unsigned verificationWaves = 15;
 	bool choosingRecipient = false;
 
 	std::filesystem::path checkpointPath()
@@ -60,12 +61,12 @@ namespace
 		{
 			if(effect["type"].String() == "ON_COMBAT_EVENT")
 			{
-				// Only terminal stat grants can be produced by an event. No nested event dispatch.
+				// Event payloads grant terminal bonuses. Team echoes use the server queue.
 				for(auto & action : effect["addInfo"]["effect"].Vector())
 				{
 					auto & bonus = action["bonus"];
 					auto type = bonus["type"].String();
-					if(action["action"].String() != "bonus" || (type != "PRIMARY_SKILL" && type != "CREATURE_DAMAGE"))
+					if(action["action"].String() != "bonus" || type == "ON_COMBAT_EVENT")
 						throw std::runtime_error("Invalid Evolution event payload");
 					auto & amount = bonus["val"].Integer();
 					amount = evolution::engineInt(evolution::Amount(amount) * rank);
@@ -79,11 +80,27 @@ namespace
 			target.Vector().push_back(std::move(effect));
 		}
 	}
+	void appendMutation(JsonNode & effects, const JsonNode & def, unsigned rank)
+	{
+		appendEffects(effects, def, rank);
+		const auto & evolution = def["awaken"];
+		if(!evolution.isNull() && rank >= evolution["rank"].Integer())
+			appendEffects(effects, evolution, 1);
+	}
 }
 
 void ArenaDraft::startVerification()
 {
 	verifying = true;
+	if(const char * value = std::getenv("EVOLUTION_TEST_WAVES"))
+	{
+		const std::string count(value);
+		if(count.empty() || count.find_first_not_of("0123456789") != std::string::npos)
+			throw std::invalid_argument("Invalid EVOLUTION_TEST_WAVES");
+		const auto waves = std::stoull(count);
+		if(!waves || waves > UINT32_MAX) throw std::out_of_range("Invalid EVOLUTION_TEST_WAVES");
+		verificationWaves = static_cast<unsigned>(waves);
+	}
 	CMainMenu::openLobby(ESelectionScreen::newGame, true, {}, ELoadMode::NONE, true);
 	GAME->server().arenaMode = true;
 }
@@ -192,7 +209,24 @@ void ArenaDraft::chooseEvolutionCreature()
 		{
 			run->begin(self->player().hero->getHeroTypeID().getNum(), self->player().primary,
 				choices.at(index).first.getNum(), 24);
-			self->buildEvolutionBattle();
+			std::vector<ArenaOffer> starts{
+				evolutionCard("Поход", "24 бойца и обычные характеристики героя."),
+				evolutionCard("Ополчение", "36 бойцов, но атака и защита героя ниже на 1 (минимум 0)."),
+				evolutionCard("Ветераны", "16 бойцов. Герой получает +2 к атаке и +2 к защите для всей армии.")};
+			ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Условия старта", "Выбери состав экспедиции", starts,
+				[self](int pick){
+					if(pick == 1)
+					{
+						run->army.count = 36;
+						for(int i=0;i<2;++i) run->primary[i] = std::max(0,run->primary[i]-1);
+					}
+					if(pick == 2)
+					{
+						run->army.count = 16;
+						for(int i=0;i<2;++i) run->primary[i] += 2;
+					}
+					self->buildEvolutionBattle();
+				}, [self](){ self->cancel(); }, nullptr);
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
@@ -221,7 +255,7 @@ void ArenaDraft::afterEvolutionGame()
 		bool won = run->phase == evolution::Phase::Reward;
 		logGlobal->info("Evolution playtest: wave %s, victory %d, roster %s, casualties %s",
 			run->wave.str(), won, run->army.count.str(), run->kills.str());
-		if(!won || run->wave == 15)
+		if(!won || run->wave == verificationWaves)
 		{
 			verificationResult = won ? 0 : 1;
 			run.reset();
@@ -253,7 +287,8 @@ void ArenaDraft::chooseEvolutionReward()
 	for(size_t i = 0; i < run->rosterSize(); ++i)
 	{
 		const auto & line = run->stack(i);
-		options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
+		if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
+		else options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated(), evolution::displayAmount(line.count)));
 	}
 	choosingRecipient = true;
 	auto self = shared_from_this();
@@ -295,13 +330,12 @@ void ArenaDraft::showEvolutionCards(size_t slot)
 }
 
 void ArenaDraft::buildEvolutionBattle()
+try
 {
 	const auto & data = evolutionCatalog();
 	checkpoint(); // before consuming the RNG, so resuming recreates the same opponent
 	eliteFight = false;
-	const auto bossIndex = ((run->wave / 5 + 2) % 3).convert_to<unsigned>();
-	const auto & bossRule = bossIndex == 0 ? data["boss"] : data["otherBosses"].Vector().at(bossIndex-1);
-	if(!player().hero)
+		if(!player().hero)
 		player().hero = createHero(HeroTypeID(run->hero));
 	if(run->rosterSize() < (run->wave >= 4 ? 3u : 2u))
 	{
@@ -327,6 +361,12 @@ void ArenaDraft::buildEvolutionBattle()
 	rng.seed(run->random());
 	map->evolutionSeed = static_cast<int>(run->random() % INT32_MAX) + 1;
 	randomizer->setSeed(map->evolutionSeed);
+	const auto plan = evolution::encounter(run->wave, map->evolutionSeed, data["otherBosses"].Vector().size()+1);
+	const auto & bossRule = plan.bossIndex ? data["otherBosses"].Vector().at(plan.bossIndex-1) : data["boss"];
+	const auto & storms = data["anomalies"].Vector();
+	const auto & weather = storms.at((map->evolutionSeed / 7u) % storms.size());
+	const auto & schools = data["schools"].Vector();
+	const size_t firstSchool = randomInt(0,static_cast<int>(schools.size())-1);
 	player().primary = run->primary;
 	std::string discoveries;
 	std::string roster;
@@ -337,7 +377,8 @@ void ArenaDraft::buildEvolutionBattle()
 		giveCreature(player(), static_cast<int>(slot)+1, creature, evolution::engineInt(line.count));
 		auto & effects = player().hero->getStackPtr(SlotID(static_cast<int>(slot)))->evolutionEffects;
 		for(const auto & mutation : line.mutations)
-			appendEffects(effects, data["mutations"][mutation.first], mutation.second);
+			appendMutation(effects, data["mutations"][mutation.first], mutation.second);
+		if(plan.anomaly) appendEffects(effects, weather, 1);
 
 		// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
 		const auto bonus = run->lineageDamage(slot);
@@ -364,7 +405,7 @@ void ArenaDraft::buildEvolutionBattle()
 				discoveries += "\nОткрыто сочетание: " + name;
 			}
 		}
-		roster += "\n" + creature.toCreature()->getNamePluralTranslated() + " × " + line.count.str();
+		roster += "\n" + creature.toCreature()->getNamePluralTranslated() + " × " + evolution::displayAmount(line.count);
 	}
 	auto heroes = offerHeroes(player().hero->getHeroTypeID());
 	enemy().hero = createHero(heroes.at(0));
@@ -375,6 +416,7 @@ void ArenaDraft::buildEvolutionBattle()
 	const int baseSlots = run->wave < 3 ? 3 : (run->wave < 8 ? 4 : 5);
 	const int slots = baseSlots + (formation == 1 ? 1 : formation == 2 ? -1 : 0);
 	const int frontShare = formation == 1 ? 22 : formation == 2 ? 65 : 40;
+	std::vector<std::string> traits(slots);
 	for(int slot = 0; slot < slots; ++slot)
 	{
 		auto pool = ArenaRules::creaturePool(slot == 0 ? std::min(7, tier + (formation == 2 ? 1 : 0)) : std::max(1, tier-1));
@@ -383,8 +425,36 @@ void ArenaDraft::buildEvolutionBattle()
 		auto cost = std::max<int64_t>(1, id.toCreature()->getAIValue());
 		int amount = evolution::engineInt(2 + run->wave / (slot == 0 ? 1 : 3) + run->threat() * share / (100 * cost));
 		giveCreature(enemy(), slot+1, id, amount);
+		auto & effects = enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects;
+		if(plan.anomaly) appendEffects(effects, weather, 1);
 		if(run->boss() && slot == 0)
-			appendEffects(enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects, bossRule, 1);
+		{
+			appendEffects(effects, bossRule, 1);
+			traits[slot] += " · " + bossRule["name"].String();
+		}
+		if(slot < plan.mutatedStacks)
+		{
+			const auto & pair = schools.at((firstSchool + slot) % schools.size()).Vector();
+			std::vector<std::string> ids;
+			for(size_t n=0; n < (plan.pair ? pair.size() : 1u); ++n)
+			{
+				const auto & id = pair.at(n).String();
+				const auto & entry = data["mutations"][id];
+				appendMutation(effects, entry, plan.mutationRank);
+				traits[slot] += " · " + entry["name"].String() + " " + std::to_string(plan.mutationRank);
+				ids.push_back(id);
+			}
+			if(plan.recipe)
+				for(const auto & recipe : data["synergies"].Vector())
+				{
+					const auto & parts = recipe["requires"].Vector();
+					if(std::all_of(parts.begin(),parts.end(),[&](const JsonNode & part){ return std::find(ids.begin(),ids.end(),part.String()) != ids.end(); }))
+					{
+						appendEffects(effects,recipe,1);
+						traits[slot] += " · " + recipe["name"].String();
+					}
+				}
+		}
 	}
 
 	std::string detail = "Твоя армия:" + roster;
@@ -392,24 +462,39 @@ void ArenaDraft::buildEvolutionBattle()
 		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
 	const std::array<std::string,3> formations{"Смешанное войско", "Орда", "Ударный отряд"};
 	if(!run->boss()) detail += "\nПротивник: " + formations[formation];
+	bool eliteAvailable = !run->boss() && run->wave % 3 == 0;
+	for(int i=0;i<slots && eliteAvailable;++i)
+		eliteAvailable = (evolution::Amount(enemy().hero->getStackPtr(SlotID(i))->getCount()) * 8 + 4) / 5 <= INT32_MAX;
 	std::string scouting = "Армия противника";
+	if(plan.anomaly)
+	{
+		detail += "\nАномалия: " + weather["name"].String();
+		scouting += "\n" + weather["name"].String() + ". " + weather["text"].String();
+	}
 	for(int i = 0; i < slots; ++i)
 	{
 		const auto * enemyStack = enemy().hero->getStackPtr(SlotID(i));
-		scouting += "\n" + enemyStack->getName() + " × " + std::to_string(enemyStack->getCount());
-		if(!run->boss() && run->wave % 3 == 0)
+		scouting += "\n" + enemyStack->getName() + " × " + std::to_string(enemyStack->getCount()) + traits[i];
+		if(eliteAvailable)
 			scouting += "  (элита: " + evolution::Amount((evolution::Amount(enemyStack->getCount()) * 8 + 4) / 5).str() + ")";
 	}
 	for(size_t slot = 0; slot < run->rosterSize(); ++slot)
 	{
 		const auto & line = run->stack(slot);
 		scouting += "\n\n" + CreatureID(line.creature).toCreature()->getNamePluralTranslated() + " × " + line.count.str();
+		for(const auto & recipe : data["synergies"].Vector())
+		{
+			std::vector<std::string> required;
+			for(const auto & id : recipe["requires"].Vector()) required.push_back(id.String());
+			if(run->hasCombination(required,slot)) scouting += "\nСочетание: " + recipe["name"].String();
+		}
+		scouting += "\nРост за забег: " + evolution::displayAmount(line.harvest) + " очк. · Бонус урона к началу волны: +" + evolution::displayAmount(run->lineageDamage(slot));
 		for(const auto & mutation : line.mutations)
 			scouting += "\n" + data["mutations"][mutation.first]["name"].String() + " × " + std::to_string(mutation.second);
 	}
 	auto self = shared_from_this();
 	std::vector<ArenaOffer> cards{evolutionCard("В бой", detail + discoveries)};
-	if(!run->boss() && run->wave % 3 == 0)
+	if(eliteAvailable)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
 		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots](int pick)
@@ -420,9 +505,16 @@ void ArenaDraft::buildEvolutionBattle()
 				{
 					auto * stack = self->enemy().hero->getStackPtr(SlotID(i));
 					const int size = evolution::engineInt((evolution::Amount(stack->getCount()) * 8 + 4) / 5);
+					auto inherited = stack->evolutionEffects;
 					self->giveCreature(self->enemy(), i+1, stack->getCreatureID(), size);
+					self->enemy().hero->getStackPtr(SlotID(i))->evolutionEffects = std::move(inherited);
 				}
 			self->startBattle();
 		},
 		[self]() { self->cancel(); }, [scouting]() { CInfoWindow::showInfoDialog(scouting, {}); });
+}
+catch(const std::overflow_error &)
+{
+	cancel();
+	CInfoWindow::showInfoDialog("Эта волна достигла числового предела VCMI. Сохранение начала волны оставлено в профиле.", {});
 }

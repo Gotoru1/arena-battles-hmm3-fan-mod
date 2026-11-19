@@ -569,6 +569,855 @@
 					"addInfo": 30
 				}
 			]
+		},
+		"drummer": {
+			"name": "Походный барабан",
+			"rarity": 0,
+			"text": "Когда другой свой отряд перемещается, носитель получает +2 к атаке за ранг до своего следующего удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionMoved",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 2,
+									"subtype": "primarySkill.attack",
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"watchman": {
+			"name": "Парный дозор",
+			"rarity": 0,
+			"text": "Когда союзник ждёт, носитель готовит ещё один ответный удар за ранг до своей следующей атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionWaited",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_RETALIATION",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"shieldwall": {
+			"name": "Сомкнутый строй",
+			"rarity": 1,
+			"text": "Защита союзника покрывает носителя шипами: +20% отражения за ранг до получения удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGuarded",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FIRE_SHIELD",
+									"val": 20,
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"hound": {
+			"name": "Гончая стаи",
+			"rarity": 2,
+			"text": "Когда союзник убивает бойцов физическим ударом, носитель накапливает +1 к скорости за ранг до конца боя.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionKilled",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "STACKS_SPEED",
+									"val": 1,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"avenger": {
+			"name": "Месть за павших",
+			"rarity": 2,
+			"text": "Потеря бойцов у союзника от физического удара заряжает носителя: +15% шанса двойного урона за ранг до следующего удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionLost",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "DOUBLE_DAMAGE_CHANCE",
+									"val": 15,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"chalice": {
+			"name": "Передача крови",
+			"rarity": 2,
+			"text": "Когда союзник исцеляется вампиризмом или кражей душ, носитель получает +20% вампиризма за ранг до следующего удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionHealed",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "LIFE_DRAIN",
+									"val": 20,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"twin": {
+			"name": "Сестра выводка",
+			"rarity": 3,
+			"text": "Рост отряда союзника при физической атаке даёт носителю ещё одну постоянную копию за убитого живого бойца за ранг до его следующего удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGrew",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "SOUL_STEAL",
+									"val": 1,
+									"subtype": "soulStealPermanent",
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"mourner": {
+			"name": "Завещание клинка",
+			"rarity": 3,
+			"text": "Когда физический удар уничтожает союзный отряд, носитель получает дополнительную атаку за ранг до конца боя.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionFell",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_ATTACK",
+									"val": 1,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"conductor": {
+			"name": "Резонатор",
+			"rarity": 2,
+			"text": "Когда другой отряд отвечает на командный сигнал, носитель получает +2 к урону за ранг до конца боя и передаёт эхо дальше.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionEcho",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 2,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"echoShell": {
+			"name": "Зеркало хора",
+			"rarity": 1,
+			"text": "Когда союзник отвечает на сигнал, носитель получает +3 к защите за ранг до получения удара и передаёт эхо.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionEcho",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 3,
+									"subtype": "primarySkill.defence",
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"needle": {
+			"name": "Игольник",
+			"rarity": 1,
+			"text": "Отряд становится стрелком с четырьмя выстрелами за ранг.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 4
+				}
+			]
+		},
+		"crossfire": {
+			"name": "Ответный залп",
+			"rarity": 2,
+			"text": "Отряд получает дальний ответный огонь и становится стрелком. Два выстрела за ранг.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 2
+				},
+				{
+					"type": "RANGED_RETALIATION",
+					"val": 1
+				}
+			]
+		},
+		"sapper": {
+			"name": "Осколочный снаряд",
+			"rarity": 3,
+			"text": "Отряд становится стрелком и поражает соседние с целью клетки. Три выстрела за ранг, учитывай расположение союзников.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 3
+				},
+				{
+					"type": "SHOOTS_ALL_ADJACENT",
+					"val": 1
+				}
+			]
+		},
+		"pointblank": {
+			"name": "Выстрел в упор",
+			"rarity": 1,
+			"text": "Можно стрелять рядом с противником. Отряд получает стрельбу и два выстрела за ранг.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 2
+				},
+				{
+					"type": "FREE_SHOOTING",
+					"val": 1
+				}
+			]
+		},
+		"phoenix": {
+			"name": "Искра феникса",
+			"rarity": 3,
+			"text": "Возрождение части отряда в бою: 15% численности и один заряд способности за ранг, минимум один боец при срабатывании.",
+			"effects": [
+				{
+					"type": "REBIRTH",
+					"val": 15,
+					"subtype": "rebirthSpecial"
+				},
+				{
+					"type": "CASTS",
+					"val": 1
+				}
+			]
+		},
+		"shed": {
+			"name": "Сброшенная кожа",
+			"rarity": 1,
+			"text": "Отряд регенерирует 25 здоровья верхнего бойца за ранг в новом раунде.",
+			"effects": [
+				{
+					"type": "HP_REGENERATION",
+					"val": 25
+				}
+			]
+		},
+		"aura": {
+			"name": "Круг единорогов",
+			"rarity": 1,
+			"text": "Соседние союзники получают сопротивление магии: 20% за ранг.",
+			"effects": [
+				{
+					"type": "SPELL_RESISTANCE_AURA",
+					"val": 20
+				}
+			]
+		},
+		"borrow": {
+			"name": "Украденный выводок",
+			"rarity": 2,
+			"text": "Физические убийства живых существ дают по две временные копии за ранг только на текущую битву.",
+			"effects": [
+				{
+					"type": "SOUL_STEAL",
+					"val": 2,
+					"subtype": "soulStealBattle"
+				}
+			]
+		},
+		"glass": {
+			"name": "Стеклянный клюв",
+			"rarity": 1,
+			"text": "Передвижение готовит удар: +8 к урону за ранг, пока отряд не получит урон.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 8,
+									"subtype": "creatureDamageBoth",
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"coil": {
+			"name": "Взвод пружины",
+			"rarity": 2,
+			"text": "Ожидание готовит наскок: +25% за клетку за ранг до следующей атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "JOUSTING",
+									"val": 25,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"cocoon": {
+			"name": "Лётный кокон",
+			"rarity": 2,
+			"text": "Команда защиты раскрывает крылья до своей атаки и даёт +2 скорости за ранг на это время.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FLYING",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "STACKS_SPEED",
+									"val": 2,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"duel": {
+			"name": "Печать дуэли",
+			"rarity": 2,
+			"text": "После пережитой атаки от живого врага отряд готовит удар без ответа и +3 к урону за ранг до своего следующего удара.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "BLOCKS_RETALIATION",
+									"val": 1,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterAttacked",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 3,
+									"subtype": "creatureDamageBoth",
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		"razor": {
+			"name": "Зубило",
+			"rarity": 1,
+			"text": "Атаки игнорируют 20% защиты цели за ранг.",
+			"effects": [
+				{
+					"type": "ENEMY_DEFENCE_REDUCTION",
+					"val": 20
+				}
+			]
+		},
+		"pollen": {
+			"name": "Облако пыльцы",
+			"rarity": 2,
+			"text": "Удар с шансом 25% за ранг отравляет цель. Действуют правила яда и иммунитеты существа.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 25,
+					"subtype": "spell.poison"
+				}
+			]
+		},
+		"basilisk": {
+			"name": "Янтарный взгляд",
+			"rarity": 2,
+			"text": "После удара есть 18% шанса за ранг обратить уцелевшую цель в камень.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 18,
+					"subtype": "spell.stoneGaze"
+				}
+			]
+		},
+		"root": {
+			"name": "Живой гарпун",
+			"rarity": 2,
+			"text": "После удара есть 30% шанса за ранг привязать цель к месту заклинанием дендроидов.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 30,
+					"subtype": "spell.bind"
+				}
+			]
+		},
+		"age": {
+			"name": "Песочные часы",
+			"rarity": 3,
+			"text": "После удара есть 20% шанса за ранг состарить уцелевшую цель и уменьшить здоровье её бойцов.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 20,
+					"subtype": "spell.age"
+				}
+			]
+		},
+		"wash": {
+			"name": "Развеивание",
+			"rarity": 1,
+			"text": "Перед ударом есть 35% шанса за ранг снять полезные заклинания цели.",
+			"effects": [
+				{
+					"type": "SPELL_BEFORE_ATTACK",
+					"val": 35,
+					"subtype": "spell.dispelHelpful"
+				}
+			]
+		},
+		"mire": {
+			"name": "Болотный след",
+			"rarity": 1,
+			"text": "После удара есть 30% шанса за ранг замедлить цель.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 30,
+					"subtype": "spell.slow"
+				}
+			]
+		},
+		"rust": {
+			"name": "Ржавые когти",
+			"rarity": 1,
+			"text": "Перед ударом есть 30% шанса за ранг разрушить часть защиты цели заклинанием «Разрушающий луч».",
+			"effects": [
+				{
+					"type": "SPELL_BEFORE_ATTACK",
+					"val": 30,
+					"subtype": "spell.disruptingRay"
+				}
+			]
+		},
+		"curse": {
+			"name": "Дурной глаз",
+			"rarity": 1,
+			"text": "Перед ударом есть 25% шанса за ранг проклясть противника и ухудшить его ответный урон.",
+			"effects": [
+				{
+					"type": "SPELL_BEFORE_ATTACK",
+					"val": 25,
+					"subtype": "spell.curse"
+				}
+			]
+		},
+		"blind": {
+			"name": "Лунная пыль",
+			"rarity": 2,
+			"text": "После удара есть 15% шанса за ранг ослепить уцелевшую цель. Следующая атака может разбудить её.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 15,
+					"subtype": "spell.blind"
+				}
+			]
+		},
+		"seedbank": {
+			"name": "Банк семян",
+			"rarity": 1,
+			"text": "Если отряд уцелел без потерь по численности, каждые 12 выживших дают ещё одного своего бойца за ранг после победы.",
+			"effects": []
+		},
+		"remnant": {
+			"name": "Последнее яйцо",
+			"rarity": 2,
+			"text": "Если весь отряд пал, после победы союзников восстанавливается четверть его начальной численности за ранг сверх подкрепления.",
+			"effects": []
+		},
+		"tithe": {
+			"name": "Кровавая десятина",
+			"rarity": 2,
+			"text": "После победы целыми группами по 10 выживших отдайте каждого десятого бойца: каждый доброволец приносит по 5 очков роста за ранг всем остальным отрядам.",
+			"effects": []
+		},
+		"graft": {
+			"name": "Пересадка",
+			"rarity": 2,
+			"text": "После победы каждые 6 недостающих бойцов носителя превращаются в одного бойца каждого другого отряда за ранг.",
+			"effects": []
+		},
+		"spoils": {
+			"name": "Охотник за трофеями",
+			"rarity": 1,
+			"text": "За победу в элитной охоте или над боссом к носителю присоединяется ещё четверть выживших за ранг.",
+			"effects": []
+		},
+		"molting": {
+			"name": "Линька",
+			"rarity": 2,
+			"text": "При потере половины начальной численности носитель получает после победы по 2 очка постоянного роста за недостающего бойца за ранг.",
+			"effects": []
+		},
+		"incubator": {
+			"name": "Делящаяся почка",
+			"rarity": 3,
+			"text": "После победы каждая новая копия сверх начальной численности делится ещё раз за каждый ранг. Подкрепления приходят позже.",
+			"effects": []
+		},
+		"quill": {
+			"name": "Перо мантикоры",
+			"rarity": 1,
+			"text": "Сначала два выстрела за ранг. На II ранге вырастает ядовитое жало: 40% шанса парализовать уцелевшую цель после атаки.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 2
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "SPELL_AFTER_ATTACK",
+						"val": 40,
+						"subtype": "spell.paralyze"
+					}
+				]
+			}
+		},
+		"larva": {
+			"name": "Личинка королевы",
+			"rarity": 2,
+			"text": "Одна временная копия за убитого живого бойца за ранг. На II ранге появляется ещё и постоянная копия за убийство.",
+			"effects": [
+				{
+					"type": "SOUL_STEAL",
+					"val": 1,
+					"subtype": "soulStealBattle"
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "SOUL_STEAL",
+						"val": 1,
+						"subtype": "soulStealPermanent"
+					}
+				]
+			}
+		},
+		"ember": {
+			"name": "Тлеющее перо",
+			"rarity": 2,
+			"text": "Получает 10% отражения за ранг. На II ранге пробуждается возрождение четверти отряда с зарядом.",
+			"effects": [
+				{
+					"type": "FIRE_SHIELD",
+					"val": 10
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "REBIRTH",
+						"val": 25,
+						"subtype": "rebirthSpecial"
+					},
+					{
+						"type": "CASTS",
+						"val": 1
+					}
+				]
+			}
+		},
+		"lens": {
+			"name": "Хрустальная линза",
+			"rarity": 1,
+			"text": "За ожидание +2 к атаке за ранг до конца боя. На II ранге ожидание также заряжает удар насквозь до следующей атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 2,
+									"subtype": "primarySkill.attack",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "ON_COMBAT_EVENT",
+						"subtype": "combatEventWait",
+						"addInfo": {
+							"effect": [
+								{
+									"action": "bonus",
+									"targetEnemy": false,
+									"bonus": {
+										"type": "TWO_HEX_ATTACK_BREATH",
+										"val": 1,
+										"duration": "UNTIL_ATTACK"
+									}
+								}
+							]
+						}
+					}
+				]
+			}
+		},
+		"sentinel": {
+			"name": "Спящий часовой",
+			"rarity": 1,
+			"text": "Каждая защита даёт +1 ответ за ранг до своего следующего хода. На II ранге ответ может опередить удар врага.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_RETALIATION",
+									"val": 1,
+									"duration": "STACK_GETS_TURN"
+								}
+							}
+						]
+					}
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "FIRST_STRIKE",
+						"val": 1
+					}
+				]
+			}
+		},
+		"wingbud": {
+			"name": "Зачатки крыльев",
+			"rarity": 1,
+			"text": "После перемещения +2 к защите за ранг до удара врага. На II ранге отряд получает полёт и возврат после атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 2,
+									"subtype": "primarySkill.defence",
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			],
+			"awaken": {
+				"rank": 2,
+				"effects": [
+					{
+						"type": "FLYING",
+						"val": 1
+					},
+					{
+						"type": "RETURN_AFTER_STRIKE",
+						"val": 1
+					}
+				]
+			}
 		}
 	},
 	"synergies": [
@@ -780,6 +1629,521 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "Перекличка дозорных",
+			"requires": [
+				"watchman",
+				"forge"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGuarded",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FIRST_STRIKE",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Летучий арбалет",
+			"requires": [
+				"needle",
+				"wingbud"
+			],
+			"effects": [
+				{
+					"type": "FLYING",
+					"val": 1
+				},
+				{
+					"type": "NO_DISTANCE_PENALTY",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Пикирующий змей",
+			"requires": [
+				"cocoon",
+				"coil"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventDefend",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "RETURN_AFTER_STRIKE",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Лавина осколков",
+			"requires": [
+				"sapper",
+				"glass"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "DOUBLE_DAMAGE_CHANCE",
+									"val": 40,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Кровяная сеть",
+			"requires": [
+				"chalice",
+				"leech"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionHealed",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_RETALIATION",
+									"val": 1,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Похоронный марш",
+			"requires": [
+				"mourner",
+				"drummer"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionFell",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "UNLIMITED_RETALIATIONS",
+									"val": 1,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Пыльца улья",
+			"requires": [
+				"pollen",
+				"nursery"
+			],
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 35,
+					"subtype": "spell.disease"
+				}
+			]
+		},
+		{
+			"name": "Штормовая батарея",
+			"requires": [
+				"crossfire",
+				"pointblank"
+			],
+			"effects": [
+				{
+					"type": "BLOCKS_RANGED_RETALIATION",
+					"val": 1
+				},
+				{
+					"type": "NO_DISTANCE_PENALTY",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Возмездие шипов",
+			"requires": [
+				"shieldwall",
+				"barbs"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGuarded",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_RETALIATION",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Осколки янтаря",
+			"requires": [
+				"basilisk",
+				"pierce"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterAttack",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FIRE_SHIELD",
+									"val": 20,
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Жатва корней",
+			"requires": [
+				"root",
+				"razor"
+			],
+			"effects": [
+				{
+					"type": "SPELL_BEFORE_ATTACK",
+					"val": 50,
+					"subtype": "spell.weakness"
+				}
+			]
+		},
+		{
+			"name": "Наследник пепла",
+			"requires": [
+				"phoenix",
+				"remnant"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionFell",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "LIFE_DRAIN",
+									"val": 30,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Голодный двойник",
+			"requires": [
+				"twin",
+				"borrow"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGrew",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_ATTACK",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Камертон стаи",
+			"requires": [
+				"conductor",
+				"hound"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionKilled",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FEROCITY",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Зеркальный караул",
+			"requires": [
+				"echoShell",
+				"sentinel"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionEcho",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "BLOCKS_RETALIATION",
+									"val": 1,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Костяной посев",
+			"requires": [
+				"graft",
+				"ossuary"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionLost",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "SOUL_STEAL",
+									"val": 1,
+									"subtype": "soulStealBattle",
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Знамя охоты",
+			"requires": [
+				"spoils",
+				"avenger"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionKilled",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "TWO_HEX_ATTACK_BREATH",
+									"val": 1,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Кровавый оброк",
+			"requires": [
+				"tithe",
+				"kinship"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionGrew",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "CREATURE_DAMAGE",
+									"val": 4,
+									"subtype": "creatureDamageBoth",
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Королевский выводок",
+			"requires": [
+				"larva",
+				"incubator"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionHealed",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "SOUL_STEAL",
+									"val": 1,
+									"subtype": "soulStealPermanent",
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Слепая зона",
+			"requires": [
+				"blind",
+				"lens"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventWait",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FREE_SHOOTING",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 2
+				}
+			]
+		},
+		{
+			"name": "Бег по лезвию",
+			"requires": [
+				"duel",
+				"stride"
+			],
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "FIRST_STRIKE",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
 		}
 	],
 	"boss": {
@@ -846,6 +2210,283 @@
 									"subtype": "creatureDamageBoth",
 									"val": 4,
 									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Пепельная птица",
+			"text": "Способна один раз восстановить часть отряда после гибели. Планируй второй удар.",
+			"effects": [
+				{
+					"type": "REBIRTH",
+					"val": 35,
+					"subtype": "rebirthSpecial"
+				},
+				{
+					"type": "CASTS",
+					"val": 1
+				},
+				{
+					"type": "FLYING",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Каменный садовник",
+			"text": "Опутывает уцелевшую цель после удара. При движении охраны накапливает защиту до следующего попадания.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 65,
+					"subtype": "spell.bind"
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionMoved",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "PRIMARY_SKILL",
+									"val": 5,
+									"subtype": "primarySkill.defence",
+									"duration": "UNTIL_BEING_ATTACKED"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Королева кровниц",
+			"text": "Ворует души живых существ. Когда свита теряет бойцов, королева заряжает вампиризм.",
+			"effects": [
+				{
+					"type": "SOUL_STEAL",
+					"val": 1,
+					"subtype": "soulStealBattle"
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionLost",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "LIFE_DRAIN",
+									"val": 40,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Сторожевая башня",
+			"text": "Стреляет в ответ и в упор. Прячь хрупкие отряды от его выстрелов.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 16
+				},
+				{
+					"type": "RANGED_RETALIATION",
+					"val": 1
+				},
+				{
+					"type": "FREE_SHOOTING",
+					"val": 1
+				}
+			]
+		},
+		{
+			"name": "Собиратель клятв",
+			"text": "Уничтожение отряда охраны физическим ударом даёт боссу ещё одну атаку до конца боя.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionFell",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "ADDITIONAL_ATTACK",
+									"val": 1,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Песочный князь",
+			"text": "После удара может состарить цель. Ответы на ожидание охраны дают ему скорость.",
+			"effects": [
+				{
+					"type": "SPELL_AFTER_ATTACK",
+					"val": 40,
+					"subtype": "spell.age"
+				},
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionWaited",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "STACKS_SPEED",
+									"val": 2,
+									"duration": "ONE_BATTLE"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Стекольщик",
+			"text": "Стреляет осколками по соседним клеткам и разрушает защиту основной цели. Рассредоточь войска.",
+			"effects": [
+				{
+					"type": "SHOOTER",
+					"val": 1
+				},
+				{
+					"type": "SHOTS",
+					"val": 12
+				},
+				{
+					"type": "SHOOTS_ALL_ADJACENT",
+					"val": 1
+				},
+				{
+					"type": "SPELL_BEFORE_ATTACK",
+					"val": 60,
+					"subtype": "spell.disruptingRay"
+				}
+			]
+		}
+	],
+	"schools": [
+		[
+			"needle",
+			"wingbud"
+		],
+		[
+			"crossfire",
+			"pointblank"
+		],
+		[
+			"shieldwall",
+			"barbs"
+		],
+		[
+			"coil",
+			"cocoon"
+		],
+		[
+			"duel",
+			"stride"
+		],
+		[
+			"conductor",
+			"hound"
+		],
+		[
+			"basilisk",
+			"pierce"
+		],
+		[
+			"root",
+			"razor"
+		]
+	],
+	"anomalies": [
+		{
+			"name": "Попутный ветер",
+			"text": "Обе армии после перемещения получают +2 к скорости до своей атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "combatEventAfterMove",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "STACKS_SPEED",
+									"val": 2,
+									"duration": "UNTIL_OWN_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Красная луна",
+			"text": "Все отряды после потерь союзника заряжают вампиризм на следующий удар.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionLost",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "LIFE_DRAIN",
+									"val": 35,
+									"duration": "UNTIL_ATTACK"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Гул под землёй",
+			"text": "Ожидание союзника даёт другим отрядам ответ без ограничения до их следующей атаки.",
+			"effects": [
+				{
+					"type": "ON_COMBAT_EVENT",
+					"subtype": "evolutionWaited",
+					"addInfo": {
+						"effect": [
+							{
+								"action": "bonus",
+								"targetEnemy": false,
+								"bonus": {
+									"type": "UNLIMITED_RETALIATIONS",
+									"val": 1,
+									"duration": "UNTIL_OWN_ATTACK"
 								}
 							}
 						]

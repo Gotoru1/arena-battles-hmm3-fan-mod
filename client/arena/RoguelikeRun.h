@@ -25,6 +25,40 @@ inline int engineInt(const Amount & value)
 	return value.convert_to<int>();
 }
 
+inline std::string displayAmount(const Amount & value)
+{
+	auto digits = value.str();
+	if(value < 1000000) return digits;
+	size_t exponent = digits.size()-1;
+	if(exponent >= 12) return digits.substr(0,1) + "," + digits.substr(1,2) + "e" + std::to_string(exponent);
+	size_t places = exponent >= 9 ? 9 : 6;
+	size_t whole = digits.size()-places;
+	return digits.substr(0,whole) + "," + digits.substr(whole,2) + (places == 9 ? " млрд" : " млн");
+}
+
+struct Encounter
+{
+	size_t bossIndex;
+	int mutatedStacks;
+	int mutationRank;
+	bool pair;
+	bool recipe;
+	bool anomaly;
+};
+
+inline Encounter encounter(const Amount & wave, unsigned seed, size_t bosses)
+{
+	if(!bosses || wave < 1) throw std::invalid_argument("Invalid wave");
+	Encounter plan{};
+	plan.bossIndex = wave < 5 ? 0 : ((wave / 5 - 1) % bosses).convert_to<size_t>();
+	plan.mutatedStacks = wave >= 56 ? 4 : wave >= 36 ? 3 : wave >= 16 ? 2 : wave >= 6 ? 1 : 0;
+	plan.mutationRank = wave >= 26 ? engineInt(2 + (wave-26)/40) : 1;
+	plan.pair = wave >= 16;
+	plan.recipe = wave >= 36;
+	plan.anomaly = wave >= 12 && wave % 5 != 0 && seed % (wave >= 46 ? 3u : 6u) == 0;
+	return plan;
+}
+
 struct Lineage
 {
 	int creature = -1;
@@ -138,9 +172,18 @@ public:
 		{
 			Amount change = remaining[i] - stack(i).count;
 			growth[i] += casualties * rank("harvest", i);
+			if(change >= 0) recruits[i] += remaining[i] / 12 * rank("seedbank",i);
+			if(remaining[i] == 0) recruits[i] += stack(i).count / 4 * rank("remnant",i);
+			if(boss() || elite) recruits[i] += remaining[i] / 4 * rank("spoils",i);
+			if(change > 0) recruits[i] += change * rank("incubator",i);
+			if(remaining[i] * 2 <= stack(i).count) growth[i] -= change * 2 * rank("molting",i);
+			Amount tithe = rank("tithe",i) && rosterSize() > 1 ? Amount(remaining[i] / 10) : Amount(0);
+			recruits[i] -= tithe;
 			for(size_t ally = 0; ally < rosterSize(); ++ally)
 			{
 				if(ally == i) continue;
+				growth[ally] += tithe * 5 * rank("tithe",i);
+				if(change < 0) recruits[ally] += -change / 6 * rank("graft",i);
 				recruits[ally] += (remaining[i] / 8) * rank("nursery", i);
 				if(change < 0) recruits[ally] += (-change / 3) * rank("ossuary", ally);
 				if(change > 0) growth[ally] += change * 5 * rank("kinship", i);

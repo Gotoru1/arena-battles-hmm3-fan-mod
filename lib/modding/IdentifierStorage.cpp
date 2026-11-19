@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include "../battle/EvolutionSignals.h"
 #include "IdentifierStorage.h"
 
 #include "CModHandler.h"
@@ -85,6 +86,15 @@ CIdentifierStorage::CIdentifierStorage()
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventAfterAttack", static_cast<int>(CombatEventType::AFTER_ATTACK));
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventBeforeAttacked", static_cast<int>(CombatEventType::BEFORE_ATTACKED));
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventAfterAttacked", static_cast<int>(CombatEventType::AFTER_ATTACKED));
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionMoved", ::evolution::AllyMoved);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionWaited", ::evolution::AllyWaited);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionGuarded", ::evolution::AllyGuarded);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionKilled", ::evolution::AllyKilled);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionLost", ::evolution::AllyLost);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionHealed", ::evolution::AllyHealed);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionGrew", ::evolution::AllyGrew);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionFell", ::evolution::AllyFell);
+	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "evolutionEcho", ::evolution::Echo);
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventWait", static_cast<int>(CombatEventType::WAIT));
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventDefend", static_cast<int>(CombatEventType::DEFEND));
 	registerObject(ModScope::scopeBuiltin(), "bonusSubtype", "combatEventBeforeMove", static_cast<int>(CombatEventType::BEFORE_MOVE));

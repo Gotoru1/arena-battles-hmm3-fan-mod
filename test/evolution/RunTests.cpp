@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "../../client/arena/RoguelikeRun.h"
+#include "../../lib/battle/EvolutionSignals.h"
+#include "../../lib/battle/EvolutionDamage.h"
 #include <iostream>
 #include <sstream>
 #include <set>
@@ -132,6 +134,45 @@ int main()
 	hive.pick(0);
 	hive.finish(false,60,3,pool,{},false,{30});
 	require(hive.phase == Phase::Defeat && hive.stack(1).harvest == 40, "No post-victory effects on defeat");
+	std::map<std::pair<int,int>,int> deliveries;
+	deliverSignal(0,AllyLost,{0,1,2},[&](int id,int event){
+		++deliveries[{id,event}];
+		return true;
+	});
+	require(deliveries.size()==5 && !deliveries.count({0,AllyLost}), "No self-delivery of ally losses");
+	for(const auto & delivery:deliveries) require(delivery.second==1, "Once per listener and cause");
+	require(damageProduct(INT64_MAX,100,100)==INT64_MAX && damageProduct(INT64_MAX,200,100)==INT64_MAX
+		&& addDamage(INT64_MAX-2,3)==INT64_MAX, "Native damage boundary");
+	require(displayAmount(1250000)=="1,25 млн" && displayAmount(Amount(10)*1000000000000)=="1,00e13","Large number display");
+	RoguelikeRun colony(1);
+	colony.begin(1,{0,0,0,0},1,24);
+	colony.recruit(2,6);
+	colony.army.mutations={{"incubator",2},{"seedbank",1},{"tithe",1},{"spoils",1}};
+	colony.stack(1).mutations={{"graft",1},{"remnant",1},{"molting",1}};
+	colony.finish(true,36,12,pool,{},true,{0});
+	require(colony.army.count==77 && colony.stack(1).count==2 && colony.stack(1).harvest==27,
+		"Brood, loss, tithe and elite settlement");
+	for(int stop : {30,50,100})
+	{
+		RoguelikeRun simulation(2048);
+		simulation.begin(1,{1,1,1,1},1,24);
+		simulation.recruit(2,6);
+		std::set<size_t> bosses;
+		for(int wave=1;wave<=stop;++wave)
+		{
+			if(wave==4) simulation.recruit(3,4);
+			auto plan=encounter(simulation.wave,wave,10);
+			if(simulation.boss()) bosses.insert(plan.bossIndex);
+			require(plan.pair==(wave>=16) && plan.recipe==(wave>=36) && plan.mutatedStacks==(wave>=56?4:wave>=36?3:wave>=16?2:wave>=6?1:0),"Encounter stages");
+			std::vector<int> survivors(simulation.companions.size(),6);
+			simulation.finish(true,20,10,pool,{},false,survivors);
+			simulation.pick(0,wave%simulation.rosterSize());
+			std::stringstream saved;
+			simulation.save(saved);
+			simulation=RoguelikeRun::restore(saved);
+		}
+		require(simulation.wave==stop+1 && bosses.size()==std::min(stop/5,10),"Long simulation with scripted survivors");
+	}
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

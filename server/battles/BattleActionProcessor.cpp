@@ -9,6 +9,8 @@
  */
 #include "StdInc.h"
 #include "BattleActionProcessor.h"
+#include "../../lib/battle/EvolutionSignals.h"
+#include "../../lib/battle/EvolutionDamage.h"
 
 #include "BattleProcessor.h"
 
@@ -57,6 +59,7 @@ bool BattleActionProcessor::doWaitAction(const CBattleInfoCallback & battle, con
 		return false;
 
 	processBattleEventTriggers(battle, CombatEventType::WAIT, stack, nullptr);
+	evolutionSignal(battle, stack, evolution::AllyWaited);
 	return true;
 }
 
@@ -154,6 +157,7 @@ bool BattleActionProcessor::doWalkAction(const CBattleInfoCallback & battle, con
 		return false;
 	}
 	processBattleEventTriggers(battle, CombatEventType::AFTER_MOVE, stack, nullptr);
+	evolutionSignal(battle, stack, evolution::AllyMoved);
 	return true;
 }
 
@@ -210,6 +214,7 @@ bool BattleActionProcessor::doDefendAction(const CBattleInfoCallback & battle, c
 	gameHandler->sendAndApply(message);
 
 	processBattleEventTriggers(battle, CombatEventType::DEFEND, stack, nullptr);
+	evolutionSignal(battle, stack, evolution::AllyGuarded);
 	return true;
 }
 
@@ -1150,6 +1155,7 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 	if (healInfo.healedHealthPoints > 0)
 		bat.flags |= BattleAttack::LIFE_DRAIN;
 
+	const auto oldAttackerCount = attacker->getCount();
 	gameHandler->sendAndApply(bat);
 
 	{
@@ -1160,8 +1166,8 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 
 		for(const BattleStackAttacked & bsa : bat.bsa)
 		{
-			totalDamage += bsa.damageAmount;
-			totalKills += bsa.killedAmount;
+			totalDamage = evolution::addDamage(totalDamage, bsa.damageAmount);
+			totalKills = static_cast<int32_t>(std::min<int64_t>(INT32_MAX, static_cast<int64_t>(totalKills) + bsa.killedAmount));
 		}
 
 		addGenericDamageLog(blm, attackerState, totalDamage);
@@ -1199,7 +1205,7 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 				rawDamage = fireShieldSpell->adjustRawDamage(actor, attacker, rawDamage);
 			}
 
-			totalDamage+=rawDamage;
+			totalDamage = evolution::addDamage(totalDamage, rawDamage);
 			//FIXME: add custom effect on actor
 		}
 
@@ -1232,6 +1238,18 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 
 	gameHandler->sendAndApply(blm);
 
+	for(const auto & hit : bat.bsa)
+	{
+		if(hit.attackerID != attacker->unitId() || hit.killedAmount <= 0) continue;
+		const auto * victim = battle.battleGetStackByID(hit.stackAttacked, false);
+		if(!victim) continue;
+		if(victim->unitSide() != attacker->unitSide())
+			evolutionSignal(battle, attacker, evolution::AllyKilled);
+		evolutionSignal(battle, victim, evolution::AllyLost);
+		if(!victim->alive()) evolutionSignal(battle, victim, evolution::AllyFell);
+	}
+	if(healInfo.healedHealthPoints > 0) evolutionSignal(battle, attacker, evolution::AllyHealed);
+	if(attacker->getCount() > oldAttackerCount) evolutionSignal(battle, attacker, evolution::AllyGrew);
 	if(defender)
 		handleAfterAttackCasting(battle, ranged, attacker, defender);
 }
@@ -1460,7 +1478,7 @@ void BattleActionProcessor::handleAfterAttackCasting(const CBattleInfoCallback &
 		spells::Target target;
 		target.emplace_back(defender);
 
-		parameters.setEffectValue(acidDamage * attacker->getCount());
+		parameters.setEffectValue(evolution::damageProduct(acidDamage, attacker->getCount()));
 		parameters.cast(gameHandler->spellcastEnvironment(), target);
 	}
 
@@ -1575,7 +1593,7 @@ void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battl
 	//life drain handling
 	if(attackerState->hasBonusOfType(BonusType::LIFE_DRAIN) && def->isLiving() && attackerState->getTotalHealth() != attackerState->getAvailableHealth())
 	{
-		int64_t toHeal = bsa.damageAmount * attackerState->valOfBonuses(BonusType::LIFE_DRAIN) / 100;
+		int64_t toHeal = evolution::damageProduct(bsa.damageAmount, attackerState->valOfBonuses(BonusType::LIFE_DRAIN), 100);
 		healInfo += attackerState->heal(toHeal, EHealLevel::RESURRECT, EHealPower::PERMANENT);
 	}
 
@@ -1612,7 +1630,7 @@ void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battl
 			)
 	{
 		//TODO: use damage with bonus but without penalties
-		auto fireShieldDamage = (std::min<int64_t>(def->getAvailableHealth(), bsa.damageAmount) * def->valOfBonuses(BonusType::FIRE_SHIELD)) / 100;
+		auto fireShieldDamage = evolution::damageProduct(std::min<int64_t>(def->getAvailableHealth(), bsa.damageAmount), def->valOfBonuses(BonusType::FIRE_SHIELD), 100);
 		fireShield.emplace_back(def, fireShieldDamage);
 	}
 }
@@ -1793,4 +1811,33 @@ void BattleActionProcessor::processBattleEventTriggers(const CBattleInfoCallback
 		}
 
 	}
+}
+
+void BattleActionProcessor::evolutionSignal(const CBattleInfoCallback & battle, const CStack * source, int signal)
+{
+	std::vector<int> allies;
+	for(const auto * stack : battle.battleGetAllStacks())
+		if(stack->alive() && stack->unitSide() == source->unitSide() && stack->hasBonusOfType(BonusType::ON_COMBAT_EVENT))
+			allies.push_back(stack->unitId());
+	if(allies.empty()) return;
+	evolution::deliverSignal(source->unitId(), signal, allies, [&](int id, int trigger)
+	{
+		const auto * unit = battle.battleGetStackByID(id);
+		if(!unit) return false;
+		const auto rules = unit->getBonusesOfType(BonusType::ON_COMBAT_EVENT, BonusCustomSubtype(trigger));
+		SetStackEffect packet;
+		packet.battleID = battle.getBattle()->getBattleID();
+		std::vector<Bonus> granted;
+		for(const auto & rule : *rules)
+		{
+			const auto & payload = rule->parameters->toCustom<BonusParametersOnCombatEvent>();
+			for(const auto & action : payload.effects)
+				if(const auto * grant = std::get_if<BonusParametersOnCombatEvent::CombatEffectBonus>(&action))
+					granted.push_back(*grant->bonus);
+		}
+		if(granted.empty()) return false;
+		packet.toAdd.emplace_back(unit->unitId(), granted);
+		gameHandler->sendAndApply(packet);
+		return true;
+	});
 }

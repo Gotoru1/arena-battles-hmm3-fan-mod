@@ -62,6 +62,17 @@ jobs:
           cpack -C RelWithDebInfo -G ZIP -D CPACK_PACKAGE_FILE_NAME=EvolutionArena-Windows-x64
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Pop-Location
+      - name: Smoke test packaged Windows executables
+        shell: pwsh
+        run: |
+          $archive = 'out/build/windows-msvc-ninja-release/EvolutionArena-Windows-x64.zip'
+          $game = Join-Path $env:RUNNER_TEMP 'evolution-portable'
+          Expand-Archive -LiteralPath $archive -DestinationPath $game
+          foreach ($binary in 'VCMI_client.exe','VCMI_server.exe') {
+            $proc = Start-Process -FilePath (Join-Path $game $binary) -WorkingDirectory $game -ArgumentList '--version' -WindowStyle Hidden -PassThru
+            if (!$proc.WaitForExit(30000)) { $proc.Kill(); throw "$binary timed out" }
+            if ($proc.ExitCode -ne 0) { throw "$binary returned $($proc.ExitCode)" }
+          }
       - uses: actions/upload-artifact@v6
         with:
           name: EvolutionArena-Windows-x64
