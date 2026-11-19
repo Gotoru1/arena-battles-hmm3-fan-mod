@@ -206,6 +206,8 @@ class JsonNode;
 	BONUS_NAME(LONG_WEAPON) /* melee attack from one hex away (attacker-empty-victim), without retaliation */ \
 	BONUS_NAME(EVOLUTION_PARASITE) /* source unit id */ \
 	BONUS_NAME(EVOLUTION_WOUND) /* source unit id */ \
+	BONUS_NAME(EVOLUTION_FAMILY) /* original body id */ \
+	BONUS_NAME(EVOLUTION_SEEN) /* copied creature species */ \
 	BONUS_NAME(EVOLUTION_TRAIT) /* Evolution Arena catalog key and rank */ \
 
 	/* end of list */

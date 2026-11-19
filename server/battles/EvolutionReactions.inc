@@ -49,13 +49,51 @@ class EvolutionReactions
 		server.sendAndApply(packet);
 	}
 
-	void transfer(const CStack * unit, int id, int rank)
+	void putTrait(const CStack * unit, int id, int rank)
 	{
 		if(rules(unit)[id] >= rank) return;
 		Bonus marker;
 		marker.type = BonusType::EVOLUTION_TRAIT;
 		marker.val = id + 1024 * (rank-1);
 		grant(unit, marker);
+	}
+
+	void transfer(const CStack * unit, int id, int rank)
+	{
+		const auto before = rules(unit);
+		auto owned = before.find(id);
+		if(owned != before.end() && owned->second >= rank) return;
+		std::vector<const CStack *> receivers{unit};
+		auto family = unit->getBonusesOfType(BonusType::EVOLUTION_FAMILY);
+		if(!family->empty())
+		{
+			const int root = (*family->begin())->val;
+			std::vector<const CStack *> siblings;
+			bool shared = before.count(56) || id == 56;
+			for(auto * other : living())
+			{
+				if(other == unit || other->unitSide() != unit->unitSide()) continue;
+				auto marks = other->getBonusesOfType(BonusType::EVOLUTION_FAMILY);
+				if(marks->empty() || (*marks->begin())->val != root) continue;
+				siblings.push_back(other);
+				shared |= rules(other).count(56) != 0;
+			}
+			if(shared) receivers.insert(receivers.end(),siblings.begin(),siblings.end());
+		}
+		for(auto * target : receivers)
+		{
+			auto prior = rules(target);
+			if(prior[id] >= rank) continue;
+			putTrait(target,id,rank);
+			if(!prior.count(61) || prior[id] != 0) continue;
+			// A rank increase is not an acquisition. It cannot reactivate the catalyst.
+			for(auto entry : prior)
+				if(entry.first != id && entry.first != 61 && entry.second < INT32_MAX/1024)
+				{
+					putTrait(target,entry.first,entry.second+1);
+					break;
+				}
+		}
 	}
 
 	void adapt(const CStack * unit)
@@ -86,10 +124,49 @@ class EvolutionReactions
 		auto * child = battle.battleGetStackByID(info.id);
 		if(!child) return;
 		const auto inherited = rules(parent);
+		if(clone)
+		{
+			auto family = parent->getBonusesOfType(BonusType::EVOLUTION_FAMILY);
+			Bonus mark;
+			mark.type = BonusType::EVOLUTION_FAMILY;
+			mark.val = family->empty() ? int(parent->unitId()) : (*family->begin())->val;
+			if(family->empty()) grant(parent,mark);
+			grant(child,mark);
+		}
 		if(clone || inherited.count(87))
 		{
 			for(const auto & rule : inherited) transfer(child,rule.first,rule.second);
 			adapt(child);
+		}
+		observe(child);
+	}
+
+	void copyProperty(const CStack * recipient,const CStack * donor)
+	{
+		for(auto trait : {BonusType::FLYING, BonusType::BLOCKS_RETALIATION, BonusType::TWO_HEX_ATTACK_BREATH,
+			BonusType::ATTACKS_ALL_ADJACENT, BonusType::NO_MELEE_PENALTY, BonusType::NO_DISTANCE_PENALTY})
+		{
+			if(recipient->hasBonusOfType(trait)) continue;
+			auto traits = donor->getBonusesOfType(trait);
+			if(traits->empty()) continue;
+			grant(recipient,**traits->begin());
+			break;
+		}
+	}
+
+	void observe(const CStack * newcomer)
+	{
+		for(auto * witness : living())
+		{
+			if(witness->unitSide() == newcomer->unitSide() || !rules(witness).count(67)) continue;
+			const int species = newcomer->creatureId().getNum();
+			const auto seen = witness->getBonusesOfType(BonusType::EVOLUTION_SEEN);
+			if(std::any_of(seen->begin(),seen->end(),[&](const auto & mark){return mark->val == species;})) continue;
+			Bonus record;
+			record.type = BonusType::EVOLUTION_SEEN;
+			record.val = species;
+			grant(witness,record);
+			copyProperty(witness,newcomer);
 		}
 	}
 
@@ -111,17 +188,7 @@ class EvolutionReactions
 		}
 
 		if(source && source->alive() && source->unitSide() != corpse->unitSide() && rules(source).count(27))
-		{
-			for(auto trait : {BonusType::FLYING, BonusType::BLOCKS_RETALIATION, BonusType::TWO_HEX_ATTACK_BREATH,
-				BonusType::ATTACKS_ALL_ADJACENT, BonusType::NO_MELEE_PENALTY, BonusType::NO_DISTANCE_PENALTY})
-			{
-				if(source->hasBonusOfType(trait)) continue;
-				auto traits = corpse->getBonusesOfType(trait);
-				if(traits->empty()) continue;
-				grant(source,**traits->begin());
-				break;
-			}
-		}
+			copyProperty(source,corpse);
 		for(auto * unit : beforeSummons)
 			if(rules(unit).count(18) && BattleHex::getDistance(unit->getPosition(),corpse->getPosition()) == 1)
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
@@ -184,6 +251,15 @@ public:
 			if(!unit->alive()) continue;
 			if(!first) parasites(unit);
 			if(!unit->alive()) continue;
+			if(first) observe(unit);
+			if(first && active.count(59))
+				for(auto * ally : living())
+					if(ally->unitSide() == unit->unitSide() && ally->creatureId() != unit->creatureId())
+					{
+						copyProperty(unit,ally);
+						copyProperty(ally,unit);
+						break;
+					}
 			if(first && active.count(78)) summon(unit,unit->creatureId(),unit->getCount(),unit->getPosition(),true);
 			if(active.count(57) && battle.battleGetRound() > 0 && battle.battleGetRound() % 3 == 0) adapt(unit);
 		}

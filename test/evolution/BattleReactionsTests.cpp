@@ -6,10 +6,10 @@
 #include <map>
 #include <memory>
 #include <vector>
-enum class BonusType { EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
+enum class BonusType { EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
 struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; };
-using CreatureID = int;
+struct CreatureID { int value; CreatureID(int v=0):value(v){} int getNum() const{return value;} operator int() const{return value;} };
 enum class BattleSide { LEFT, RIGHT };
 struct BattleHex {
 	int pos=-1;
@@ -37,7 +37,7 @@ struct CStack {
 	int id;Data data;std::vector<Bonus> bonuses;
 	int unitId() const{return id;} bool alive() const{return data.health>0;}
 	int getCount() const{return (data.health+9)/10;}
-	auto unitSide() const{return data.side;} auto creatureId() const{return data.species;}
+	auto unitSide() const{return data.side;} auto creatureId() const{return CreatureID(data.species);}
 	auto getPosition() const{return data.pos;} int getAvailableHealth() const{return data.health;}
 	auto getBonusesOfType(BonusType t) const{
 		auto result=std::make_shared<std::vector<std::shared_ptr<Bonus>>>();
@@ -110,14 +110,14 @@ int main(){
 	auto & secondary=add(7,BattleSide::RIGHT,{});
 	actions.evolutionRound(field,true);
 	assert(field.units.size()==5);
-	assert(field.units.at(5).bonuses.size()==5);
+	assert(field.units.at(5).bonuses.size()==6);
 	BattleAttack hit{{{enemy.id,carrier.id,30,false}}};
 	actions.evolutionAttack(field,&carrier,&enemy,hit);
 	assert(secondary.data.health==90 && enemy.data.pos.pos!=5);
 	assert(enemy.hasBonusOfType(BonusType::EVOLUTION_PARASITE) && enemy.hasBonusOfType(BonusType::EVOLUTION_WOUND));
 	carrier.data.health=72;field.round=3;
 	actions.evolutionRound(field,false);
-	assert(carrier.data.health==74 && enemy.data.health==98 && ally.bonuses.size()==5);
+	assert(carrier.data.health==74 && enemy.data.health==98 && ally.bonuses.size()==6);
 	actions.evolutionAttack(field,&ally,&enemy,{{{enemy.id,ally.id,8,false}}});
 	assert(enemy.data.health==96);
 	enemy.data.pos={5};enemy.data.health=0;enemy.bonuses.push_back({BonusType::FLYING,1});
@@ -126,5 +126,21 @@ int main(){
 	assert(field.units.size()==6 && field.units.at(6).data.side==BattleSide::LEFT);
 	assert(field.units.at(6).bonuses.size()>=7);
 	ally.data.health=0;actions.evolutionAttack(field,&secondary,&ally,{{{ally.id,secondary.id,30,true}}});
-	assert(carrier.bonuses.size()>8 || field.units.at(5).bonuses.size()>5);
+	assert(std::any_of(carrier.bonuses.begin(),carrier.bonuses.end(),[](Bonus b){return b.type==BonusType::EVOLUTION_TRAIT && b.val==25;}));
+	CBattleInfoCallback family;
+	CGameHandler familyServer{family,{}};
+	BattleActionProcessor familyActions{&familyServer};
+	family.units.emplace(1,CStack{1,{1,4,40,{5},BattleSide::LEFT},{}});
+	family.units.emplace(2,CStack{2,{2,4,40,{4},BattleSide::LEFT},{}});
+	family.units.emplace(3,CStack{3,{3,4,40,{9},BattleSide::RIGHT},{}});
+	auto & root=family.units.at(1);
+	for(int m:{23,56,59,61,67,78}) root.bonuses.push_back({BonusType::EVOLUTION_TRAIT,m});
+	family.units.at(2).bonuses.push_back({BonusType::NO_MELEE_PENALTY,1});
+	family.units.at(3).bonuses.push_back({BonusType::FLYING,1});
+	familyActions.evolutionRound(family,true);
+	assert(root.hasBonusOfType(BonusType::NO_MELEE_PENALTY) && root.hasBonusOfType(BonusType::FLYING));
+	assert(family.units.at(4).hasBonusOfType(BonusType::EVOLUTION_FAMILY));
+	auto rootRules=root.getBonusesOfType(BonusType::EVOLUTION_TRAIT);
+	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==9;}));
+	assert(std::any_of(rootRules->begin(),rootRules->end(),[](auto b){return b->val==1047;}));
 }
