@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Exercise the production reaction dispatcher with a small packet-applying battlefield.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <algorithm>
 #include <cassert>
 #include <functional>
