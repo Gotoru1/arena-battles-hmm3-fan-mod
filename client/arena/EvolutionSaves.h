@@ -18,6 +18,12 @@ public:
 		return directory / ("evolution2-run-" + std::to_string(slot+1) + ".sav");
 	}
 
+	bool legacyExists(int slot) const
+	{
+		const auto name = slot ? "evolution-run-" + std::to_string(slot+1) + ".sav" : "evolution-run.sav";
+		return std::filesystem::exists(directory / name);
+	}
+
 	bool exists(int slot) const { return std::filesystem::exists(path(slot)); }
 
 	RoguelikeRun read(int slot) const

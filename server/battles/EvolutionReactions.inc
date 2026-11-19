@@ -61,7 +61,7 @@ class EvolutionReactions
 	void adapt(const CStack * unit)
 	{
 		// These traits can activate after a unit enters an ongoing battle.
-		std::vector<int> pool{10,18,23,25,27,51};
+		std::vector<int> pool{9,10,18,19,23,25,27,51};
 		auto current = rules(unit);
 		pool.erase(std::remove_if(pool.begin(), pool.end(), [&](int id){return current.count(id) != 0;}),pool.end());
 		if(!pool.empty()) transfer(unit, pool[server.getRandomGenerator().nextInt(0,static_cast<int>(pool.size())-1)], 1);
@@ -127,6 +127,52 @@ class EvolutionReactions
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
 	}
 
+	bool attach(const CStack * target, const CStack * owner, BonusType type)
+	{
+		auto marks = target->getBonusesOfType(type);
+		for(const auto & mark : *marks)
+			if(mark->val == static_cast<int>(owner->unitId())) return false;
+		Bonus mark;
+		mark.type = type;
+		mark.val = static_cast<int>(owner->unitId());
+		grant(target, mark);
+		return true;
+	}
+
+	int64_t injure(const CStack * target, const CStack * owner, int64_t amount)
+	{
+		if(!target->alive() || amount <= 0) return 0;
+		amount = std::min<int64_t>(amount, target->getAvailableHealth());
+		BattleStackAttacked hit;
+		hit.attackerID = owner->unitId();
+		hit.stackAttacked = target->unitId();
+		hit.damageAmount = amount;
+		target->prepareAttacked(hit,server.getRandomGenerator());
+		StacksInjured packet;
+		packet.battleID = battle.getBattle()->getBattleID();
+		packet.stacks.push_back(hit);
+		server.sendAndApply(packet);
+		if(hit.killed() && !target->alive()) fallen(owner,target);
+		return amount;
+	}
+
+	void parasites(const CStack * target)
+	{
+		const auto marks = target->getBonusesOfType(BonusType::EVOLUTION_PARASITE);
+		for(const auto & mark : *marks)
+		{
+			auto * owner = battle.battleGetStackByID(mark->val);
+			if(!owner || !owner->alive() || !target->alive() || owner->unitSide() == target->unitSide()) continue;
+			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
+			auto state = owner->acquireState();
+			state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			BattleUnitsChanged packet;
+			packet.battleID = battle.getBattle()->getBattleID();
+			packet.changedStacks.emplace_back(owner->unitId(), UnitChanges::EOperation::RESET_STATE);
+			state->save(packet.changedStacks.back().data);
+			server.sendAndApply(packet);
+		}
+	}
 public:
 	EvolutionReactions(CGameHandler & server, const CBattleInfoCallback & battle) : server(server), battle(battle) {}
 
@@ -135,6 +181,9 @@ public:
 		for(auto * unit : living())
 		{
 			const auto active = rules(unit);
+			if(!unit->alive()) continue;
+			if(!first) parasites(unit);
+			if(!unit->alive()) continue;
 			if(first && active.count(78)) summon(unit,unit->creatureId(),unit->getCount(),unit->getPosition(),true);
 			if(active.count(57) && battle.battleGetRound() > 0 && battle.battleGetRound() % 3 == 0) adapt(unit);
 		}
@@ -151,22 +200,25 @@ public:
 			if(unit && hit.killed() && !unit->alive()) fallen(source,unit);
 		}
 		if(!primary || !source->alive() || primary->unitSide() == source->unitSide()) return;
+		if(primary->alive())
+		{
+			const auto wounds = primary->getBonusesOfType(BonusType::EVOLUTION_WOUND);
+			for(const auto & wound : *wounds)
+			{
+				auto * owner = battle.battleGetStackByID(wound->val, false);
+				if(owner && owner != source && owner->unitSide() == source->unitSide())
+					injure(primary,source,std::max<int64_t>(1,source->getCount()/4));
+			}
+			if(primary->alive() && active.count(9)) attach(primary,source,BonusType::EVOLUTION_PARASITE);
+			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
+		}
 		if(active.count(23))
 		{
 			auto * target = nearest(primary,primary->unitSide());
 			for(const auto & hit : packet.bsa)
 				if(target && hit.stackAttacked == primary->unitId() && hit.damageAmount > 0)
 				{
-					BattleStackAttacked spark;
-					spark.attackerID = source->unitId();
-					spark.stackAttacked = target->unitId();
-					spark.damageAmount = std::max<int64_t>(1, hit.damageAmount / 3);
-					target->prepareAttacked(spark,server.getRandomGenerator());
-					StacksInjured damage;
-					damage.battleID = battle.getBattle()->getBattleID();
-					damage.stacks.push_back(spark);
-					server.sendAndApply(damage);
-					if(spark.killed() && !target->alive()) fallen(source,target);
+					injure(target,source,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(23),3)));
 					break;
 				}
 		}

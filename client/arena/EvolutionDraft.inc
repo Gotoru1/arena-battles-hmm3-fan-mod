@@ -174,7 +174,9 @@ void ArenaDraft::chooseEvolutionSlot(bool loading)
 		std::string description = "Свободно";
 		try
 		{
-			if(saves().exists(slot))
+			if(!saves().exists(slot) && saves().legacyExists(slot))
+				description = "Здесь есть забег версии 1. Его можно продолжить в прежней сборке. В версии 2 можно начать новый.";
+			else if(saves().exists(slot))
 			{
 				const auto saved = saves().read(slot);
 				description = "Волна " + saved.wave.str() + (saved.phase == evolution::Phase::Reward ? "\nВыбор награды" : "\nПеред боем")

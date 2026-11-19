@@ -14,11 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install Boost headers
-        run: sudo apt-get update -qq && sudo apt-get install -y libboost-dev
+        shell: bash
+        run: |
+          if [ ! -f /usr/include/boost/multiprecision/cpp_int.hpp ]; then
+            curl --fail --location --retry 3 https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2 -o "$RUNNER_TEMP/boost.tar.bz2"
+            tar -xjf "$RUNNER_TEMP/boost.tar.bz2" -C "$RUNNER_TEMP" boost_1_86_0/boost
+            echo "CPLUS_INCLUDE_PATH=$RUNNER_TEMP/boost_1_86_0" >> "$GITHUB_ENV"
+          fi
       - name: Compile and run deterministic run tests
         run: |
           g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/RunTests.cpp -o "$RUNNER_TEMP/evolution-tests"
           "$RUNNER_TEMP/evolution-tests"
+          g++ -std=c++17 -Wall -Wextra -pedantic -fsanitize=undefined -fno-sanitize-recover=all test/evolution/BattleReactionsTests.cpp -o "$RUNNER_TEMP/reaction-tests"
+          "$RUNNER_TEMP/reaction-tests"
           python3 test/evolution/test_catalog.py
   build:
     runs-on: windows-2025-vs2026
