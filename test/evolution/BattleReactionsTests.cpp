@@ -226,7 +226,34 @@ static void defenseAndConversion()
 	assert(converted.unitSide()==shooter.unitSide() && converted.creatureId()==bearer.creatureId());
 	assert(converted.getCount()==5 && converted.hasBonusOfType(BonusType::EVOLUTION_TRAIT));
 }
+static void parasiteBurstAndGenerations()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	auto & parent=field.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(9),trait(54),trait(97)}}).first->second;
+	auto & prey=field.units.emplace(2,CStack{2,{22,5,50,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & guard=field.units.emplace(3,CStack{3,{33,4,40,{6},BattleSide::RIGHT},{}}).first->second;
+	actions.evolutionAttack(field,&parent,&prey,{{{2,1,2,false,0}}});
+	prey.data.health=0;
+	actions.evolutionAttack(field,&parent,&prey,{{{2,1,50,true,5}}});
+	assert(field.units.size()==4);
+	auto & larva=field.units.at(4);
+	assert(larva.data.pos.pos==4 && larva.unitSide()==parent.unitSide());
+	assert(larva.bonuses.size()>=3 && !larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,97)->empty());
+	assert(larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
+	// Fill both adjacent cells and kill another infected stack in the same location.
+	auto & second=field.units.emplace(5,CStack{5,{44,5,50,{5},BattleSide::RIGHT},{}}).first->second;
+	actions.evolutionAttack(field,&parent,&second,{{{5,1,2,false,0}}});
+	second.data.health=0;
+	actions.evolutionAttack(field,&parent,&second,{{{5,1,50,true,5}}});
+	assert(guard.data.health==30 && larva.data.health==10 && field.units.size()==5);
+	parent.data.health=0;
+	actions.evolutionAttack(field,&guard,&parent,{{{1,3,100,true,10}}});
+	assert(!larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
+}
 int main(){
+	parasiteBurstAndGenerations();
 	defenseAndConversion();
 	for(unsigned seed=1;seed<=120;++seed) assert(randomRun(seed)==randomRun(seed));
 	CBattleInfoCallback field;

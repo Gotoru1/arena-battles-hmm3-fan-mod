@@ -140,6 +140,12 @@ class EvolutionReactions
 		auto roots=parent->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500095));
 		for(const auto & root:*roots) remember(child,500095,root->val);
 		if(rules(parent).count(95)) remember(child,500095,parent->unitId());
+		if(rules(parent).count(97))
+		{
+			remember(child,500097,parent->unitId());
+			transfer(child,97,1);
+			adapt(child,rules(parent));
+		}
 	}
 
 	void putTrait(const CStack * unit, int id, int rank)
@@ -191,12 +197,12 @@ class EvolutionReactions
 		}
 	}
 
-	void adapt(const CStack * unit)
+	void adapt(const CStack * unit,const Rules & excluded = {})
 	{
 		// These traits can activate after a unit enters an ongoing battle.
 		std::vector<int> pool{9,10,18,19,23,25,27,51};
 		auto current = rules(unit);
-		pool.erase(std::remove_if(pool.begin(), pool.end(), [&](int id){return current.count(id) != 0;}),pool.end());
+		pool.erase(std::remove_if(pool.begin(), pool.end(), [&](int id){return current.count(id) || excluded.count(id);}),pool.end());
 		if(!pool.empty()) transfer(unit, pool[server.getRandomGenerator().nextInt(0,static_cast<int>(pool.size())-1)], 1);
 	}
 
@@ -557,10 +563,46 @@ class EvolutionReactions
 		return true;
 	}
 
+	void burst(const CStack * killer,const CStack * corpse)
+	{
+		bool spawned = false;
+		for(auto hex : corpse->getPosition().getNeighbouringTiles())
+		{
+			if(!hex.isValid() || battle.getAvailableHex(larvaType(),killer->unitSide(),hex.toInt()) != hex) continue;
+			if(summon(killer,larvaType(),1,hex,false)) spawned = true;
+		}
+		if(spawned) return;
+		for(auto * neighbour : living())
+			if(neighbour->unitSide()!=killer->unitSide() && BattleHex::getDistance(neighbour->getPosition(),corpse->getPosition())==1)
+				injure(neighbour,killer,std::max<int64_t>(1,corpse->getMaxHealth()));
+	}
+
+	void passGeneration(const CStack * corpse,const Rules & legacy,const std::vector<const CStack *> & survivors)
+	{
+		for(const auto * child : survivors)
+		{
+			if(child->unitSide()!=corpse->unitSide() || !marked(child,500097,corpse->unitId())) continue;
+			const auto owned = rules(child);
+			int best=0, rank=0;
+			for(auto entry : legacy)
+			{
+				auto existing=owned.find(entry.first);
+				if(entry.first==97 || (existing!=owned.end() && existing->second>=entry.second)) continue;
+				if(entry.second>rank || (entry.second==rank && entry.first>best))
+				{
+					best=entry.first;
+					rank=entry.second;
+				}
+			}
+			if(best) transfer(child,best,rank);
+		}
+	}
+
 	void fallen(const CStack * source, const CStack * corpse)
 	{
 		auto beforeSummons = living();
 		const auto legacy=rules(corpse);
+		if(legacy.count(97)) passGeneration(corpse,legacy,beforeSummons);
 		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(41)
 			&& source->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500041))->empty())
 		{
@@ -618,6 +660,8 @@ class EvolutionReactions
 			}
 		}
 		const auto infection = corpse->getBonusesOfType(BonusType::EVOLUTION_PARASITE);
+		if(source && source->unitSide()!=corpse->unitSide() && rules(source).count(54) && !infection->empty())
+			burst(source,corpse);
 		for(const auto & mark : *infection)
 		{
 			auto * carrier = battle.battleGetStackByID(mark->val,false);
