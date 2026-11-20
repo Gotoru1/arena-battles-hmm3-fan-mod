@@ -1591,7 +1591,7 @@ void BattleActionProcessor::handleAfterAttackCasting(const CBattleInfoCallback &
 	}
 }
 
-void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battle, BattleAttack & bat, std::shared_ptr<battle::CUnitState> attackerState, FireShieldInfo & fireShield, const CStack * def, battle::HealInfo & healInfo, int distance, bool secondary) const
+void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battle, BattleAttack & bat, std::shared_ptr<battle::CUnitState> attackerState, FireShieldInfo & fireShield, const CStack * def, battle::HealInfo & healInfo, int distance, bool secondary)
 {
 	BattleStackAttacked bsa;
 	if(secondary)
@@ -1609,6 +1609,8 @@ void BattleActionProcessor::applyBattleEffects(const CBattleInfoCallback & battl
 
 		auto range = battle.calculateDmgRange(bai);
 		bsa.damageAmount = battle.getBattle()->getActualDamage(range.damage, attackerState->getCount(), gameHandler->getRandomGenerator());
+		if(evolutionEnabled())
+			bsa.damageAmount = evolutionIncoming(battle, attackerState->unitId(), def, bsa.damageAmount, bat.shot(), secondary);
 		CStack::prepareAttacked(bsa, gameHandler->getRandomGenerator(), bai.defender->acquireState()); //calculate casualties
 	}
 

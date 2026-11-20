@@ -304,13 +304,13 @@ class EvolutionReactions
 		return id;
 	}
 
-	int broodCount(const CStack * unit,int subtype) const
+	int counter(const CStack * unit,int subtype) const
 	{
 		const auto stored=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(subtype));
 		return stored->empty()?0:(*stored->begin())->val;
 	}
 
-	void setBroodCount(const CStack * unit,int subtype,int value)
+	void setCounter(const CStack * unit,int subtype,int value)
 	{
 		const auto stored=unit->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(subtype));
 		std::vector<Bonus> old;
@@ -319,13 +319,37 @@ class EvolutionReactions
 		if(value) remember(unit,subtype,value);
 	}
 
+	// VCMI serializes each bonus value as a signed 32-bit integer.
+	// Three nonnegative limbs preserve the full native damage range across packets.
+	int64_t reserve(const CStack * unit) const
+	{
+		int64_t amount = 0;
+		for(int i=0; i<3; ++i)
+			amount |= int64_t(counter(unit,500247+i)) << (30*i);
+		return amount;
+	}
+
+	void setReserve(const CStack * unit,int64_t amount)
+	{
+		for(int i=0; i<3; ++i)
+		{
+			setCounter(unit,500247+i,static_cast<int>(amount & 0x3fffffff));
+			amount >>= 30;
+		}
+	}
+
+	static int64_t combineDamage(int64_t amount,int64_t extra)
+	{
+		return amount + std::min(extra,INT64_MAX-amount);
+	}
+
 	void lostLarvae(const CStack * larva,uint32_t count)
 	{
 		if(!count) return;
 		const auto mothers=larva->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500075));
 		for(const auto & mother:*mothers)
 			if(const auto * queen=battle.battleGetStackByID(mother->val,false))
-				setBroodCount(queen,500175,static_cast<int>(std::min<int64_t>(INT32_MAX-1,int64_t(broodCount(queen,500175))+count)));
+				setCounter(queen,500175,static_cast<int>(std::min<int64_t>(INT32_MAX-1,int64_t(counter(queen,500175))+count)));
 	}
 
 	bool lay(const CStack * parent, BattleHex hex)
@@ -337,10 +361,10 @@ class EvolutionReactions
 		source.type = BonusType::EVOLUTION_BROOD;
 		source.val = static_cast<int>(parent->unitId());
 		grant(egg,source);
-		if(const auto stored=broodCount(parent,500175))
+		if(const auto stored=counter(parent,500175))
 		{
-			setBroodCount(egg,500275,stored);
-			setBroodCount(parent,500175,0);
+			setCounter(egg,500275,stored);
+			setCounter(parent,500175,0);
 		}
 		return true;
 	}
@@ -353,7 +377,7 @@ class EvolutionReactions
 		const auto side = egg->unitSide();
 		const auto hex = egg->getPosition();
 		const auto id = egg->unitId();
-		const int clutch=1+broodCount(egg,500275);
+		const int clutch=1+counter(egg,500275);
 		BattleUnitsChanged remove;
 		remove.battleID = battle.getBattle()->getBattleID();
 		remove.changedStacks.emplace_back(id,UnitChanges::EOperation::REMOVE);
@@ -597,7 +621,18 @@ class EvolutionReactions
 		for(const auto & mark : *infection)
 		{
 			auto * carrier = battle.battleGetStackByID(mark->val,false);
-			if(carrier && rules(carrier).count(39)) lay(carrier,corpse->getPosition());
+			if(!carrier || carrier->unitSide()==corpse->unitSide()) continue;
+			const auto traits=rules(carrier);
+			if(traits.count(89) && !marked(corpse,500089,1))
+			{
+				if(auto * converted=summon(carrier,corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/2),corpse->getPosition(),false))
+				{
+					remember(corpse,500089,1);
+					copyProperty(converted,corpse);
+					if(!legacy.empty()) transfer(converted,legacy.begin()->first,legacy.begin()->second);
+				}
+			}
+			else if(traits.count(39) && !traits.count(89)) lay(carrier,corpse->getPosition());
 		}
 		for(int id : {10,25})
 		{
@@ -782,6 +817,44 @@ public:
 		}
 	}
 
+	int64_t incoming(const CStack * source,const CStack * target,int64_t damage,bool ranged,bool secondary)
+	{
+		if(damage<=0 || !source || source->unitSide()==target->unitSide()) return damage;
+		if(!secondary && rules(source).count(47))
+		{
+			const auto stored = reserve(source);
+			if(stored)
+			{
+				setReserve(source,0);
+				damage = combineDamage(damage,stored);
+			}
+		}
+		const auto active = rules(target);
+		const int round = battle.battleGetRound();
+		if(active.count(47) && ranged && counter(target,500047) != ~round)
+		{
+			setCounter(target,500047,~round);
+			setReserve(target,combineDamage(reserve(target),damage));
+			return 0;
+		}
+		if(active.count(14))
+		{
+			if(counter(target,500014) != ~round)
+			{
+				setCounter(target,500014,~round);
+				setCounter(target,500114,3);
+			}
+			const int charges = counter(target,500114);
+			if(charges>0)
+			{
+				setCounter(target,500114,charges-1);
+				damage -= std::min(damage,std::max<int64_t>(1,target->getAvailableHealth()/8));
+				if(charges==1) setCounter(target,500214,1);
+			}
+		}
+		return damage;
+	}
+
 	void externalDamage(const StacksInjured & injuries)
 	{
 		for(const auto & hit:injuries.stacks)
@@ -834,6 +907,12 @@ public:
 		// death reactions but cannot recursively emit another primary attack.
 		for(const auto & hit : packet.bsa)
 		{
+			const auto * victim = battle.battleGetStackByID(hit.stackAttacked,false);
+			if(victim && counter(victim,500214))
+			{
+				setCounter(victim,500214,0);
+				spawn(victim->unitSide(),huskType(),1,victim->getPosition());
+			}
 			chain.post(evolution::ReactionKind::Loss,hit.attackerID,hit.stackAttacked,hit.killedAmount,hit.killed());
 		}
 		flush();
@@ -858,7 +937,7 @@ public:
 				if(owner && owner != source && owner->unitSide() == source->unitSide())
 					injure(primary,source,std::max<int64_t>(1,source->getCount()/4));
 			}
-			if(primary->alive() && active.count(9)) attach(primary,source,BonusType::EVOLUTION_PARASITE);
+			if(primary->alive() && (active.count(9) || active.count(89))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
 			if(primary->alive() && active.count(62)) remember(primary,500062,source->unitId());
 			if(primary->alive() && active.count(26)) remember(primary,500026,source->unitId());
@@ -902,6 +981,14 @@ void BattleActionProcessor::withEvolution(const CBattleInfoCallback & battle,con
 	activeReaction=&context;
 	work(context);
 	context.flush();
+}
+
+int64_t BattleActionProcessor::evolutionIncoming(const CBattleInfoCallback & battle, uint32_t source, const CStack * target, int64_t damage, bool ranged, bool secondary)
+{
+	withEvolution(battle,[&](auto & context){
+		damage = context.incoming(battle.battleGetStackByID(source),target,damage,ranged,secondary);
+	});
+	return damage;
 }
 
 void BattleActionProcessor::evolutionRound(const CBattleInfoCallback & battle, bool first)

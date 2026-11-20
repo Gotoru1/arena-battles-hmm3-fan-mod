@@ -67,7 +67,7 @@ class BattleActionProcessor : boost::noncopyable
 	std::set<SpellID> getSpellsForAttackCasting(const TConstBonusListPtr & spells, const CStack *defender);
 
 	// damage, drain life & fire shield; returns amount of drained life
-	void applyBattleEffects(const CBattleInfoCallback & battle, BattleAttack & bat, std::shared_ptr<battle::CUnitState> attackerState, FireShieldInfo & fireShield, const CStack * def, battle::HealInfo & healInfo, int distance, bool secondary) const;
+	void applyBattleEffects(const CBattleInfoCallback & battle, BattleAttack & bat, std::shared_ptr<battle::CUnitState> attackerState, FireShieldInfo & fireShield, const CStack * def, battle::HealInfo & healInfo, int distance, bool secondary);
 
 	void sendGenericKilledLog(const CBattleInfoCallback & battle, const CStack * defender, int32_t killed, bool multiple);
 	void addGenericKilledLog(BattleLogMessage & blm, const CStack * defender, int32_t killed, bool multiple) const;
@@ -101,6 +101,7 @@ class BattleActionProcessor : boost::noncopyable
 	uint64_t reactionSerial = 0;
 	evolution_server::EvolutionReactions * activeReaction = nullptr;
 	void withEvolution(const CBattleInfoCallback & battle,const std::function<void(evolution_server::EvolutionReactions &)> & work);
+	int64_t evolutionIncoming(const CBattleInfoCallback & battle, uint32_t source, const CStack * target, int64_t damage, bool ranged, bool secondary);
 	bool evolutionEnabled() const;
 	bool evolutionThreatened(const CBattleInfoCallback & battle,const CStack * mover,BattleHex hex);
 	void evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover);

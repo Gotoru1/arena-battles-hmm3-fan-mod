@@ -132,6 +132,7 @@ namespace evolution_server {class EvolutionReactions;}
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
 	evolution_server::EvolutionReactions * activeReaction=nullptr;
+	int64_t evolutionIncoming(const CBattleInfoCallback & battle, uint32_t source, const CStack * target, int64_t damage, bool ranged, bool secondary);
 	bool evolutionEnabled() const{return true;}
 	bool evolutionThreatened(const CBattleInfoCallback &,const CStack *,BattleHex);
 	void evolutionMoved(const CBattleInfoCallback &,const CStack *);
@@ -194,7 +195,39 @@ static std::vector<int> randomRun(unsigned seed)
 	return fingerprint;
 }
 
+static void defenseAndConversion()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	auto & shooter=field.units.emplace(1,CStack{1,{11,10,100,{1},BattleSide::LEFT},{trait(89)}}).first->second;
+	auto & bearer=field.units.emplace(2,CStack{2,{22,10,100,{2},BattleSide::RIGHT},{trait(47),trait(14)}}).first->second;
+	auto hit=[&](const CStack & a,const CStack & b,int64_t n,bool ranged,bool secondary=false){
+		return actions.evolutionIncoming(field,a.id,&b,n,ranged,secondary);
+	};
+	assert(hit(shooter,bearer,7000000000LL,true)==0);
+	assert(hit(bearer,shooter,10,false,true)==10);
+	assert(hit(bearer,shooter,10,false)==7000000010LL);
+	assert(hit(bearer,shooter,10,false)==10);
+	for(int i=0;i<3;++i)
+	{
+		assert(hit(shooter,bearer,20,true)==8);
+		actions.evolutionAttack(field,&shooter,&bearer,{{{2,1,8,false,0}}});
+	}
+	assert(field.units.size()==3 && field.units.at(3).unitSide()==bearer.unitSide());
+	assert(hit(shooter,bearer,20,false)==20);
+	++field.round;
+	assert(hit(shooter,bearer,INT64_MAX,true)==0);
+	assert(hit(bearer,shooter,2,false)==INT64_MAX);
+	assert(hit(shooter,bearer,20,false)==8);
+	bearer.data.health=0;
+	actions.evolutionAttack(field,&shooter,&bearer,{{{2,1,100,true,10}}});
+	const auto & converted=field.units.at(4);
+	assert(converted.unitSide()==shooter.unitSide() && converted.creatureId()==bearer.creatureId());
+	assert(converted.getCount()==5 && converted.hasBonusOfType(BonusType::EVOLUTION_TRAIT));
+}
 int main(){
+	defenseAndConversion();
 	for(unsigned seed=1;seed<=120;++seed) assert(randomRun(seed)==randomRun(seed));
 	CBattleInfoCallback field;
 	auto add=[&](int pos,BattleSide side,std::vector<int> mutations)->CStack &{
