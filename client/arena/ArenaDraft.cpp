@@ -9,6 +9,7 @@
 #include "ArenaDraft.h"
 #include "ArenaWindows.h"
 #include "EvolutionSaves.h"
+#include "EvolutionEnemyArmy.h"
 #include "../mainmenu/CMainMenu.h"
 #include "../../lib/mapObjects/army/CStackInstance.h"
 #include <cstdlib>

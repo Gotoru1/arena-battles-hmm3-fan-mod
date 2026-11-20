@@ -265,6 +265,7 @@ public:
 
 	bool areAnyPlayers; /// Unused. True if there are any playable players on the map.
 
+	JsonNode evolutionReinforcements; // Arena-only deployment manifest, read with the map seed.
 	int evolutionSeed = 0; // Read directly from the arena map before server initialization.
 	bool battleOnly; /// Battle only mode
 

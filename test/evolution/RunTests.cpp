@@ -163,7 +163,7 @@ int main()
 			if(wave==4) simulation.recruit(3,4);
 			auto plan=encounter(simulation.wave,wave,10);
 			if(simulation.boss()) bosses.insert(plan.bossIndex);
-			require(plan.pair==(wave>=16) && plan.recipe==(wave>=36) && plan.mutatedStacks==(wave>=56?4:wave>=36?3:wave>=16?2:wave>=6?1:0),"Encounter stages");
+			require(plan.mutationRank==(wave<26 ? 1 : 2+(wave-26)/40),"Enemy mutation ranks");
 			std::vector<int> survivors(simulation.companions.size(),6);
 			simulation.finish(true,20,10,pool,{},false,survivors);
 			simulation.pick(0,wave%simulation.rosterSize());

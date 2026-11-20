@@ -40,10 +40,7 @@ inline std::string displayAmount(const Amount & value)
 struct Encounter
 {
 	size_t bossIndex;
-	int mutatedStacks;
 	int mutationRank;
-	bool pair;
-	bool recipe;
 	bool anomaly;
 };
 
@@ -52,10 +49,7 @@ inline Encounter encounter(const Amount & wave, unsigned seed, size_t bosses)
 	if(!bosses || wave < 1) throw std::invalid_argument("Invalid wave");
 	Encounter plan{};
 	plan.bossIndex = wave < 5 ? 0 : ((wave / 5 - 1) % bosses).convert_to<size_t>();
-	plan.mutatedStacks = wave >= 56 ? 4 : wave >= 36 ? 3 : wave >= 16 ? 2 : wave >= 6 ? 1 : 0;
 	plan.mutationRank = wave >= 26 ? engineInt(2 + (wave-26)/40) : 1;
-	plan.pair = wave >= 16;
-	plan.recipe = wave >= 36;
 	plan.anomaly = wave >= 12 && wave % 5 != 0 && seed % (wave >= 46 ? 3u : 6u) == 0;
 	return plan;
 }
@@ -402,7 +396,7 @@ public:
 	Amount threat() const
 	{
 		// AI value budget, not unit count. After the introductory waves the quadratic term dominates.
-		return (600 + 230 * wave + 40 * wave * wave) * (boss() ? 3 : 2) / 2;
+		return (600 + 250 * wave + 48 * wave * wave) * (boss() ? 3 : 2) / 2;
 	}
 };
 }

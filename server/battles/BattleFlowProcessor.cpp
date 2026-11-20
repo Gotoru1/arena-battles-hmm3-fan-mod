@@ -29,7 +29,13 @@
 #include "../../lib/spells/ISpellMechanics.h"
 #include "../../lib/spells/ObstacleCasterProxy.h"
 
+#include "../../lib/gameState/CGameState.h"
+#include "../../lib/mapping/CMap.h"
+#include "../../lib/json/JsonBonus.h"
+#include "../../lib/networkPacks/SetStackEffect.h"
 #include <vstd/RNG.h>
+
+#include "EvolutionDeployment.inc"
 
 BattleFlowProcessor::BattleFlowProcessor(BattleProcessor * owner, CGameHandler * newGameHandler)
 	: owner(owner)
@@ -136,6 +142,33 @@ void BattleFlowProcessor::tryPlaceMoats(const CBattleInfoCallback & battle)
 void BattleFlowProcessor::onBattleStarted(const CBattleInfoCallback & battle)
 {
 	tryPlaceMoats(battle);
+	const auto & map=gameHandler->gameState().getMap();
+	if(map.evolutionSeed && !map.evolutionReinforcements.isNull())
+	{
+		const auto & manifest=map.evolutionReinforcements;
+		const auto side=battle.sideToPlayer(BattleSide::ATTACKER).getNum()==manifest["owner"].Integer()
+			? BattleSide::ATTACKER : BattleSide::DEFENDER;
+		int index=0;
+		for(const auto & company:manifest["companies"].Vector())
+		{
+			const CreatureID species(static_cast<int>(company["creature"].Integer()));
+			const auto count=company["count"].Integer();
+			if(index>=23 || count<=0 || count>INT32_MAX) break;
+			std::vector<Bonus> effects;
+			for(auto entry:company["effects"].Vector())
+			{
+				entry.setModScope("core");
+				if(auto effect=JsonUtils::parseBonus(entry)) effects.push_back(*effect);
+			}
+			// Fill the rear ranks first. VCMI resolves obstacles and double-wide footprints.
+			const int column=2+2*(index/11);
+			const BattleHex preferred(side==BattleSide::ATTACKER ? column : 16-column,(index*5)%11);
+			if(!evolution_server::deployCompany(*gameHandler,battle,side,species,static_cast<int>(count),preferred,std::move(effects)))
+				logGlobal->warn("No free battle hex for Evolution Arena company %d",index+8);
+			++index;
+		}
+	}
+
 
 	gameHandler->turnTimerHandler->onBattleStart(battle.getBattle()->getBattleID());
 

@@ -536,8 +536,6 @@ try
 	const auto & bossRule = plan.bossIndex ? data["otherBosses"].Vector().at(plan.bossIndex-1) : data["boss"];
 	const auto & storms = data["anomalies"].Vector();
 	const auto & weather = storms.at((map->evolutionSeed / 7u) % storms.size());
-	const auto & schools = data["schools"].Vector();
-	const size_t firstSchool = randomInt(0,static_cast<int>(schools.size())-1);
 	for(const auto & reward:run->history)
 		if(reward.rfind("reward.artifact.",0)==0)
 		{
@@ -599,47 +597,61 @@ try
 	std::copy_n(initial.begin(), 4, enemy().primary.begin());
 	const int tier = run->wave >= 25 ? 7 : 1 + (evolution::engineInt(run->wave)-1) / 4;
 	const int formation = !run->boss() && run->wave >= 3 ? randomInt(0, 2) : 0;
-	const int baseSlots = run->wave < 3 ? 3 : (run->wave < 8 ? 4 : 5);
-	const int slots = baseSlots + (formation == 1 ? 1 : formation == 2 ? -1 : 0);
+	const int wave = evolution::engineInt(run->wave);
+	const int slots = evolution::enemyCompanies(wave);
+	const int heroSlots = std::min(slots,static_cast<int>(GameConstants::ARMY_SIZE));
+	std::vector<evolution::EnemyTrait> poolTraits;
+	for(const auto & entry:data["mutations"].Struct())
+	{
+		const int id=std::stoi(entry.first.substr(5));
+		// These rewards only trigger between player waves.
+		if(id!=41 && id!=88) poolTraits.push_back({id,static_cast<unsigned>(entry.second["rarity"].Integer())});
+	}
+	const auto mutations=evolution::enemyMutations(wave,map->evolutionSeed,poolTraits);
 	const int frontShare = formation == 1 ? 22 : formation == 2 ? 65 : 40;
 	std::vector<std::string> traits(slots);
+	std::vector<int> counts(slots);
+	std::vector<CreatureID> species(slots);
+	auto & extra = map->evolutionReinforcements;
+	extra = JsonNode();
+	extra["owner"].Integer() = 1-active;
+	auto & companies=extra["companies"].Vector();
 	for(int slot = 0; slot < slots; ++slot)
 	{
 		auto pool = ArenaRules::creaturePool(slot == 0 ? std::min(7, tier + (formation == 2 ? 1 : 0)) : std::max(1, tier-1));
 		auto id = pool.at(randomInt(0, static_cast<int>(pool.size()) - 1));
-		const int share = slot == 0 ? frontShare : (100-frontShare) / (slots-1);
-		auto cost = std::max<int64_t>(1, id.toCreature()->getAIValue());
-		int amount = evolution::engineInt(2 + run->wave / (slot == 0 ? 1 : 3) + run->threat() * share / (100 * cost));
-		giveCreature(enemy(), slot+1, id, amount);
-		auto & effects = enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects;
-		if(plan.anomaly) appendEffects(effects, weather, 1);
-		if(run->boss() && slot == 0)
+		species[slot]=id;
+		const auto cost=std::max<int64_t>(1,id.toCreature()->getAIValue());
+		const int divisor=slot==0 ? 1 : slots-1;
+		const int share=slot==0 ? frontShare : 100-frontShare;
+		const evolution::Amount base=slot==0 ? evolution::Amount(2+run->wave) : evolution::Amount((2+run->wave/3)*std::min(4,slots-1)/divisor);
+		counts[slot]=std::max(1,evolution::engineInt(base + run->threat()*share/(100*cost*divisor)));
+		JsonNode effects;
+		effects.setType(JsonNode::JsonType::DATA_VECTOR);
+		if(plan.anomaly) appendEffects(effects,weather,1);
+		if(run->boss() && slot==0)
 		{
-			appendEffects(effects, bossRule, 1);
-			traits[slot] += " · " + bossRule["name"].String();
+			appendEffects(effects,bossRule,1);
+			traits[slot]+=" · "+bossRule["name"].String();
 		}
-		if(slot < plan.mutatedStacks)
+		for(int trait:mutations[slot])
 		{
-			const auto & pair = schools.at((firstSchool + slot) % schools.size()).Vector();
-			std::vector<std::string> ids;
-			for(size_t n=0; n < (plan.pair ? pair.size() : 1u); ++n)
-			{
-				const auto & id = pair.at(n).String();
-				const auto & entry = data["mutations"][id];
-				appendMutation(effects, entry, plan.mutationRank);
-				traits[slot] += " · " + rarityText(entry,entry["name"].String()) + " " + std::to_string(plan.mutationRank);
-				ids.push_back(id);
-			}
-			if(plan.recipe)
-				for(const auto & recipe : data["synergies"].Vector())
-				{
-					const auto & parts = recipe["requires"].Vector();
-					if(std::all_of(parts.begin(),parts.end(),[&](const JsonNode & part){ return std::find(ids.begin(),ids.end(),part.String()) != ids.end(); }))
-					{
-						appendEffects(effects,recipe,1);
-						traits[slot] += " · " + recipe["name"].String();
-					}
-				}
+			const auto & rule=data["mutations"]["trait"+std::to_string(trait)];
+			appendMutation(effects,rule,plan.mutationRank);
+			traits[slot]+=" · "+rarityText(rule,rule["name"].String())+" "+std::to_string(plan.mutationRank);
+		}
+		if(slot<heroSlots)
+		{
+			giveCreature(enemy(),slot+1,id,counts[slot]);
+			enemy().hero->getStackPtr(SlotID(slot))->evolutionEffects=std::move(effects);
+		}
+		else
+		{
+			JsonNode company;
+			company["creature"].Integer()=id.getNum();
+			company["count"].Integer()=counts[slot];
+			company["effects"]=std::move(effects);
+			companies.push_back(std::move(company));
 		}
 	}
 
@@ -650,8 +662,9 @@ try
 	if(!run->boss()) detail += "\nПротивник: " + formations[formation];
 	bool eliteAvailable = !run->boss() && run->wave % 3 == 0;
 	for(int i=0;i<slots && eliteAvailable;++i)
-		eliteAvailable = (evolution::Amount(enemy().hero->getStackPtr(SlotID(i))->getCount()) * 8 + 4) / 5 <= INT32_MAX;
-	std::string scouting = "Армия противника";
+		eliteAvailable = (evolution::Amount(counts[i]) * 8 + 4) / 5 <= INT32_MAX;
+	detail += "\nОтрядов противника: "+std::to_string(slots);
+	std::string scouting = "Армия противника · "+std::to_string(slots)+" отр.";
 	if(plan.anomaly)
 	{
 		detail += "\nАномалия: " + weather["name"].String();
@@ -659,10 +672,9 @@ try
 	}
 	for(int i = 0; i < slots; ++i)
 	{
-		const auto * enemyStack = enemy().hero->getStackPtr(SlotID(i));
-		scouting += "\n" + enemyStack->getName() + " × " + std::to_string(enemyStack->getCount()) + traits[i];
+		scouting += "\n" + species[i].toCreature()->getNamePluralTranslated() + " × " + std::to_string(counts[i]) + traits[i];
 		if(eliteAvailable)
-			scouting += "  (элита: " + evolution::Amount((evolution::Amount(enemyStack->getCount()) * 8 + 4) / 5).str() + ")";
+			scouting += "  (элита: " + evolution::Amount((evolution::Amount(counts[i]) * 8 + 4) / 5).str() + ")";
 	}
 	for(size_t slot = 0; slot < run->rosterSize(); ++slot)
 	{
@@ -698,11 +710,17 @@ try
 	if(eliteAvailable)
 		cards.push_back(evolutionCard("Элитная охота", "Все вражеские отряды на 60% больше (округление вверх). За победу среди трёх наград обязательно появится эпическая или легендарная мутация."));
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Evolution Arena - Волна " + run->wave.str(),
-		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, slots](int pick)
+		"Кнопка «Твой герой» — разведка и мутации. В бою A — автобой.", cards, [self, heroSlots](int pick)
 		{
 			eliteFight = pick == 1;
 			if(eliteFight)
-				for(int i = 0; i < slots; ++i)
+			{
+				for(auto & company:self->map->evolutionReinforcements["companies"].Vector())
+				{
+					auto & count=company["count"].Integer();
+					count=(count*8+4)/5;
+				}
+				for(int i = 0; i < heroSlots; ++i)
 				{
 					auto * stack = self->enemy().hero->getStackPtr(SlotID(i));
 					const int size = evolution::engineInt((evolution::Amount(stack->getCount()) * 8 + 4) / 5);
@@ -710,6 +728,7 @@ try
 					self->giveCreature(self->enemy(), i+1, stack->getCreatureID(), size);
 					self->enemy().hero->getStackPtr(SlotID(i))->evolutionEffects = std::move(inherited);
 				}
+			}
 			self->startBattle();
 		},
 		[self]() { self->cancel(); }, [scouting]() { CInfoWindow::showInfoDialog(scouting, {}); },

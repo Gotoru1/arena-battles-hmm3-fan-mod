@@ -90,7 +90,7 @@ CasualtiesAfterBattle::CasualtiesAfterBattle(const CBattleInfoCallback & battle,
 		}
 		else if(st->unitSlot() == SlotID::SUMMONED_SLOT_PLACEHOLDER)
 		{
-			if(st->alive() && st->getCount() > 0)
+			if(st->alive() && st->getCount() > 0 && !st->hasBonusOfType(BonusType::NONE,BonusCustomSubtype(500701)))
 			{
 				logGlobal->debug("Permanently summoned %d units.", st->getCount());
 				const CreatureID summonedType = st->creatureId();
@@ -684,7 +684,10 @@ void BattleResultProcessor::setBattleResult(const CBattleInfoCallback & battle, 
 	{
 		si32 killed = st->getKilled();
 		if(killed > 0)
-			battleResult->casualties[st->unitSide()][st->creatureId()] += killed;
+		{
+			auto & total=battleResult->casualties[st->unitSide()][st->creatureId()];
+			total=static_cast<si32>(std::min<int64_t>(INT32_MAX,int64_t(total)+killed));
+		}
 	}
 }
 

@@ -9,6 +9,7 @@
 #include <random>
 #include <string>
 #include "../../lib/battle/EvolutionChain.h"
+#include "../../client/arena/EvolutionEnemyArmy.h"
 #include <string>
 #include <cstdint>
 #include <map>
@@ -27,8 +28,9 @@ struct Bonus { BonusType type{}; int val{}; BonusDuration duration{}; NumericSub
 struct CreatureID { int value; CreatureID(int v=0):value(v){} static int decode(std::string s){return s=="arenabattles:evolutionEgg"?500:501;} int getNum() const{return value;} operator int() const{return value;} };
 enum class BattleSide { LEFT, RIGHT };
 struct BattleHex {
+	static inline int fieldSize=21;
 	int pos=-1;
-	bool isValid() const {return pos>=0 && pos<21;}
+	bool isValid() const {return pos>=0 && pos<fieldSize;}
 	int toInt() const {return pos;}
 	bool operator!=(BattleHex other) const {return pos!=other.pos;}
 	bool operator==(BattleHex other) const {return pos==other.pos;}
@@ -106,7 +108,7 @@ struct CBattleInfoCallback {
 	}
 	const auto & getAccessibility(const CStack*) const{return *this;}
 	BattleHex getAvailableHex(int,BattleSide,int near) const{
-		for(int d=0;d<21;++d)for(int p:{near+d,near-d})if(accessible({p},nullptr))return {p};
+		for(int d=0;d<BattleHex::fieldSize;++d)for(int p:{near+d,near-d})if(accessible({p},nullptr))return {p};
 		return {};
 	}
 	int battleGetRound() const{return round;}
@@ -252,7 +254,56 @@ static void parasiteBurstAndGenerations()
 	actions.evolutionAttack(field,&guard,&parent,{{{1,3,100,true,10}}});
 	assert(!larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
 }
+#include "../../server/battles/EvolutionDeployment.inc"
+
+static void growingEnemyArmies()
+{
+	std::vector<evolution::EnemyTrait> pool{{1,0},{14,0},{47,1},{54,1},{75,2},{89,3}};
+	std::set<int> carriers;
+	for(unsigned seed=0;seed<120;++seed)
+	{
+		size_t previous=0;
+		for(int wave:{1,2,5,10,15,30,54,55,60,100,1000})
+		{
+			auto deal=evolution::enemyMutations(wave,seed,pool);
+			assert(deal==evolution::enemyMutations(wave,seed,pool));
+			assert(deal.size()==static_cast<size_t>(std::min(30,3+(wave-1)/2)));
+			size_t total=0;
+			for(size_t i=0;i<deal.size();++i)
+			{
+				assert(std::set<int>(deal[i].begin(),deal[i].end()).size()==deal[i].size());
+				if(wave==2 && !deal[i].empty()) carriers.insert(static_cast<int>(i));
+				total+=deal[i].size();
+			}
+			assert(total>=previous && total==std::min(deal.size()*pool.size(),wave==1 ? size_t(0) : size_t(wave/2)));
+			previous=total;
+		}
+	}
+	assert(carriers.size()==3);
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleHex::fieldSize=30;
+	for(int i=0;i<7;++i)
+		field.units.emplace(i+1,CStack{i+1,{7,3,30,{i},BattleSide::RIGHT},{}});
+	for(int i=7;i<30;++i)
+		assert(evolution_server::deployCompany(server,field,BattleSide::RIGHT,CreatureID(7),3,{12},{trait(47)}));
+	assert(!evolution_server::deployCompany(server,field,BattleSide::RIGHT,CreatureID(7),3,{12},{}));
+	assert(field.units.size()==30);
+	BattleHex::fieldSize=21;
+	std::set<int> occupied;
+	for(const auto & entry:field.units)
+	{
+		const auto & stack=entry.second;
+		assert(occupied.insert(stack.getPosition().pos).second);
+		assert(stack.getCount()==3 && stack.unitSide()==BattleSide::RIGHT );
+		if(stack.base) continue;
+		assert(!stack.getBonusesOfType(BonusType::EVOLUTION_TRAIT,47)->empty());
+		assert(!stack.getBonusesOfType(BonusType::NONE,500701)->empty());
+	}
+}
+
 int main(){
+	growingEnemyArmies();
 	parasiteBurstAndGenerations();
 	defenseAndConversion();
 	for(unsigned seed=1;seed<=120;++seed) assert(randomRun(seed)==randomRun(seed));

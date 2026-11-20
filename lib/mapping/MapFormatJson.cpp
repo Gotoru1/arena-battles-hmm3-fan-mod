@@ -984,6 +984,7 @@ void CMapLoaderJson::readHeader(const bool complete)
 
 	mapHeader->battleOnly = header["battleOnly"].Bool();
 	mapHeader->evolutionSeed = header["evolutionSeed"].Integer();
+	if(mapHeader->evolutionSeed) mapHeader->evolutionReinforcements=header["evolutionReinforcements"];
 
 	readDisposedHeroes(handler);
 
@@ -1411,7 +1412,10 @@ void CMapSaverJson::writeHeader()
 
 	header["battleOnly"].Bool() = mapHeader->battleOnly;
 	if(mapHeader->evolutionSeed)
+	{
 		header["evolutionSeed"].Integer() = mapHeader->evolutionSeed;
+		if(!mapHeader->evolutionReinforcements.isNull()) header["evolutionReinforcements"]=mapHeader->evolutionReinforcements;
+	}
 
 	writeOptions(handler);
 
