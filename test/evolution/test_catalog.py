@@ -53,6 +53,44 @@ class CatalogTests(unittest.TestCase):
             for field in ("name", "text", "rarity"):
                 self.assertEqual(original[field], entry[field])
 
+    def test_every_mutation_is_named_and_drawn(self):
+        content = ROOT / "Mods/arenabattles/Content"
+        texts = json.loads((content / "config/arenabattles/english.json").read_text(encoding="utf-8"))
+        for key, entry in DATA["mutations"].items():
+            effect, = entry["effects"]
+            number = effect["subtype"]
+            self.assertEqual(effect["description"], "@arenabattles.evolution.trait." + number)
+            self.assertEqual(texts[effect["description"][1:]], "{%s}\n%s" % (entry["name"], entry["text"]))
+            self.assertEqual(effect["icon"], "evolution/trait" + number)
+            self.assertTrue((content / "Data" / (effect["icon"] + ".png")).is_file(), key)
+        reactions = (ROOT / "server/battles/EvolutionReactions.inc").read_text(encoding="utf-8")
+        statuses = re.search(r'names\[\]=\{([^}]*)\}', reactions).group(1).replace('"', "").split(",")
+        self.assertEqual(len(statuses), reactions.count("{BonusType::", reactions.index("ailments()"), reactions.index("return all;")))
+        for name in statuses:
+            self.assertIn("arenabattles.evolution.status." + name, texts)
+            self.assertTrue((content / "Data/evolution" / ("status_%s.png" % name)).is_file(), name)
+        # Battlefield pictures: every referenced animation and every frame in it must ship with the mod.
+        animations = {"evoMark_" + look for look in re.findall(r'"(blood|trap|spores|mycelium|territory)"', reactions)}
+        self.assertEqual(len(animations), 5)
+        animations |= {name.replace("evoMark_", "evoMarkIn_") for name in animations}
+        creatures = json.loads((content / "config/evolutionCreatures.json").read_text(encoding="utf-8"))
+        for creature in creatures.values():
+            graphics = creature["graphics"]
+            if graphics["animation"].startswith("evo"):
+                animations.add(graphics["animation"][:-4])
+                for size in ("iconLarge", "iconSmall"):
+                    self.assertTrue((content / "Data" / (graphics[size] + ".png")).is_file(), graphics[size])
+        for name in animations:
+            sheet = json.loads((content / "Sprites" / (name + ".json")).read_text(encoding="utf-8"))
+            groups = {sequence["group"]: sequence["frames"] for sequence in sheet["sequences"]}
+            self.assertTrue(groups[0])
+            for frames in groups.values():
+                for frame in frames:
+                    self.assertTrue((content / "Sprites" / sheet["basepath"] / frame).is_file(), frame)
+            if not name.startswith("evoMark"):
+                # The battle renderer refuses a creature without these and plays the rest on demand.
+                self.assertTrue({0, 1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 20, 21} <= groups.keys(), name)
+
     def test_army_rewards(self):
         self.assertEqual(len(DATA["rewards"]),10)
         native = (ROOT/"config/artifacts.json").read_text(encoding="utf-8")

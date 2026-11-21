@@ -332,8 +332,12 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 		const auto id=std::to_string(key);
 		if(!evolutionCatalog()["discoveries"][id].isNull() && std::find(run->synergies.begin(),run->synergies.end(),id)==run->synergies.end()) run->synergies.push_back(id);
 	}
-	std::vector<int> reserves(survivors.begin()+1, survivors.begin()+run->rosterSize());
-	run->finish(won, survivors[0], casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
+	// The hospital works on the reported survivors, so every run rule still sees one consistent number.
+	std::vector<int> reserves;
+	for(size_t slot = 1; slot < run->rosterSize(); ++slot)
+		reserves.push_back(won ? evolution::engineInt(evolution::RoguelikeRun::afterHospital(run->stack(slot).count, survivors[slot], run->wave)) : survivors[slot]);
+	const auto leaders = won ? evolution::RoguelikeRun::afterHospital(run->army.count, survivors[0], run->wave) : evolution::Amount(survivors[0]);
+	run->finish(won, leaders, casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
 	if(won)
 	{
 		std::vector<std::string> extra;
@@ -624,7 +628,7 @@ try
 		const auto cost=std::max<int64_t>(1,id.toCreature()->getAIValue());
 		const int divisor=slot==0 ? 1 : slots-1;
 		const int share=slot==0 ? frontShare : 100-frontShare;
-		const evolution::Amount base=slot==0 ? evolution::Amount(2+run->wave) : evolution::Amount((2+run->wave/3)*std::min(4,slots-1)/divisor);
+		const evolution::Amount base=slot==0 ? evolution::Amount(1+run->wave/2) : evolution::Amount((1+run->wave/4)*std::min(4,slots-1)/divisor);
 		counts[slot]=std::max(1,evolution::engineInt(base + run->threat()*share/(100*cost*divisor)));
 		JsonNode effects;
 		effects.setType(JsonNode::JsonType::DATA_VECTOR);
@@ -656,6 +660,8 @@ try
 	}
 
 	std::string detail = "Твоя армия:" + roster;
+	detail += "
+Лазарет: после победы в строй вернётся " + std::to_string(evolution::RoguelikeRun::hospitalShare(run->wave)) + "% потерь каждого выжившего отряда.";
 	if(run->boss())
 		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
 	const std::array<std::string,3> formations{"Смешанное войско", "Орда", "Ударный отряд"};

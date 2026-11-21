@@ -27,15 +27,15 @@
       }
     },
     "graphics": {
-      "animation": "CGARGO.DEF",
+      "animation": "evoEgg.def",
       "animationTime": {
         "walk": 0.6,
         "attack": 0.5,
         "idle": 1
       },
       "timeBetweenFidgets": 4,
-      "iconLarge": "TWCRPORT.DEF:0:31",
-      "iconSmall": "CPRSMALL.DEF:0:31"
+      "iconLarge": "evolution/portrait_egg",
+      "iconSmall": "evolution/portrait_egg_small"
     },
     "sound": {
       "attack": "SGRGATTK.wav",
@@ -115,15 +115,15 @@
       }
     },
     "graphics": {
-      "animation": "CGARGO.DEF",
+      "animation": "evoHusk.def",
       "animationTime": {
         "walk": 0.6,
         "attack": 0.5,
         "idle": 1
       },
       "timeBetweenFidgets": 4,
-      "iconLarge": "TWCRPORT.DEF:0:31",
-      "iconSmall": "CPRSMALL.DEF:0:31"
+      "iconLarge": "evolution/portrait_husk",
+      "iconSmall": "evolution/portrait_husk_small"
     },
     "sound": {
       "attack": "SGRGATTK.wav",

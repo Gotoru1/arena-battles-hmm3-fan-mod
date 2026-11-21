@@ -1,0 +1,123 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 1,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 2,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 3,
+			"frames": [
+				"evoHusk_hit.png",
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 4,
+			"frames": [
+				"evoHusk_hit.png",
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 5,
+			"frames": [
+				"evoHusk_fall0.png",
+				"evoHusk_fall1.png",
+				"evoHusk_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 6,
+			"frames": [
+				"evoHusk_fall0.png",
+				"evoHusk_fall1.png",
+				"evoHusk_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 7,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 8,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 9,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 10,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 11,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 12,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 13,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 20,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 21,
+			"frames": [
+				"evoHusk_idle0.png"
+			],
+			"generateOverlay": 1
+		}
+	]
+}

@@ -1,0 +1,14 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"mark_trap_in0.png",
+				"mark_trap_in1.png",
+				"mark_trap_in2.png",
+				"mark_trap.png"
+			]
+		}
+	]
+}

@@ -8,7 +8,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "10"
+          "subtype": "10",
+          "description": "@arenabattles.evolution.trait.10",
+          "icon": "evolution/trait10"
         }
       ]
     },
@@ -20,7 +22,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "18"
+          "subtype": "18",
+          "description": "@arenabattles.evolution.trait.18",
+          "icon": "evolution/trait18"
         }
       ]
     },
@@ -32,7 +36,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "23"
+          "subtype": "23",
+          "description": "@arenabattles.evolution.trait.23",
+          "icon": "evolution/trait23"
         }
       ]
     },
@@ -44,7 +50,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "25"
+          "subtype": "25",
+          "description": "@arenabattles.evolution.trait.25",
+          "icon": "evolution/trait25"
         }
       ]
     },
@@ -56,7 +64,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "27"
+          "subtype": "27",
+          "description": "@arenabattles.evolution.trait.27",
+          "icon": "evolution/trait27"
         }
       ]
     },
@@ -68,7 +78,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "51"
+          "subtype": "51",
+          "description": "@arenabattles.evolution.trait.51",
+          "icon": "evolution/trait51"
         }
       ]
     },
@@ -80,7 +92,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "57"
+          "subtype": "57",
+          "description": "@arenabattles.evolution.trait.57",
+          "icon": "evolution/trait57"
         }
       ]
     },
@@ -92,7 +106,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "78"
+          "subtype": "78",
+          "description": "@arenabattles.evolution.trait.78",
+          "icon": "evolution/trait78"
         }
       ]
     },
@@ -104,7 +120,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "87"
+          "subtype": "87",
+          "description": "@arenabattles.evolution.trait.87",
+          "icon": "evolution/trait87"
         }
       ]
     },
@@ -116,7 +134,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "9"
+          "subtype": "9",
+          "description": "@arenabattles.evolution.trait.9",
+          "icon": "evolution/trait9"
         }
       ]
     },
@@ -128,7 +148,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "19"
+          "subtype": "19",
+          "description": "@arenabattles.evolution.trait.19",
+          "icon": "evolution/trait19"
         }
       ]
     },
@@ -140,7 +162,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "56"
+          "subtype": "56",
+          "description": "@arenabattles.evolution.trait.56",
+          "icon": "evolution/trait56"
         }
       ]
     },
@@ -152,7 +176,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "59"
+          "subtype": "59",
+          "description": "@arenabattles.evolution.trait.59",
+          "icon": "evolution/trait59"
         }
       ]
     },
@@ -164,7 +190,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "61"
+          "subtype": "61",
+          "description": "@arenabattles.evolution.trait.61",
+          "icon": "evolution/trait61"
         }
       ]
     },
@@ -176,7 +204,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "67"
+          "subtype": "67",
+          "description": "@arenabattles.evolution.trait.67",
+          "icon": "evolution/trait67"
         }
       ]
     },
@@ -188,7 +218,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "1"
+          "subtype": "1",
+          "description": "@arenabattles.evolution.trait.1",
+          "icon": "evolution/trait1"
         }
       ]
     },
@@ -200,7 +232,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "39"
+          "subtype": "39",
+          "description": "@arenabattles.evolution.trait.39",
+          "icon": "evolution/trait39"
         }
       ]
     },
@@ -212,7 +246,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "60"
+          "subtype": "60",
+          "description": "@arenabattles.evolution.trait.60",
+          "icon": "evolution/trait60"
         }
       ]
     },
@@ -224,7 +260,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "88"
+          "subtype": "88",
+          "description": "@arenabattles.evolution.trait.88",
+          "icon": "evolution/trait88"
         }
       ]
     },
@@ -236,7 +274,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "15"
+          "subtype": "15",
+          "description": "@arenabattles.evolution.trait.15",
+          "icon": "evolution/trait15"
         }
       ]
     },
@@ -248,7 +288,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "32"
+          "subtype": "32",
+          "description": "@arenabattles.evolution.trait.32",
+          "icon": "evolution/trait32"
         }
       ]
     },
@@ -260,7 +302,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "3"
+          "subtype": "3",
+          "description": "@arenabattles.evolution.trait.3",
+          "icon": "evolution/trait3"
         }
       ]
     },
@@ -272,7 +316,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "68"
+          "subtype": "68",
+          "description": "@arenabattles.evolution.trait.68",
+          "icon": "evolution/trait68"
         }
       ]
     },
@@ -284,7 +330,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "21"
+          "subtype": "21",
+          "description": "@arenabattles.evolution.trait.21",
+          "icon": "evolution/trait21"
         }
       ]
     },
@@ -296,7 +344,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "8"
+          "subtype": "8",
+          "description": "@arenabattles.evolution.trait.8",
+          "icon": "evolution/trait8"
         }
       ]
     },
@@ -308,7 +358,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "50"
+          "subtype": "50",
+          "description": "@arenabattles.evolution.trait.50",
+          "icon": "evolution/trait50"
         }
       ]
     },
@@ -320,7 +372,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "20"
+          "subtype": "20",
+          "description": "@arenabattles.evolution.trait.20",
+          "icon": "evolution/trait20"
         }
       ]
     },
@@ -332,7 +386,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "26"
+          "subtype": "26",
+          "description": "@arenabattles.evolution.trait.26",
+          "icon": "evolution/trait26"
         }
       ]
     },
@@ -344,7 +400,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "7",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.7",
+          "icon": "evolution/trait7"
         }
       ]
     },
@@ -356,7 +414,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "22",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.22",
+          "icon": "evolution/trait22"
         }
       ]
     },
@@ -368,7 +428,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "95",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.95",
+          "icon": "evolution/trait95"
         }
       ]
     },
@@ -380,7 +442,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "62",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.62",
+          "icon": "evolution/trait62"
         }
       ]
     },
@@ -392,7 +456,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "75",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.75",
+          "icon": "evolution/trait75"
         }
       ]
     },
@@ -404,7 +470,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "subtype": "41",
-          "val": 1
+          "val": 1,
+          "description": "@arenabattles.evolution.trait.41",
+          "icon": "evolution/trait41"
         }
       ]
     },
@@ -416,7 +484,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "14"
+          "subtype": "14",
+          "description": "@arenabattles.evolution.trait.14",
+          "icon": "evolution/trait14"
         }
       ]
     },
@@ -428,7 +498,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "47"
+          "subtype": "47",
+          "description": "@arenabattles.evolution.trait.47",
+          "icon": "evolution/trait47"
         }
       ]
     },
@@ -440,7 +512,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "89"
+          "subtype": "89",
+          "description": "@arenabattles.evolution.trait.89",
+          "icon": "evolution/trait89"
         }
       ]
     },
@@ -452,7 +526,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "54"
+          "subtype": "54",
+          "description": "@arenabattles.evolution.trait.54",
+          "icon": "evolution/trait54"
         }
       ]
     },
@@ -464,7 +540,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "97"
+          "subtype": "97",
+          "description": "@arenabattles.evolution.trait.97",
+          "icon": "evolution/trait97"
         }
       ]
     },
@@ -476,7 +554,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "53"
+          "subtype": "53",
+          "description": "@arenabattles.evolution.trait.53",
+          "icon": "evolution/trait53"
         }
       ]
     },
@@ -488,7 +568,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "66"
+          "subtype": "66",
+          "description": "@arenabattles.evolution.trait.66",
+          "icon": "evolution/trait66"
         }
       ]
     },
@@ -500,7 +582,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "73"
+          "subtype": "73",
+          "description": "@arenabattles.evolution.trait.73",
+          "icon": "evolution/trait73"
         }
       ]
     },
@@ -512,7 +596,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "2"
+          "subtype": "2",
+          "description": "@arenabattles.evolution.trait.2",
+          "icon": "evolution/trait2"
         }
       ]
     },
@@ -524,7 +610,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "35"
+          "subtype": "35",
+          "description": "@arenabattles.evolution.trait.35",
+          "icon": "evolution/trait35"
         }
       ]
     },
@@ -536,7 +624,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "48"
+          "subtype": "48",
+          "description": "@arenabattles.evolution.trait.48",
+          "icon": "evolution/trait48"
         }
       ]
     },
@@ -548,7 +638,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "71"
+          "subtype": "71",
+          "description": "@arenabattles.evolution.trait.71",
+          "icon": "evolution/trait71"
         }
       ]
     },
@@ -560,7 +652,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "77"
+          "subtype": "77",
+          "description": "@arenabattles.evolution.trait.77",
+          "icon": "evolution/trait77"
         }
       ]
     },
@@ -572,7 +666,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "82"
+          "subtype": "82",
+          "description": "@arenabattles.evolution.trait.82",
+          "icon": "evolution/trait82"
         }
       ]
     },
@@ -584,7 +680,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "4"
+          "subtype": "4",
+          "description": "@arenabattles.evolution.trait.4",
+          "icon": "evolution/trait4"
         }
       ]
     },
@@ -596,7 +694,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "6"
+          "subtype": "6",
+          "description": "@arenabattles.evolution.trait.6",
+          "icon": "evolution/trait6"
         }
       ]
     },
@@ -608,7 +708,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "13"
+          "subtype": "13",
+          "description": "@arenabattles.evolution.trait.13",
+          "icon": "evolution/trait13"
         }
       ]
     },
@@ -620,7 +722,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "17"
+          "subtype": "17",
+          "description": "@arenabattles.evolution.trait.17",
+          "icon": "evolution/trait17"
         }
       ]
     },
@@ -632,7 +736,9 @@
         {
           "type": "EVOLUTION_TRAIT",
           "val": 1,
-          "subtype": "24"
+          "subtype": "24",
+          "description": "@arenabattles.evolution.trait.24",
+          "icon": "evolution/trait24"
         }
       ]
     }

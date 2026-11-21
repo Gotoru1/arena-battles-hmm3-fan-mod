@@ -27,6 +27,11 @@ int main()
 		r->begin(2, {1,2,3,4}, 3, 24);
 	mustFail([&]{run.finish(true, 20, 12, {"a", "a", "b"});});
 	require(run.phase == Phase::Battle && run.kills == 0, "Rejected report mutated run");
+	require(run.threat() == 449, "The first wave starts at half strength");
+	require(RoguelikeRun::afterHospital(24,12,1) == 18 && RoguelikeRun::afterHospital(24,12,6) == 16
+		&& RoguelikeRun::afterHospital(24,12,11) == 15, "Hospital share by wave");
+	require(RoguelikeRun::afterHospital(24,0,1) == 0 && RoguelikeRun::afterHospital(24,30,1) == 30
+		&& RoguelikeRun::afterHospital(24,24,1) == 24, "Hospital never revives a unit or reduces growth");
 	for(int n = 1; n <= 16; ++n)
 	{
 		require(run.boss() == (n % 5 == 0), "Boss cadence");

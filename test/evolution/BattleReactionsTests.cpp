@@ -168,13 +168,19 @@ struct CGameHandler {
 		const auto & mark=*change.data;
 		assert(mark.pos.isValid() && mark.passable && !mark.trap && !mark.hidden && mark.trigger==SpellID(SpellID::NONE));
 		assert(mark.customSize.size()==1 && mark.customSize.back()==mark.pos);
-		assert(!mark.animation.name.empty() && !mark.appearAnimation.name.empty() && mark.turnsRemaining!=0);
+		assert(mark.animation.name.rfind("evoMark_",0)==0 && mark.appearAnimation.name.rfind("evoMarkIn_",0)==0 && mark.turnsRemaining!=0);
+		assert(mark.animationYOffset==0);
 		for(const auto & other:field.marks) assert(other->uniqueID!=mark.uniqueID);
 		field.marks.push_back(change.data);
 	}}
 };
 namespace evolution {int64_t damageProduct(int64_t a,int64_t b,int c=1){return a*b/c;}}
-namespace evolution_server {class EvolutionReactions;}
+namespace evolution_server {class EvolutionReactions;
+static std::vector<int> labelledTraits;
+static std::vector<std::string> labelledStatuses;
+static void labelTrait(Bonus &,int trait){labelledTraits.push_back(trait);}
+static void labelStatus(Bonus &,const std::string & name){labelledStatuses.push_back(name);}
+}
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
 	evolution_server::EvolutionReactions * activeReaction=nullptr;
@@ -210,7 +216,8 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
-	const std::vector<int> traits{1,2,3,8,9,10,13,15,18,19,21,23,24,25,27,32,35,39,48,50,51,56,57,59,60,61,67,68,71,77,78,82,87};
+	// Every battle mutation of the active catalog.
+	const std::vector<int> traits{1,2,3,4,6,7,8,9,10,13,14,15,17,18,19,20,21,22,23,24,25,26,27,32,35,39,47,48,50,51,53,54,56,57,59,60,61,62,66,67,68,71,73,75,77,78,82,87,89,95,97};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -220,7 +227,7 @@ static std::vector<int> randomRun(unsigned seed)
 		for(int pick=0;pick<5;++pick)unit.bonuses.push_back(trait(traits[random()%traits.size()]));
 	}
 	actions.evolutionRound(field,true);
-	for(int step=0;step<45;++step)
+	for(int step=0;step<90;++step)
 	{
 		std::vector<int> left,right;
 		std::set<int> occupied;
@@ -234,15 +241,42 @@ static std::vector<int> randomRun(unsigned seed)
 		}
 		if(left.empty()||right.empty()) break;
 		if(step%2) left.swap(right);
+		if(step%4==1)
+		{
+			// Walk to a free cell: trails, traps, spores, territory and guards all react to this.
+			auto & walker=field.units.at(left[random()%left.size()]);
+			std::vector<int> open;
+			for(int cell=0;cell<BattleHex::fieldSize;++cell) if(!occupied.count(cell)) open.push_back(cell);
+			if(!open.empty())
+			{
+				const BattleHex origin=walker.getPosition();
+				walker.data.pos={open[random()%open.size()]};
+				actions.evolutionMoved(field,&walker,origin);
+			}
+			continue;
+		}
+		if(step%7==3)
+		{
+			actions.evolutionDefended(field,&field.units.at(left[random()%left.size()]));
+			continue;
+		}
 		auto & from=field.units.at(left[random()%left.size()]);
 		auto & to=field.units.at(right[random()%right.size()]);
 		const auto before=to.getCount();
 		const auto damage=std::min(to.data.health,static_cast<int>(1+random()%36));
 		to.data.health-=damage;
 		actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,damage,!to.alive(),before-to.getCount()}}});
-		if(step%3==2){++field.round;actions.evolutionRound(field,false);}
+		if(step%3==2)
+		{
+			++field.round;
+			for(auto & mark:field.marks) if(mark->turnsRemaining>0) --mark->turnsRemaining;
+			actions.evolutionRound(field,false);
+			field.marks.erase(std::remove_if(field.marks.begin(),field.marks.end(),[](const auto & mark){return mark->turnsRemaining==0;}),field.marks.end());
+		}
+		assert(field.units.size()<400 && field.marks.size()<=static_cast<size_t>(BattleHex::fieldSize)*10);
 	}
 	std::vector<int> fingerprint;
+	for(const auto & mark:field.marks) fingerprint.insert(fingerprint.end(),{mark->uniqueID,mark->pos.pos,mark->spellLevel,mark->casterSpellPower,mark->turnsRemaining});
 	for(const auto & entry:field.units)
 	{
 		const auto & u=entry.second;
@@ -861,7 +895,7 @@ int main(){
 	growingEnemyArmies();
 	parasiteBurstAndGenerations();
 	defenseAndConversion();
-	for(unsigned seed=1;seed<=120;++seed) assert(randomRun(seed)==randomRun(seed));
+	for(unsigned seed=1;seed<=400;++seed) assert(randomRun(seed)==randomRun(seed));
 	CBattleInfoCallback field;
 	auto add=[&](int pos,BattleSide side,std::vector<int> mutations)->CStack &{
 		int id=field.battleNextUnitId();

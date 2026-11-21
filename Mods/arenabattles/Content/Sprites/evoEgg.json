@@ -1,0 +1,138 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"evoEgg_idle0.png",
+				"evoEgg_idle1.png",
+				"evoEgg_idle0.png",
+				"evoEgg_idle2.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 1,
+			"frames": [
+				"evoEgg_idle0.png",
+				"evoEgg_idle1.png",
+				"evoEgg_idle0.png",
+				"evoEgg_idle2.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 2,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 3,
+			"frames": [
+				"evoEgg_hit.png",
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 4,
+			"frames": [
+				"evoEgg_hit.png",
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 5,
+			"frames": [
+				"evoEgg_crack0.png",
+				"evoEgg_crack1.png",
+				"evoEgg_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 6,
+			"frames": [
+				"evoEgg_crack0.png",
+				"evoEgg_crack1.png",
+				"evoEgg_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 7,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 8,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 9,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 10,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 11,
+			"frames": [
+				"evoEgg_idle0.png",
+				"evoEgg_idle1.png",
+				"evoEgg_idle0.png",
+				"evoEgg_idle2.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 12,
+			"frames": [
+				"evoEgg_idle0.png",
+				"evoEgg_idle1.png",
+				"evoEgg_idle0.png",
+				"evoEgg_idle2.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 13,
+			"frames": [
+				"evoEgg_idle0.png",
+				"evoEgg_idle1.png",
+				"evoEgg_idle0.png",
+				"evoEgg_idle2.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 20,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 21,
+			"frames": [
+				"evoEgg_idle0.png"
+			],
+			"generateOverlay": 1
+		}
+	]
+}

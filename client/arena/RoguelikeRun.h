@@ -393,10 +393,29 @@ public:
 		return result;
 	}
 
+	// The first ten waves ramp up from half strength so that a new army can find its build.
+	static Amount introduction(const Amount & wave)
+	{
+		return wave >= 11 ? Amount(100) : Amount(45 + 5 * wave);
+	}
+
 	Amount threat() const
 	{
 		// AI value budget, not unit count. After the introductory waves the quadratic term dominates.
-		return (600 + 250 * wave + 48 * wave * wave) * (boss() ? 3 : 2) / 2;
+		return (600 + 250 * wave + 48 * wave * wave) * (boss() ? 3 : 2) / 2 * introduction(wave) / 100;
+	}
+
+	// Field hospital: share of a surviving unit's casualties that returns after a victory.
+	static int hospitalShare(const Amount & wave)
+	{
+		return wave <= 5 ? 50 : wave <= 10 ? 35 : 25;
+	}
+
+	// A destroyed unit has nobody left to carry the wounded, and growth is never reduced.
+	static Amount afterHospital(const Amount & before,const Amount & survivors,const Amount & wave)
+	{
+		if(survivors <= 0 || survivors >= before) return survivors;
+		return survivors + (before - survivors) * hospitalShare(wave) / 100;
 	}
 };
 }

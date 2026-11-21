@@ -370,6 +370,14 @@
 		"hidden": true
 	},
 
+	// Evolution Arena markers. Visible ones carry their own description and icon.
+	"EVOLUTION_BROOD": { "hidden": true },
+	"EVOLUTION_FAMILY": { "hidden": true },
+	"EVOLUTION_PARASITE": { "hidden": true },
+	"EVOLUTION_SEEN": { "hidden": true },
+	"EVOLUTION_TRAIT": { "hidden": true },
+	"EVOLUTION_WOUND": { "hidden": true },
+
 	"NO_DISTANCE_PENALTY":
 	{
 	},

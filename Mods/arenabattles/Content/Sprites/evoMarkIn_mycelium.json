@@ -1,0 +1,14 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"mark_mycelium_in0.png",
+				"mark_mycelium_in1.png",
+				"mark_mycelium_in2.png",
+				"mark_mycelium.png"
+			]
+		}
+	]
+}

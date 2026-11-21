@@ -1867,4 +1867,20 @@ void BattleActionProcessor::evolutionSignal(const CBattleInfoCallback & battle, 
 	});
 }
 
+namespace evolution_server
+{
+// Text and picture for the creature window. The strings live in the mod's translation file.
+static void labelTrait(Bonus & bonus, int trait)
+{
+	bonus.description.appendTextID("arenabattles.evolution.trait." + std::to_string(trait));
+	bonus.customIconPath = ImagePath::builtin("evolution/trait" + std::to_string(trait));
+}
+
+static void labelStatus(Bonus & bonus, const std::string & name)
+{
+	bonus.description.appendTextID("arenabattles.evolution.status." + name);
+	bonus.customIconPath = ImagePath::builtin("evolution/status_" + name);
+}
+}
+
 #include "EvolutionReactions.inc"

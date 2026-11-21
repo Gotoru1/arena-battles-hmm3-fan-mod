@@ -180,6 +180,7 @@ class EvolutionReactions
 		marker.type = BonusType::EVOLUTION_TRAIT;
 		marker.subtype=BonusCustomSubtype(id);
 		marker.val=rank;
+		labelTrait(marker,id);
 		grant(unit, marker);
 	}
 
@@ -778,6 +779,8 @@ class EvolutionReactions
 		mark.type=def.type;
 		if(def.subtype) mark.subtype=BonusCustomSubtype(def.subtype);
 		mark.val=owner;
+		static const char * const names[]={"parasite","wound","germ","viral","poison","slow","memory"};
+		labelStatus(mark,names[kind]);
 		grant(target,mark);
 		if(firstSlow)
 		{
@@ -866,6 +869,7 @@ class EvolutionReactions
 		for(const auto & mark:groundMarks(battle))
 			if(mark.hex==hex && mark.kind==kind && mark.side==owner->unitSide()) return false;
 		const bool pit=kind==6 || kind==13 || kind==17;
+		const std::string look=kind==4 ? "blood" : kind==6 ? "trap" : kind==13 ? "spores" : kind==17 ? "mycelium" : "territory";
 		SpellCreatedObstacle mark;
 		mark.uniqueID=battle.nextObstacleId();
 		mark.pos=hex;
@@ -882,9 +886,10 @@ class EvolutionReactions
 		mark.trap=false;
 		mark.removeOnTrigger=false;
 		mark.appearSound=AudioPath::builtin(pit ? "QUIKSAND" : "LANDMINE");
-		mark.appearAnimation=AnimationPath::builtin(pit ? "C17SPE0" : "C09SPF0");
-		mark.animation=AnimationPath::builtin(pit ? "C17SPE1" : "C09SPF1");
-		mark.animationYOffset=pit ? -42 : 0;
+		// Own 45x52 pictures drawn over the whole cell.
+		mark.appearAnimation=AnimationPath::builtin("evoMarkIn_"+look);
+		mark.animation=AnimationPath::builtin("evoMark_"+look);
+		mark.animationYOffset=0;
 		mark.customSize.insert(hex);
 		BattleObstaclesChanged packet;
 		packet.battleID=battle.getBattle()->getBattleID();
