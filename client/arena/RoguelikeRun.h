@@ -62,6 +62,9 @@ struct Lineage
 	Amount count = 0;
 	std::map<std::string, unsigned> mutations;
 	Amount harvest = 0;
+	// Lasting keepsakes of won battles: "prop.N" an absorbed creature property,
+	// "adapt" the number of adaptations, "arsenal.T" waves left for a taken mutation T.
+	std::map<std::string, int> gifts;
 };
 
 enum class Phase { Draft, Battle, Reward, Defeat };
@@ -330,6 +333,27 @@ public:
 		}
 	}
 
+	// What a unit keeps from the battle that was just won. `property` is the index of an absorbed
+	// creature property or negative, `taken` the mutations of destroyed enemies, `absorbed` the
+	// surviving fighters of the unit's own copies and descendants.
+	void keep(size_t slot,int property,bool adapted,const std::array<int,3> & taken,int absorbed)
+	{
+		if(phase != Phase::Reward || absorbed < 0) throw std::logic_error("Keepsakes belong to a won battle");
+		auto & line = stack(slot);
+		for(auto it = line.gifts.begin(); it != line.gifts.end();)
+		{
+			if(it->first.rfind("arsenal.",0) == 0 && --it->second <= 0) it = line.gifts.erase(it);
+			else ++it;
+		}
+		if(rank("trait96",slot) && property >= 0 && property < 6) line.gifts["prop." + std::to_string(property)] = 1;
+		if(rank("trait98",slot) && adapted && line.gifts["adapt"] < 15) ++line.gifts["adapt"];
+		if(rank("trait76",slot))
+			for(int trait : taken)
+				if(trait > 0) line.gifts["arsenal." + std::to_string(trait)] = 3;
+		if(rank("trait86",slot) && line.mutations.size() >= 6) line.count += absorbed;
+		if(line.gifts.count("adapt") && !line.gifts.at("adapt")) line.gifts.erase("adapt");
+	}
+
 	// World Rebirth: every defeated boss raises all four hero statistics.
 	void rebirth()
 	{
@@ -346,7 +370,7 @@ public:
 	{
 		if(phase != Phase::Battle && phase != Phase::Reward)
 			throw std::logic_error("No active run");
-		out << "EA5 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+		out << "EA6 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
 			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
 		for(auto value : primary) out << value << ' ';
 		out << '\n' << random << '\n';
@@ -364,6 +388,11 @@ public:
 		out << '\n' << alternateForms.size() << '\n';
 		for(const auto & form : alternateForms)
 			out << form.first << ' ' << std::quoted(form.second) << '\n';
+		for(size_t i=0;i<rosterSize();++i)
+		{
+			out << stack(i).gifts.size() << '\n';
+			for(const auto & gift : stack(i).gifts) out << std::quoted(gift.first) << ' ' << gift.second << '\n';
+		}
 		if(!out) throw std::runtime_error("Не удалось записать забег");
 	}
 
@@ -373,7 +402,7 @@ public:
 		std::string version;
 		RoguelikeRun result(0);
 		bool reward = false;
-		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4" && version != "EA5") || !(in >> result.seed >> reward >> result.wave >> result.kills
+		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4" && version != "EA5" && version != "EA6") || !(in >> result.seed >> reward >> result.wave >> result.kills
 			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
 			throw invalid;
 		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
@@ -405,7 +434,8 @@ public:
 				result.companions.push_back(line);
 			}
 		}
-		if(version=="EA5")
+		const bool identified = version=="EA5" || version=="EA6";
+		if(identified)
 		{
 			if(!(in>>result.nextIdentity) || result.nextIdentity<2) throw invalid;
 			std::set<uint32_t> ids;
@@ -425,7 +455,7 @@ public:
 			size_t encoded=0;
 			if(version!="EA2" && !(in>>encoded)) throw invalid;
 			for(size_t slot=0;slot<result.rosterSize();++slot)
-				if(encoded==(version=="EA5"?result.stack(slot).identity:slot)) return slot;
+				if(encoded==(identified?result.stack(slot).identity:slot)) return slot;
 			throw invalid;
 		};
 		Amount replayed = 1;
@@ -436,7 +466,7 @@ public:
 			if(!armyReward(id)) gain(result.stack(slot),id);
 			result.seasons(++replayed);
 		}
-		if(version == "EA4" || version == "EA5")
+		if(version == "EA4" || identified)
 		{
 			size_t count;
 			if(!(in >> count) || count > result.history.size()/2) throw invalid;
@@ -448,6 +478,18 @@ public:
 					|| !result.alternateForms.emplace(result.stack(slot).identity,id).second) throw invalid;
 			}
 		}
+		if(version == "EA6")
+			for(size_t slot=0;slot<result.rosterSize();++slot)
+			{
+				size_t count;
+				if(!(in >> count) || count > 64) throw invalid;
+				for(size_t i=0;i<count;++i)
+				{
+					std::string key;
+					int value;
+					if(!(in >> std::quoted(key) >> value) || key.empty() || value < 1 || !result.stack(slot).gifts.emplace(key,value).second) throw invalid;
+				}
+			}
 		result.phase = reward ? Phase::Reward : Phase::Battle;
 		return result;
 	}

@@ -321,7 +321,8 @@ void ArenaDraft::chooseEvolutionCreature()
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
-void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies, const std::array<int,7> & alliesLost, const std::array<int,7> & leaps)
+void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies, const std::array<int,7> & alliesLost, const std::array<int,7> & leaps,
+	const std::array<int,7> & properties, const std::array<int,7> & adapted, const std::array<std::array<int,3>,7> & taken, const std::array<int,7> & absorbed)
 {
 	if(!evolutionBattle())
 		return;
@@ -351,6 +352,7 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 			const auto * creature = CreatureID(run->stack(slot).creature).toCreature();
 			const int upgrade = creature->upgrades.empty() ? -1 : creature->upgrades.begin()->getNum();
 			run->grow(slot, alliesLost[slot], leaps[slot] != 0, upgrade);
+			run->keep(slot, properties[slot], adapted[slot] != 0, taken[slot], absorbed[slot]);
 		}
 		run->rebirth();
 		std::vector<std::string> extra;
@@ -579,6 +581,35 @@ try
 			const auto & borrowed=data["mutations"]["trait"+std::to_string(line.borrowedTrait)];
 			if(!borrowed.isNull()) appendMutation(effects,borrowed,1);
 		}
+		// Keepsakes of earlier battles: taken mutations, absorbed creature properties, adaptations.
+		for(const auto & gift : line.gifts)
+		{
+			if(gift.first.rfind("arsenal.",0)==0)
+			{
+				const auto & taken=data["mutations"]["trait"+gift.first.substr(8)];
+				if(!taken.isNull() && !line.mutations.count("trait"+gift.first.substr(8))) appendMutation(effects,taken,1);
+			}
+			else if(gift.first.rfind("prop.",0)==0)
+			{
+				static const std::array<const char *,6> names{"FLYING","BLOCKS_RETALIATION","TWO_HEX_ATTACK_BREATH","ATTACKS_ALL_ADJACENT","NO_MELEE_PENALTY","NO_DISTANCE_PENALTY"};
+				const auto index=static_cast<size_t>(std::stoi(gift.first.substr(5)));
+				if(index<names.size())
+				{
+					JsonNode property;
+					property["type"].String()=names[index];
+					property["val"].Integer()=1;
+					effects.Vector().push_back(property);
+				}
+			}
+			else if(gift.first=="adapt")
+			{
+				JsonNode shell;
+				shell["type"].String()="GENERAL_DAMAGE_REDUCTION";
+				shell["subtype"].String()="damageTypeAll";
+				shell["val"].Integer()=std::min(45,3*gift.second);
+				effects.Vector().push_back(shell);
+			}
+		}
 		if(plan.anomaly) appendEffects(effects, weather, 1);
 
 		// Resolve run-level effects before crossing VCMI's signed 32-bit bonus boundary.
@@ -623,7 +654,7 @@ try
 		const int id=std::stoi(entry.first.substr(5));
 		// These rewards only trigger between player waves.
 		// and these only shape the player's run.
-		static const std::set<int> runOnly{41,70,80,83,85,88,91,92,99};
+		static const std::set<int> runOnly{41,70,76,80,83,85,86,88,91,92,96,98,99};
 		if(!runOnly.count(id)) poolTraits.push_back({id,static_cast<unsigned>(entry.second["rarity"].Integer())});
 	}
 	const auto mutations=evolution::enemyMutations(wave,map->evolutionSeed,poolTraits);

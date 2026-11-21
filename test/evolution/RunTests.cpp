@@ -335,6 +335,44 @@ int main()
 		grown.rebirth();
 		require(grown.primary==(std::array<int,4>{2,3,4,5}),"World Rebirth after the boss");
 	}
+	{
+		// Keepsakes: an absorbed property, adaptations, a three-wave arsenal and absorbed descendants survive a save.
+		RoguelikeRun keeper(9);
+		keeper.begin(2,{1,2,3,4},3,24);
+		mustFail([&]{keeper.keep(0,0,true,{0,0,0},0);});
+		for(const std::string wanted : {"trait96","trait98","trait76","trait86","trait9","trait23"})
+		{
+			keeper.finish(true,20,1,{wanted,"filler1","filler2"});
+			const auto at=std::find(keeper.offers.begin(),keeper.offers.end(),wanted);
+			keeper.pick(static_cast<size_t>(at-keeper.offers.begin()));
+		}
+		keeper.finish(true,20,1,pool);
+		const auto before=keeper.army.count;
+		keeper.keep(0,2,true,{19,0,0},7);
+		const std::map<std::string,int> expected{{"adapt",1},{"arsenal.19",3},{"prop.2",1}};
+		require(keeper.army.gifts==expected && keeper.army.count==before+7,"Keepsakes of a won battle");
+		std::stringstream stored;
+		keeper.save(stored);
+		auto loaded=RoguelikeRun::restore(stored);
+		require(loaded.army.gifts==expected && loaded.army.count==keeper.army.count,"Keepsakes survive a save");
+		// The arsenal lasts three waves; a property outside the list is ignored.
+		loaded.keep(0,9,false,{0,0,0},0);
+		loaded.keep(0,-1,false,{0,0,0},0);
+		require(loaded.army.gifts.at("arsenal.19")==1 && !loaded.army.gifts.count("prop.9"),"Arsenal ages");
+		loaded.keep(0,-1,true,{0,0,0},0);
+		require(!loaded.army.gifts.count("arsenal.19") && loaded.army.gifts.at("adapt")==2,"Arsenal expires, adaptations add up");
+		// A unit without these mutations keeps nothing.
+		RoguelikeRun plain(9);
+		plain.begin(2,{1,2,3,4},3,24);
+		plain.finish(true,20,1,pool);
+		plain.keep(0,2,true,{19,0,0},7);
+		require(plain.army.gifts.empty() && plain.army.count==27,"Keepsakes need their mutations");
+		// A save from before keepsakes still opens.
+		std::ostringstream old;
+		old << "EA5 12 0 1 0 1 2 24 0\n1 2 3 4\n" << plain.random << "\n0\n0\n0\n0\n2\n1 0\n\n0\n";
+		std::istringstream oldInput(old.str());
+		require(RoguelikeRun::restore(oldInput).army.gifts.empty(),"EA5 migration");
+	}
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});

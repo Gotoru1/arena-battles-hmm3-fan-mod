@@ -5,6 +5,7 @@
 #endif
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <functional>
 #include <random>
 #include <string>
@@ -226,7 +227,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,37,38,39,40,42,43,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,77,78,79,80,81,82,83,85,87,89,90,91,92,93,94,95,97,99,100};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,37,38,39,40,42,43,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,85,86,87,89,90,91,92,93,94,95,96,97,98,99,100};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1421,6 +1422,32 @@ static void runGrowthMarkers()
 	assert(carries(leaper,BonusType::NONE,500170,7) && carries(leaper,BonusType::NONE,500270,1));
 	kill(enemy,avenger);
 	assert(carries(avenger,BonusType::NONE,500080,2));
+
+	// Species Rewrite reports the first absorbed property of a wave; Living Arsenal takes up to three mutations;
+	// Absolute Adaptation notes a survived blow of a mutated enemy.
+	CBattleInfoCallback keep;
+	CGameHandler keepServer{keep,{}};
+	BattleActionProcessor keepActions{&keepServer};
+	auto & rewriter=keep.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(96),trait(76),trait(98)}}).first->second;
+	auto & plain=keep.units.emplace(2,CStack{2,{12,10,100,{9},BattleSide::RIGHT},{}}).first->second;
+	auto & mutant=keep.units.emplace(3,CStack{3,{13,10,100,{10},BattleSide::RIGHT},{trait(19)}}).first->second;
+	keepActions.evolutionAttack(keep,&plain,&rewriter,{{{1,2,10,false,0}}});
+	assert(rewriter.getBonusesOfType(BonusType::NONE,500098)->empty());
+	keepActions.evolutionAttack(keep,&mutant,&rewriter,{{{1,3,10,false,0}}});
+	assert(carries(rewriter,BonusType::NONE,500098,1));
+	for(int i=0;i<5;++i)
+	{
+		// The first victim carries a mutation the bearer already owns, so nothing is taken from it.
+		static const int carried[]={96,21,23,24,25};
+		auto & victim=keep.units.emplace(10+i,CStack{10+i,{20+i,1,0,{12+i},BattleSide::RIGHT},{trait(carried[i])}}).first->second;
+		if(i==1) victim.bonuses.push_back({BonusType::NO_MELEE_PENALTY,1});
+		if(i==2) victim.bonuses.push_back({BonusType::FLYING,1});
+		keepActions.evolutionAttack(keep,&rewriter,&victim,{{{victim.id,1,10,true,1}}});
+	}
+	// NO_MELEE_PENALTY is the fifth property of the list. The later FLYING is copied for the battle only.
+	assert(carries(rewriter,BonusType::NONE,500096,5) && rewriter.getBonusesOfType(BonusType::NONE,500096)->size()==1);
+	const auto arsenal=rewriter.getBonusesOfType(BonusType::NONE,500076);
+	assert(arsenal->size()==3 && carries(rewriter,BonusType::NONE,500076,21) && carries(rewriter,BonusType::NONE,500076,23) && carries(rewriter,BonusType::NONE,500076,24));
 
 	// Final Evolution: eight different mutations work one rank higher for the battle; seven do not.
 	CBattleInfoCallback apex;

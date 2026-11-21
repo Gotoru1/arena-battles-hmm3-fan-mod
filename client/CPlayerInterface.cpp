@@ -842,7 +842,9 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 	{
 		auto battle = cb->getBattle(battleID);
 		const auto side = battle->battleGetMySide();
-		std::array<int, 7> survivors{},trophies{},alliesLost{},leaps{};
+		std::array<int, 7> survivors{},trophies{},alliesLost{},leaps{},properties{},adapted{},absorbed{};
+		std::array<std::array<int,3>,7> taken{};
+		properties.fill(-1);
 		std::set<int> discoveries;
 		for(const auto * stack : battle->battleGetAllStacks())
 		{
@@ -867,16 +869,35 @@ void CPlayerInterface::battleEnd(const BattleID & battleID, const BattleResult *
 					const auto fallen=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500080));
 					if(!fallen->empty()) alliesLost[slot]=std::max(alliesLost[slot],(*fallen->begin())->val);
 					if(!stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500270))->empty()) leaps[slot]=1;
+					const auto absorbedProperty=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500096));
+					if(!absorbedProperty->empty()) properties[slot]=(*absorbedProperty->begin())->val-1;
+					if(!stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500098))->empty()) adapted[slot]=1;
+					const auto arsenal=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500076));
+					size_t shelf=0;
+					for(const auto & weapon:*arsenal)
+						if(shelf<3) taken[slot][shelf++]=weapon->val;
 					if(!stack->alive()) break;
 					auto living=std::max(0,stack->getCount()-stack->health.getResurrected());
 					survivors[slot]=static_cast<int>(std::min<int64_t>(INT32_MAX,int64_t(survivors[slot])+living));
 				}
 		}
+		// Evolutionary Singularity absorbs what is left of the unit's own copies and descendants.
+		for(const auto * stack : battle->battleGetAllStacks())
+		{
+			if(stack->unitSide() != side || stack->base || !stack->alive()) continue;
+			const auto brood=stack->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500190));
+			if(brood->empty()) continue;
+			const auto * ancestor=battle->battleGetStackByID((*brood->begin())->val-1,false);
+			if(!ancestor || !ancestor->base || ancestor->unitSide()!=side) continue;
+			for(int slot=0;slot<7;++slot)
+				if(ancestor->unitSlot()==SlotID(slot))
+					absorbed[slot]=static_cast<int>(std::min<int64_t>(INT32_MAX,int64_t(absorbed[slot])+stack->getCount()));
+		}
 		int64_t casualties = 0;
 		const auto enemy = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 		for(const auto & entry : br->casualties[enemy])
 			casualties += std::max(0, entry.second);
-		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties, discoveries, trophies, alliesLost, leaps);
+		ArenaDraft::settleEvolution(br->winner == side, survivors, casualties, discoveries, trophies, alliesLost, leaps, properties, adapted, taken, absorbed);
 	}
 	if(isAutoFightOn || autofightingAI)
 	{

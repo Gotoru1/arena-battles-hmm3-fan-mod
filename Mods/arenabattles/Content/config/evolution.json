@@ -1273,6 +1273,62 @@
           "icon": "evolution/trait93"
         }
       ]
+    },
+    "trait76": {
+      "name": "Живой арсенал",
+      "text": "Уничтожив мутировавший вражеский отряд, носитель забирает одну его мутацию на три следующие волны. За бой можно забрать до трёх мутаций.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "76",
+          "description": "@arenabattles.evolution.trait.76",
+          "icon": "evolution/trait76"
+        }
+      ]
+    },
+    "trait86": {
+      "name": "Эволюционный сингуляритет",
+      "text": "Если у носителя не меньше шести разных мутаций, после победы он навсегда поглощает своих выживших потомков и копии: их бойцы пополняют его отряд.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "86",
+          "description": "@arenabattles.evolution.trait.86",
+          "icon": "evolution/trait86"
+        }
+      ]
+    },
+    "trait96": {
+      "name": "Переписывание вида",
+      "text": "Один раз за волну, уничтожив вражеский отряд, носитель навсегда перенимает одно его врождённое свойство: полёт, удар без ответа, дыхание на две клетки, круговую атаку, ближний бой без штрафа или стрельбу без штрафа за расстояние.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "96",
+          "description": "@arenabattles.evolution.trait.96",
+          "icon": "evolution/trait96"
+        }
+      ]
+    },
+    "trait98": {
+      "name": "Абсолютная адаптация",
+      "text": "Пережив в выигранном бою удар мутировавшего врага, носитель навсегда получает на 3% меньше урона от любых атак. Адаптации складываются до 45%.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "98",
+          "description": "@arenabattles.evolution.trait.98",
+          "icon": "evolution/trait98"
+        }
+      ]
     }
   },
   "synergies": [],

@@ -391,17 +391,22 @@ class EvolutionReactions
 		return child;
 	}
 
-	void copyProperty(const CStack * recipient,const CStack * donor)
+	// Returns the index of the copied property in this list, or -1. The run stores that index.
+	int copyProperty(const CStack * recipient,const CStack * donor)
 	{
+		int index=0;
 		for(auto trait : {BonusType::FLYING, BonusType::BLOCKS_RETALIATION, BonusType::TWO_HEX_ATTACK_BREATH,
 			BonusType::ATTACKS_ALL_ADJACENT, BonusType::NO_MELEE_PENALTY, BonusType::NO_DISTANCE_PENALTY})
 		{
-			if(recipient->hasBonusOfType(trait)) continue;
 			auto traits = donor->getBonusesOfType(trait);
-			if(traits->empty()) continue;
-			grant(recipient,**traits->begin());
-			break;
+			if(!recipient->hasBonusOfType(trait) && !traits->empty())
+			{
+				grant(recipient,**traits->begin());
+				return index;
+			}
+			++index;
 		}
+		return -1;
 	}
 
 	void observe(const CStack * newcomer)
@@ -1012,6 +1017,20 @@ class EvolutionReactions
 			const auto hunter=rules(source);
 			if(hunter.count(12)) stain(corpse->getPosition(),12,source,-1);
 			if(hunter.count(37)) stain(corpse->getPosition(),37,source,3);
+			if(hunter.count(96) && !counter(source,500096))
+			{
+				// Species Rewrite: the first property absorbed in a wave is reported to the run for good.
+				const int property=copyProperty(source,corpse);
+				if(property>=0) setCounter(source,500096,property+1);
+			}
+			if(hunter.count(76) && source->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500076))->size()<3)
+				for(auto taken:legacy)
+					if(taken.first!=88 && !hunter.count(taken.first) && !marked(source,500076,taken.first))
+					{
+						// Living Arsenal: one mutation of a destroyed enemy, kept for the next waves.
+						remember(source,500076,taken.first);
+						break;
+					}
 			if(hunter.count(74) && !counter(source,500174))
 			{
 				// Evolutionary Fork: the third destroyed unit fixes the form for the rest of the battle.
@@ -1994,6 +2013,9 @@ public:
 				for(auto hex:struck->getPosition().getNeighbouringTiles())
 					if(hex.isValid() && access.accessible(hex,struck)) stain(hex,13,struck,2);
 			}
+			// Absolute Adaptation: outliving a blow of a mutated enemy is what the run remembers.
+			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(98) && !active.empty())
+				remember(struck,500098,1);
 			lastStand(struck);
 		}
 		settleShared(source);

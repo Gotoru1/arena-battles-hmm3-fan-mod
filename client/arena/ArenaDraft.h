@@ -92,7 +92,8 @@ public:
 	static void verificationFrame();
 	static int verificationExitCode();
 	static void abandonEvolution();
-	static void settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies, const std::array<int,7> & alliesLost, const std::array<int,7> & leaps);
+	static void settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies, const std::array<int,7> & alliesLost, const std::array<int,7> & leaps,
+		const std::array<int,7> & properties, const std::array<int,7> & adapted, const std::array<std::array<int,3>,7> & taken, const std::array<int,7> & absorbed);
 	static void afterEvolutionGame();
 
 	// used by the windows. player() is the side currently drafting, enemy() the other one.
