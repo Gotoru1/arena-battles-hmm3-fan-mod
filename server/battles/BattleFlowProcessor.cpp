@@ -161,8 +161,8 @@ void BattleFlowProcessor::onBattleStarted(const CBattleInfoCallback & battle)
 				if(auto effect=JsonUtils::parseBonus(entry)) effects.push_back(*effect);
 			}
 			// Fill the rear ranks first. VCMI resolves obstacles and double-wide footprints.
-			const int column=2+2*(index/11);
-			const BattleHex preferred(side==BattleSide::ATTACKER ? column : 16-column,(index*5)%11);
+			const auto cell=evolution_server::companyCell(index);
+			const BattleHex preferred(cell.first,cell.second);
 			if(!evolution_server::deployCompany(*gameHandler,battle,side,species,static_cast<int>(count),preferred,std::move(effects)))
 				logGlobal->warn("No free battle hex for Evolution Arena company %d",index+8);
 			++index;

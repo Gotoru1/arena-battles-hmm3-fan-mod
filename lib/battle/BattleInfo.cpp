@@ -24,6 +24,7 @@
 #include "../mapObjects/CGTownInstance.h"
 #include "../texts/CGeneralTextHandler.h"
 #include "../BattleFieldHandler.h"
+#include "../mapping/CMapHeader.h"
 #include "../ObstacleHandler.h"
 
 #include <vstd/RNG.h>
@@ -202,6 +203,9 @@ std::unique_ptr<BattleInfo> BattleInfo::setupBattle(IGameInfoCallback *cb, const
 		RandGen r{};
 		auto ourRand = [&](){ return r.rand(); };
 		r.srand(tile);
+		// Every Evolution Arena battle happens on the same map tile: take the rocks and trees from the wave seed.
+		if(const auto * header = cb->getMapHeader(); header && header->evolutionSeed)
+			r.srand(static_cast<ui32>(header->evolutionSeed));
 		r.rand(1,8); //battle sound ID to play... can't do anything with it here
 		int tilesToBlock = r.rand(5,12);
 

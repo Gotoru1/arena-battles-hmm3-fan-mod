@@ -91,6 +91,29 @@ class CatalogTests(unittest.TestCase):
                 # The battle renderer refuses a creature without these and plays the rest on demand.
                 self.assertTrue({0, 1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 20, 21} <= groups.keys(), name)
 
+    def test_arena_layouts_surround_the_centre(self):
+        text = (ROOT / "config/gameConfig.json").read_text(encoding="utf-8")
+        text = re.sub(r"//[^\n]*", "", text)
+        text = re.sub(r",(\s*[}\]])", r"\1", text)
+        layouts = json.loads(text)["settings"]["combat"]["layouts"]
+        for name, centre, edge in (("evolutionCenterAttacker", "attacker", "defender"), ("evolutionCenterDefender", "defender", "attacker")):
+            layout = layouts[name]
+            machines = set(layout["attackerWarMachines"]) | set(layout["defenderWarMachines"])
+            for form in ("UnitsLoose", "UnitsTight"):
+                for count in range(1, 8):
+                    middle = layout[centre + form][count - 1]
+                    flanks = layout[edge + form][count - 1]
+                    self.assertEqual((len(middle), len(flanks)), (count, count))
+                    self.assertEqual(len(set(middle) | set(flanks)), 2 * count)
+                    self.assertFalse(machines & (set(middle) | set(flanks)))
+                    for cell in middle:
+                        self.assertIn(cell % 17, (7, 8, 9))
+                        self.assertTrue(2 <= cell // 17 <= 8)
+                    for cell in flanks:
+                        self.assertIn(cell % 17, (1, 15))
+                    if count > 1:
+                        self.assertEqual({cell % 17 for cell in flanks}, {1, 15})
+
     def test_army_rewards(self):
         self.assertEqual(len(DATA["rewards"]),10)
         native = (ROOT/"config/artifacts.json").read_text(encoding="utf-8")

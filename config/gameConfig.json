@@ -666,6 +666,96 @@
 						[ 15, 49, 83, 100, 117, 151, 185 ]
 					]
 				},
+				// Evolution Arena: the attacking player stands in the middle, the enemy comes from both edges
+				"evolutionCenterAttacker" : {
+					"tacticsAllowed" : false,
+					"obstaclesAllowed" : true,
+					"attackerCommander" : 88,
+					"defenderCommander" : 98,
+					"attackerWarMachines" : [ 52, 18, 154, 120 ],
+					"defenderWarMachines" : [ 66, 32, 168, 134 ],
+					"attackerUnitsLoose": [
+						[ 93 ],
+						[ 76, 110 ],
+						[ 59, 93, 127 ],
+						[ 59, 92, 94, 127 ],
+						[ 42, 75, 93, 111, 144 ],
+						[ 42, 75, 77, 109, 111, 144 ],
+						[ 42, 75, 77, 93, 109, 111, 144 ]
+					],
+					"attackerUnitsTight": [
+						[ 93 ],
+						[ 76, 110 ],
+						[ 59, 93, 127 ],
+						[ 59, 92, 94, 127 ],
+						[ 42, 75, 93, 111, 144 ],
+						[ 42, 75, 77, 109, 111, 144 ],
+						[ 42, 75, 77, 93, 109, 111, 144 ]
+					],
+					"defenderUnitsLoose": [
+						[ 69 ],
+						[ 69, 117 ],
+						[ 69, 117, 137 ],
+						[ 69, 117, 137, 49 ],
+						[ 69, 117, 137, 49, 1 ],
+						[ 69, 117, 137, 49, 1, 185 ],
+						[ 69, 117, 137, 49, 1, 185, 83 ]
+					],
+					"defenderUnitsTight": [
+						[ 69 ],
+						[ 69, 117 ],
+						[ 69, 117, 137 ],
+						[ 69, 117, 137, 49 ],
+						[ 69, 117, 137, 49, 1 ],
+						[ 69, 117, 137, 49, 1, 185 ],
+						[ 69, 117, 137, 49, 1, 185, 83 ]
+					]
+				},
+				// Evolution Arena: the same field when the player is the defending side
+				"evolutionCenterDefender" : {
+					"tacticsAllowed" : false,
+					"obstaclesAllowed" : true,
+					"attackerCommander" : 88,
+					"defenderCommander" : 98,
+					"attackerWarMachines" : [ 52, 18, 154, 120 ],
+					"defenderWarMachines" : [ 66, 32, 168, 134 ],
+					"attackerUnitsLoose": [
+						[ 69 ],
+						[ 69, 117 ],
+						[ 69, 117, 137 ],
+						[ 69, 117, 137, 49 ],
+						[ 69, 117, 137, 49, 1 ],
+						[ 69, 117, 137, 49, 1, 185 ],
+						[ 69, 117, 137, 49, 1, 185, 83 ]
+					],
+					"attackerUnitsTight": [
+						[ 69 ],
+						[ 69, 117 ],
+						[ 69, 117, 137 ],
+						[ 69, 117, 137, 49 ],
+						[ 69, 117, 137, 49, 1 ],
+						[ 69, 117, 137, 49, 1, 185 ],
+						[ 69, 117, 137, 49, 1, 185, 83 ]
+					],
+					"defenderUnitsLoose": [
+						[ 93 ],
+						[ 76, 110 ],
+						[ 59, 93, 127 ],
+						[ 59, 92, 94, 127 ],
+						[ 42, 75, 93, 111, 144 ],
+						[ 42, 75, 77, 109, 111, 144 ],
+						[ 42, 75, 77, 93, 109, 111, 144 ]
+					],
+					"defenderUnitsTight": [
+						[ 93 ],
+						[ 76, 110 ],
+						[ 59, 93, 127 ],
+						[ 59, 92, 94, 127 ],
+						[ 42, 75, 93, 111, 144 ],
+						[ 42, 75, 77, 109, 111, 144 ],
+						[ 42, 75, 77, 93, 109, 111, 144 ]
+					]
+				},
 				// Configuration for creature banks with single-tile enemies
 				"creatureBankNarrow" : {
 					"tacticsAllowed" : false,

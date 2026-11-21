@@ -380,6 +380,14 @@ static void growingEnemyArmies()
 		}
 	}
 	assert(carriers.size()==3);
+	// The extra companies surround the centre: left and right edges alternate and no preferred cell repeats.
+	std::set<std::pair<int,int>> cells;
+	for(int index=0;index<23;++index)
+	{
+		const auto cell=evolution_server::companyCell(index);
+		assert(cells.insert(cell).second && cell.second>=0 && cell.second<=10);
+		assert(index%2 ? (cell.first==14 || cell.first==12) : (cell.first==2 || cell.first==4));
+	}
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleHex::fieldSize=30;

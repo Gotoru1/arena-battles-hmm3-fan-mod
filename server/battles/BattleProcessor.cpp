@@ -142,10 +142,18 @@ void BattleProcessor::startBattle(const CArmedInstance *army1, const CArmedInsta
 
 void BattleProcessor::startBattle(const CArmedInstance *army1, const CArmedInstance *army2)
 {
+	const auto & arena = gameHandler->gameState().getMap();
+	std::string layoutName = "default";
+	if(arena.evolutionSeed && !arena.evolutionReinforcements.isNull())
+	{
+		// Evolution Arena: the player's army stands in the middle and the enemy closes in from both edges.
+		const bool enemyAttacks = army1->getOwner().getNum() == arena.evolutionReinforcements["owner"].Integer();
+		layoutName = enemyAttacks ? "evolutionCenterDefender" : "evolutionCenterAttacker";
+	}
 	startBattle(army1, army2, army2->visitablePos(),
 		army1->ID == Obj::HERO ? dynamic_cast<const CGHeroInstance*>(army1) : nullptr,
 		army2->ID == Obj::HERO ? dynamic_cast<const CGHeroInstance*>(army2) : nullptr,
-		BattleLayout::createDefaultLayout(gameHandler->gameInfo(), army1, army2),
+		BattleLayout::createLayout(gameHandler->gameInfo(), layoutName, army1, army2),
 		nullptr);
 }
 
@@ -167,6 +175,16 @@ BattleID BattleProcessor::setupBattle(int3 tile, BattleSideArray<const CArmedIns
 	}
 	else if (heroes[BattleSide::ATTACKER] && heroes[BattleSide::ATTACKER]->inBoat() && heroes[BattleSide::DEFENDER] && heroes[BattleSide::DEFENDER]->inBoat())
 		battlefieldType = BattleField(*LIBRARY->identifiers()->getIdentifier("core", "battlefield.ship_to_ship"));
+
+	const auto & arenaMap = gameHandler->gameState().getMap();
+	if(arenaMap.evolutionSeed && !town && arenaMap.evolutionSeed % 3 == 0)
+	{
+		// Evolution Arena: every third seed fights on one of the magical terrains with its native rules.
+		static const char * const fields[] = {"magic_plains", "fiery_fields", "rocklands", "magic_clouds", "lucid_pools", "holy_ground", "clover_field", "evil_fog", "cursed_ground"};
+		const auto chosen = LIBRARY->identifiers()->getIdentifier("core", std::string("battlefield.") + fields[(arenaMap.evolutionSeed / 3) % std::size(fields)]);
+		if(chosen)
+			battlefieldType = BattleField(*chosen);
+	}
 
 	//send info about battles
 	BattleStart bs;

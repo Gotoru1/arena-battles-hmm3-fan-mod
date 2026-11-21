@@ -3,6 +3,15 @@
 // are ordinary battle participants, and are never written back into hero slots.
 namespace evolution_server
 {
+// Companies beyond the hero's seven slots line up on both edges of the field, rear ranks first,
+// because the player's army stands in the middle. Returns the preferred column and row.
+inline std::pair<int,int> companyCell(int index)
+{
+	const int rank=index/2;
+	const int column=2+2*(rank/11);
+	return {index%2 ? 16-column : column,(rank*5)%11};
+}
+
 bool deployCompany(CGameHandler & server,const CBattleInfoCallback & battle,BattleSide side,
 	CreatureID species,int count,BattleHex preferred,std::vector<Bonus> effects)
 {
