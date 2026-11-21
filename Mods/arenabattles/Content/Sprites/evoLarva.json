@@ -1,0 +1,137 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"evoLarva_move0.png",
+				"evoLarva_move1.png",
+				"evoLarva_move2.png",
+				"evoLarva_move3.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 1,
+			"frames": [
+				"evoLarva_idle0.png",
+				"evoLarva_idle1.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 2,
+			"frames": [
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 3,
+			"frames": [
+				"evoLarva_hit.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 4,
+			"frames": [
+				"evoLarva_hit.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 5,
+			"frames": [
+				"evoLarva_dead0.png",
+				"evoLarva_dead1.png",
+				"evoLarva_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 6,
+			"frames": [
+				"evoLarva_dead0.png",
+				"evoLarva_dead1.png",
+				"evoLarva_dead.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 7,
+			"frames": [
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 8,
+			"frames": [
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 9,
+			"frames": [
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 10,
+			"frames": [
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 11,
+			"frames": [
+				"evoLarva_bite0.png",
+				"evoLarva_bite1.png",
+				"evoLarva_bite2.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 12,
+			"frames": [
+				"evoLarva_bite0.png",
+				"evoLarva_bite1.png",
+				"evoLarva_bite2.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 13,
+			"frames": [
+				"evoLarva_bite0.png",
+				"evoLarva_bite1.png",
+				"evoLarva_bite2.png",
+				"evoLarva_idle0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 20,
+			"frames": [
+				"evoLarva_move0.png"
+			],
+			"generateOverlay": 1
+		},
+		{
+			"group": 21,
+			"frames": [
+				"evoLarva_move3.png"
+			],
+			"generateOverlay": 1
+		}
+	]
+}

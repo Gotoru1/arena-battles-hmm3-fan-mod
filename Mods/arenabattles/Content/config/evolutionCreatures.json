@@ -69,15 +69,15 @@
     "aiValue": 12,
     "abilities": {},
     "graphics": {
-      "animation": "CDRFLY.DEF",
+      "animation": "evoLarva.def",
       "animationTime": {
         "walk": 0.6,
         "attack": 0.5,
         "idle": 1
       },
       "timeBetweenFidgets": 4,
-      "iconLarge": "TWCRPORT.DEF:0:106",
-      "iconSmall": "CPRSMALL.DEF:0:106"
+      "iconLarge": "evolution/portrait_larva",
+      "iconSmall": "evolution/portrait_larva_small"
     },
     "sound": {
       "attack": "DFLYATTK.wav",

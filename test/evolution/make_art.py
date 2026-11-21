@@ -376,6 +376,31 @@ def portrait(draw):
     return img
 
 
+def larva(img, cx, foot, phase=0.0, lunge=0.0, flat=1.0, alpha=1.0, jaws=0.0):
+    """A pale segmented grub facing right. `phase` bends the body, `lunge` throws the head forward."""
+    box = (cx - 44, foot - 48, cx + 44, foot + 6)
+    img.paint(box, ellipse(cx, foot - 1, 27, 4.5), (0, 0, 0, 0.32 * alpha))
+    segments = []
+    for i in range(6):
+        x = cx - 22 + i * 8.5 + lunge * i / 5.0
+        lift = math.sin(phase + i * 1.1) * 3.0 * flat
+        radius = (7.5 + 3.0 * math.sin(i / 5.0 * math.pi)) * (1.0 if i < 5 else 0.9)
+        segments.append((x, foot - 3 - radius * flat - max(0.0, lift), radius))
+    for x, y, r in segments:
+        img.paint(box, ellipse(x, y, r + 1.3, r * flat + 1.3), (44, 36, 24, 0.95 * alpha))
+    for i, (x, y, r) in enumerate(segments):
+        tone = (214, 204, 150) if i % 2 else (196, 184, 128)
+        img.paint(box, ellipse(x, y, r, r * flat), shade(tone, x, y, r * 1.3, 60, 70, alpha))
+        img.paint(box, both(ellipse(x, y, r, r * flat), stroke(x - r * 0.5, y - r * flat, x - r * 0.5, y + r * flat, 1.1)), (150, 128, 80, 0.5 * alpha))
+    hx, hy, hr = segments[-1]
+    img.paint(box, ellipse(hx + 2.5, hy - 2.0, 1.7, 1.7), (30, 16, 12, alpha))
+    for sign in (-1, 1):
+        img.paint(box, stroke(hx + hr * 0.7, hy + sign * 2.0, hx + hr * 0.7 + 5.5, hy + sign * (1.0 + 4.0 * jaws), 1.8), (110, 50, 30, alpha))
+    for i in (1, 2, 3):
+        x, y, r = segments[i]
+        img.paint(box, stroke(x, y + r * flat * 0.6, x + 1.5, foot - 1, 1.5), (120, 100, 60, 0.9 * alpha))
+
+
 def animation(name, groups, overlay=False):
     path = os.path.join(CONTENT, "Sprites", name + ".json")
     data = {"basepath": "arena/evolution/", "sequences": [{"group": g, "frames": frames} for g, frames in sorted(groups.items())]}
@@ -432,7 +457,25 @@ def main():
               11: one, 12: one, 13: one, 20: one, 21: one}
     write("evoHusk", frames, groups)
 
-    for name, draw in (("egg", lambda i, x, y: egg(i, x, y)), ("husk", lambda i, x, y: husk(i, x, y, 0.0, 1.0))):
+    still = creature_frame(lambda i, x, y: larva(i, x, y))
+    frames = {"idle0": still, "idle1": creature_frame(lambda i, x, y: larva(i, x, y, 0.8)), "hit": still.tint(70),
+              "dead0": creature_frame(lambda i, x, y: larva(i, x, y, 0.0, 0.0, 0.75, 0.9)),
+              "dead1": creature_frame(lambda i, x, y: larva(i, x, y, 0.0, 0.0, 0.5, 0.75)),
+              "dead": creature_frame(lambda i, x, y: larva(i, x, y, 0.0, 0.0, 0.3, 0.55))}
+    for step in range(4):
+        frames["move%d" % step] = creature_frame(lambda i, x, y, s=step: larva(i, x, y, s * math.pi / 2))
+    for step, (reach, bite) in enumerate(((3.0, 0.4), (9.0, 1.0), (4.0, 0.2))):
+        frames["bite%d" % step] = creature_frame(lambda i, x, y, r=reach, b=bite: larva(i, x, y, 0.0, r, 1.0, 1.0, b))
+    one = ["idle0"]
+    crawl = ["move0", "move1", "move2", "move3"]
+    bite = ["bite0", "bite1", "bite2", "idle0"]
+    dying = ["dead0", "dead1", "dead"]
+    groups = {0: crawl, 1: ["idle0", "idle1", "idle0"], 2: one, 3: ["hit", "idle0"], 4: ["hit", "idle0"], 5: dying, 6: dying, 7: one, 8: one,
+              9: one, 10: one, 11: bite, 12: bite, 13: bite, 20: ["move0"], 21: ["move3"]}
+    write("evoLarva", frames, groups)
+
+    for name, draw in (("egg", lambda i, x, y: egg(i, x, y)), ("husk", lambda i, x, y: husk(i, x, y, 0.0, 1.0)),
+                       ("larva", lambda i, x, y: larva(i, x, y - 10))):
         large = portrait(draw)
         large.save(os.path.join(data, "portrait_%s.png" % name))
         resize(large, 32, 32).save(os.path.join(data, "portrait_%s_small.png" % name))
