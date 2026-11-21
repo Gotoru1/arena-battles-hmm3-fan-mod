@@ -302,7 +302,35 @@ static void growingEnemyArmies()
 	}
 }
 
+static void adaptiveDamageAndDebt()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	auto & a=field.units.emplace(1,CStack{1,{11,10,100,{1},BattleSide::LEFT},{trait(66)}}).first->second;
+	auto & b=field.units.emplace(2,CStack{2,{22,10,100,{2},BattleSide::RIGHT},{trait(53),trait(73)}}).first->second;
+	auto hit=[&](int64_t n,bool shot=false){return actions.evolutionIncoming(field,a.id,&b,n,shot,false);};
+	assert(hit(40)==40 && hit(40)==30 && hit(40,true)==50);
+	actions.evolutionAttack(field,&a,&b,{{{2,1,40,false,0}}});
+	assert(hit(30)==50); // 30 + 10 stored, then 25% for switching channel
+	assert(hit(200)==0 && hit(200)==150);
+	a.data.health=0;
+	++field.round;
+	actions.evolutionRound(field,false);
+	assert(b.data.health==50);
+	actions.evolutionRound(field,false);
+	assert(b.data.health==50);
+	a.data.health=100;
+	actions.evolutionAttack(field,&b,&a,{{{1,2,32,false,0}}});
+	assert(hit(32)==30); // defensive round: 32 + 8 stored, then resistance
+	assert(hit(100)==0);
+	++field.round;
+	actions.evolutionRound(field,false);
+	assert(!b.alive());
+}
+
 int main(){
+	adaptiveDamageAndDebt();
 	growingEnemyArmies();
 	parasiteBurstAndGenerations();
 	defenseAndConversion();

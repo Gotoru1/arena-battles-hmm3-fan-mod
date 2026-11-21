@@ -327,19 +327,19 @@ class EvolutionReactions
 
 	// VCMI serializes each bonus value as a signed 32-bit integer.
 	// Three nonnegative limbs preserve the full native damage range across packets.
-	int64_t reserve(const CStack * unit) const
+	int64_t reserve(const CStack * unit,int key=500247) const
 	{
 		int64_t amount = 0;
 		for(int i=0; i<3; ++i)
-			amount |= int64_t(counter(unit,500247+i)) << (30*i);
+			amount |= int64_t(counter(unit,key+i)) << (30*i);
 		return amount;
 	}
 
-	void setReserve(const CStack * unit,int64_t amount)
+	void setReserve(const CStack * unit,int64_t amount,int key=500247)
 	{
 		for(int i=0; i<3; ++i)
 		{
-			setCounter(unit,500247+i,static_cast<int>(amount & 0x3fffffff));
+			setCounter(unit,key+i,static_cast<int>(amount & 0x3fffffff));
 			amount >>= 30;
 		}
 	}
@@ -873,6 +873,15 @@ public:
 				damage = combineDamage(damage,stored);
 			}
 		}
+		if(!secondary && rules(source).count(66))
+		{
+			const auto charge=reserve(source,500366);
+			if(charge)
+			{
+				damage=combineDamage(damage,charge);
+				setReserve(source,0,500366);
+			}
+		}
 		const auto active = rules(target);
 		const int round = battle.battleGetRound();
 		if(active.count(47) && ranged && counter(target,500047) != ~round)
@@ -896,7 +905,39 @@ public:
 				if(charges==1) setCounter(target,500214,1);
 			}
 		}
+		const int channel=ranged ? 2 : 1;
+		if(damage>0 && active.count(53))
+		{
+			const int last=counter(target,500053);
+			if(last==channel) damage-=damage/4;
+			else if(last) damage=combineDamage(damage,damage/4);
+		}
+		if(active.count(73) && damage>=target->getAvailableHealth() && counter(target,500073)!=~round && !reserve(target,500373))
+		{
+			setCounter(target,500073,~round);
+			setCounter(target,500173,static_cast<int>(source->unitId()));
+			setReserve(target,target->getAvailableHealth(),500373);
+			return 0;
+		}
+		if(damage>0 && active.count(53)) setCounter(target,500053,channel);
 		return damage;
+	}
+
+	void settleDeferred()
+	{
+		std::vector<uint32_t> due;
+		for(auto * unit:living())
+			if(reserve(unit,500373)) due.push_back(unit->unitId());
+		for(auto id:due)
+		{
+			auto * unit=battle.battleGetStackByID(id);
+			if(!unit) continue;
+			const auto amount=reserve(unit,500373);
+			const auto * owner=battle.battleGetStackByID(counter(unit,500173),false);
+			setReserve(unit,0,500373);
+			if(owner && owner->alive()) injure(unit,owner,amount);
+			else if(amount/2) injure(unit,owner ? owner : unit,amount/2);
+		}
 	}
 
 	void externalDamage(const StacksInjured & injuries)
@@ -909,6 +950,7 @@ public:
 	void round(bool first)
 	{
 		if(first) exchange();
+		else settleDeferred();
 		for(auto * unit : living())
 		{
 			const auto active = rules(unit);
@@ -952,6 +994,16 @@ public:
 		for(const auto & hit : packet.bsa)
 		{
 			const auto * victim = battle.battleGetStackByID(hit.stackAttacked,false);
+			if(victim && hit.damageAmount>0 && source->unitSide()!=victim->unitSide())
+			{
+				const bool offensive=battle.battleGetRound()%2!=0;
+				const auto * bearer=offensive ? source : victim;
+				if(bearer->alive() && rules(bearer).count(66))
+				{
+					const auto gained=std::max<int64_t>(1,hit.damageAmount/4);
+					setReserve(bearer,combineDamage(reserve(bearer,500366),gained),500366);
+				}
+			}
 			if(victim && counter(victim,500214))
 			{
 				setCounter(victim,500214,0);
