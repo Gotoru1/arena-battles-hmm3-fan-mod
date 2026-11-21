@@ -270,17 +270,74 @@ public:
 		}
 		else
 		{
-			auto & level=line.mutations[id];
+			const auto level=rank(id,slot);
 			if(level==std::numeric_limits<unsigned>::max()) throw std::overflow_error("Mutation rank exceeds unsigned range");
 			if(alternateForm && level!=1) throw std::logic_error("Evolution needs rank two");
 			if(alternateForm) alternateForms.emplace(line.identity,id);
-			++level;
+			gain(line,id);
 		}
 		history.push_back(offers[index]);
 		recipients.push_back(line.identity);
 		offers.clear();
 		++wave;
+		seasons(wave);
 		phase = Phase::Battle;
+	}
+
+	// Mutations that reshape other mutations follow fixed rules, so that replaying the
+	// ordered draft of a save file rebuilds exactly the same ranks.
+	static void raiseWeakest(Lineage & line,const std::string & first,const std::string & second = {})
+	{
+		std::string weakest;
+		for(const auto & entry : line.mutations)
+			if(entry.first != first && entry.first != second && entry.first.rfind("law.",0) != 0
+				&& entry.second < std::numeric_limits<unsigned>::max()
+				&& (weakest.empty() || entry.second < line.mutations.at(weakest))) weakest = entry.first;
+		if(!weakest.empty()) ++line.mutations[weakest];
+	}
+
+	// Biological Singularity: a mutation that is new to the unit also raises its weakest other mutation.
+	static void gain(Lineage & line,const std::string & id)
+	{
+		const bool fresh = !line.mutations.count(id);
+		++line.mutations[id];
+		if(fresh && id != "trait92" && line.mutations.count("trait92")) raiseWeakest(line,id,"trait92");
+	}
+
+	// Mutation Rebirth: on every third wave the weakest other mutation of the bearer gains a rank.
+	void seasons(const Amount & reached)
+	{
+		if(reached < 4 || (reached - 1) % 3 != 0) return;
+		for(size_t slot = 0; slot < rosterSize(); ++slot)
+			if(rank("trait83",slot)) raiseWeakest(stack(slot),"trait83");
+	}
+
+	// Lasting growth earned in the battle that was just won. `upgrade` is the improved
+	// creature of the unit, or a negative number when it has none.
+	void grow(size_t slot,int alliesLost,bool leaped,int upgrade)
+	{
+		if(phase != Phase::Reward || alliesLost < 0) throw std::logic_error("Growth belongs to a won battle");
+		auto & line = stack(slot);
+		line.harvest += Amount(alliesLost) * 10 * rank("trait80",slot);
+		line.harvest += Amount(10) * rank("trait85",slot);
+		if((leaped && rank("trait70",slot)) || (boss() && rank("trait91",slot)))
+		{
+			bool taken = upgrade < 0;
+			for(size_t other = 0; other < rosterSize(); ++other)
+				taken |= stack(other).creature == upgrade;
+			if(taken) line.harvest += 50;
+			else line.creature = upgrade;
+		}
+	}
+
+	// World Rebirth: every defeated boss raises all four hero statistics.
+	void rebirth()
+	{
+		if(phase != Phase::Reward || !boss()) return;
+		Amount ranks = 0;
+		for(size_t slot = 0; slot < rosterSize(); ++slot) ranks += rank("trait99",slot);
+		for(auto & stat : primary)
+			stat = engineInt(std::min<Amount>(Amount(stat) + ranks, std::numeric_limits<int>::max()));
 	}
 
 	// A battle checkpoint holds the RNG immediately before enemy generation.
@@ -371,11 +428,13 @@ public:
 				if(encoded==(version=="EA5"?result.stack(slot).identity:slot)) return slot;
 			throw invalid;
 		};
+		Amount replayed = 1;
 		for(const auto & id : result.history)
 		{
 			const auto slot=readOwner();
 			result.recipients.push_back(result.stack(slot).identity);
-			if(!armyReward(id)) ++result.stack(slot).mutations[id];
+			if(!armyReward(id)) gain(result.stack(slot),id);
+			result.seasons(++replayed);
 		}
 		if(version == "EA4" || version == "EA5")
 		{

@@ -224,7 +224,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,39,40,42,43,45,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,71,72,73,75,77,78,81,82,87,89,90,94,95,97};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,39,40,42,43,45,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,75,77,78,80,81,82,83,85,87,89,90,91,92,94,95,97,99,100};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1381,7 +1381,66 @@ static void swarmGroup()
 	}
 }
 
+static void runGrowthMarkers()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	auto add=[&](int id,int count,int pos,BattleSide side,std::vector<int> mutations)->CStack &{
+		auto & unit=field.units.emplace(id,CStack{id,{10+id,count,count*10,{pos},side},{}}).first->second;
+		for(int m:mutations) unit.bonuses.push_back(trait(m));
+		return unit;
+	};
+	auto kill=[&](CStack & killer,CStack & victim){
+		const int count=victim.getCount();
+		victim.data.health=0;
+		actions.evolutionAttack(field,&killer,&victim,{{{victim.id,killer.id,10,true,count}}});
+	};
+	// Vengeance Machine counts allied bodies destroyed while it lives, and never its own death.
+	auto & avenger=add(1,10,2,BattleSide::LEFT,{80});
+	auto & first=add(2,5,3,BattleSide::LEFT,{});
+	auto & second=add(3,5,4,BattleSide::LEFT,{});
+	auto & enemy=add(4,100,8,BattleSide::RIGHT,{});
+	auto & prey=add(5,1,9,BattleSide::RIGHT,{});
+	// Evolutionary Leap needs all three deeds in one battle.
+	auto & leaper=add(6,10,1,BattleSide::LEFT,{70});
+	kill(enemy,first);
+	assert(carries(avenger,BonusType::NONE,500080,1));
+	kill(enemy,second);
+	assert(carries(avenger,BonusType::NONE,500080,2) && avenger.getBonusesOfType(BonusType::NONE,500080)->size()==1);
+	kill(leaper,prey);
+	assert(carries(leaper,BonusType::NONE,500170,1) && leaper.getBonusesOfType(BonusType::NONE,500270)->empty());
+	leaper.data.health=80;
+	actions.evolutionAttack(field,&enemy,&leaper,{{{6,4,20,false,2}}});
+	assert(carries(leaper,BonusType::NONE,500170,3) && leaper.getBonusesOfType(BonusType::NONE,500270)->empty());
+	nextRound(field,actions);
+	assert(leaper.getBonusesOfType(BonusType::NONE,500270)->empty());
+	nextRound(field,actions);
+	assert(carries(leaper,BonusType::NONE,500170,7) && carries(leaper,BonusType::NONE,500270,1));
+	kill(enemy,avenger);
+	assert(carries(avenger,BonusType::NONE,500080,2));
+
+	// Final Evolution: eight different mutations work one rank higher for the battle; seven do not.
+	CBattleInfoCallback apex;
+	CGameHandler apexServer{apex,{}};
+	BattleActionProcessor apexActions{&apexServer};
+	auto & ready=apex.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{}}).first->second;
+	auto & early=apex.units.emplace(2,CStack{2,{12,10,100,{4},BattleSide::LEFT},{}}).first->second;
+	apex.units.emplace(3,CStack{3,{13,10,100,{9},BattleSide::RIGHT},{}});
+	for(int m:{100,2,9,14,19,23,47,53}) ready.bonuses.push_back(trait(m));
+	for(int m:{100,2,9,14,19,23,47}) early.bonuses.push_back(trait(m));
+	apexActions.evolutionRound(apex,true);
+	for(int m:{2,9,14,19,23,47,53})
+	{
+		const auto ranks=ready.getBonusesOfType(BonusType::EVOLUTION_TRAIT,m);
+		assert(std::any_of(ranks->begin(),ranks->end(),[](const auto & b){return b->val==2;}));
+	}
+	assert(ready.getBonusesOfType(BonusType::EVOLUTION_TRAIT,100)->size()==1);
+	assert(early.getBonusesOfType(BonusType::EVOLUTION_TRAIT)->size()==7);
+}
+
 int main(){
+	runGrowthMarkers();
 	swarmGroup();
 	deathAndTransformation();
 	bloodAndLinks();

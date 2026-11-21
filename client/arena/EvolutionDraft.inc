@@ -321,7 +321,7 @@ void ArenaDraft::chooseEvolutionCreature()
 		}, [self]() { self->cancel(); }, nullptr);
 }
 
-void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies)
+void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors, int64_t casualties, const std::set<int> & discoveries, const std::array<int,7> & trophies, const std::array<int,7> & alliesLost, const std::array<int,7> & leaps)
 {
 	if(!evolutionBattle())
 		return;
@@ -345,6 +345,14 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 	run->finish(won, leaders, casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
 	if(won)
 	{
+		// Lasting growth: Vengeance Machine, Self-Learning Flesh, Evolutionary Leap, Eternal Metamorphosis, World Rebirth.
+		for(size_t slot = 0; slot < run->rosterSize(); ++slot)
+		{
+			const auto * creature = CreatureID(run->stack(slot).creature).toCreature();
+			const int upgrade = creature->upgrades.empty() ? -1 : creature->upgrades.begin()->getNum();
+			run->grow(slot, alliesLost[slot], leaps[slot] != 0, upgrade);
+		}
+		run->rebirth();
 		std::vector<std::string> extra;
 		for(const auto & entry:evolutionCatalog()["rewards"].Struct()) extra.push_back(entry.first);
 		run->offerArmyReward(std::move(extra));
@@ -614,7 +622,9 @@ try
 	{
 		const int id=std::stoi(entry.first.substr(5));
 		// These rewards only trigger between player waves.
-		if(id!=41 && id!=88) poolTraits.push_back({id,static_cast<unsigned>(entry.second["rarity"].Integer())});
+		// and these only shape the player's run.
+		static const std::set<int> runOnly{41,70,80,83,85,88,91,92,99};
+		if(!runOnly.count(id)) poolTraits.push_back({id,static_cast<unsigned>(entry.second["rarity"].Integer())});
 	}
 	const auto mutations=evolution::enemyMutations(wave,map->evolutionSeed,poolTraits);
 	const int frontShare = formation == 1 ? 22 : formation == 2 ? 65 : 40;

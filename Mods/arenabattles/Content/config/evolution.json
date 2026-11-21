@@ -1063,6 +1063,118 @@
           "icon": "evolution/trait90"
         }
       ]
+    },
+    "trait70": {
+      "name": "Эволюционный скачок",
+      "text": "Если за один бой носитель уничтожил вражеский отряд, потерял бойцов и дожил до третьего раунда, после победы он навсегда превращается в улучшенную форму своего вида с теми же мутациями. Если улучшать некуда, получает +5 к урону до конца забега.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "70",
+          "description": "@arenabattles.evolution.trait.70",
+          "icon": "evolution/trait70"
+        }
+      ]
+    },
+    "trait80": {
+      "name": "Машина мести",
+      "text": "За каждый союзный отряд, уничтоженный в бою, включая призванных существ, носитель после победы навсегда получает +1 к урону за ранг.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "80",
+          "description": "@arenabattles.evolution.trait.80",
+          "icon": "evolution/trait80"
+        }
+      ]
+    },
+    "trait83": {
+      "name": "Перерождение мутаций",
+      "text": "Каждую третью волну самая слабая из остальных мутаций носителя навсегда повышает ранг.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "83",
+          "description": "@arenabattles.evolution.trait.83",
+          "icon": "evolution/trait83"
+        }
+      ]
+    },
+    "trait85": {
+      "name": "Самообучающаяся плоть",
+      "text": "После каждой победы носитель навсегда получает +1 к урону за ранг.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "85",
+          "description": "@arenabattles.evolution.trait.85",
+          "icon": "evolution/trait85"
+        }
+      ]
+    },
+    "trait91": {
+      "name": "Вечная метаморфоза",
+      "text": "После каждой победы над боссом носитель навсегда превращается в улучшенную форму своего вида с теми же мутациями. Если улучшать некуда, получает +5 к урону до конца забега.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "91",
+          "description": "@arenabattles.evolution.trait.91",
+          "icon": "evolution/trait91"
+        }
+      ]
+    },
+    "trait92": {
+      "name": "Биологическая сингулярность",
+      "text": "Каждая мутация, которую носитель получает впервые, навсегда повышает на один ранг самую слабую из его остальных мутаций.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "92",
+          "description": "@arenabattles.evolution.trait.92",
+          "icon": "evolution/trait92"
+        }
+      ]
+    },
+    "trait99": {
+      "name": "Перерождение мира",
+      "text": "После каждого побеждённого босса все четыре характеристики героя навсегда растут на 1 за ранг.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "99",
+          "description": "@arenabattles.evolution.trait.99",
+          "icon": "evolution/trait99"
+        }
+      ]
+    },
+    "trait100": {
+      "name": "Последняя эволюция",
+      "text": "Если у носителя не меньше восьми разных мутаций, в начале боя ранг каждой из них повышается на 1 до конца сражения.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "100",
+          "description": "@arenabattles.evolution.trait.100",
+          "icon": "evolution/trait100"
+        }
+      ]
     }
   },
   "synergies": [],

@@ -673,6 +673,17 @@ class EvolutionReactions
 		return static_cast<int>(std::max<int64_t>(1,std::min<int64_t>(amount,INT32_MAX)));
 	}
 
+	// Evolutionary Leap: destroy an enemy unit (1), lose fighters (2) and reach the third round (4)
+	// in one battle. The marker 500270 tells the run to improve the creature after a victory.
+	void leap(const CStack * unit,int deed)
+	{
+		if(!unit->alive() || !rules(unit).count(70)) return;
+		const int deeds=counter(unit,500170);
+		if((deeds|deed)==deeds) return;
+		setCounter(unit,500170,deeds|deed);
+		if((deeds|deed)==7) remember(unit,500270,1);
+	}
+
 	// Predatory Rebirth: the dead bearer returns at the start of the next round by using up
 	// the untouched remains of an enemy it destroyed.
 	void rebirths()
@@ -929,6 +940,12 @@ class EvolutionReactions
 		if(source && source->unitSide()!=corpse->unitSide())
 			for(auto * witness:beforeSummons)
 				if(witness->unitSide()==corpse->unitSide() && rules(witness).count(8)) remember(witness,500008,source->unitId());
+		// Vengeance Machine counts every allied body destroyed in this battle; the run turns the count into lasting damage.
+		if(corpse->creatureId()!=eggType() && corpse->creatureId()!=huskType())
+			for(auto * witness:beforeSummons)
+				if(witness!=corpse && witness->unitSide()==corpse->unitSide() && rules(witness).count(80))
+					setCounter(witness,500080,std::min(INT32_MAX-1,counter(witness,500080))+1);
+		if(source && source->alive() && source->unitSide()!=corpse->unitSide()) leap(source,1);
 		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(68))
 		{
 			static const CreatureID ghost(CreatureID::decode("core:wight"));
@@ -1503,6 +1520,7 @@ public:
 			case evolution::ReactionKind::Loss:
 				lostLarvae(target,event.amount);
 				casualties(event.amount);
+				if(event.amount && target->alive()) leap(target,2);
 				if(event.amount && counter(target,500069)>0)
 					if(const auto * twin=partner(target,500069))
 						if(twin->alive())
@@ -1840,6 +1858,13 @@ public:
 			if(!first && unit->alive()) { parasites(unit); if(unit->alive()) epidemic(unit); }
 			if(!unit->alive()) continue;
 			if(active.count(32)) recycle(unit,0);
+			if(battle.battleGetRound()>=3) leap(unit,4);
+			if(first && active.count(100) && active.size()>=8)
+			{
+				// Final Evolution: with eight different mutations every one of them works a rank higher.
+				for(auto rule:active)
+					if(rule.first!=100 && rule.second<INT32_MAX) putTrait(unit,rule.first,rule.second+1);
+			}
 			if(first) observe(unit);
 			if(first && active.count(59))
 				for(auto * ally : living())

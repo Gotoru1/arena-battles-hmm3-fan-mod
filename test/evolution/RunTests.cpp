@@ -292,6 +292,49 @@ int main()
 	std::filesystem::remove(slots.path(1));
 	std::filesystem::remove(slots.path(2));
 	require(std::filesystem::remove(folder),"No partial save files left behind");
+	{
+		// Biological Singularity and Mutation Rebirth reshape ranks by fixed rules that a save replay repeats.
+		RoguelikeRun shaped(77);
+		shaped.begin(2,{1,2,3,4},3,24);
+		for(const std::string wanted : {"trait92","trait9","trait23","trait83","trait9","trait18","trait51"})
+		{
+			shaped.finish(true,20,1,{wanted,"filler1","filler2"});
+			const auto at=std::find(shaped.offers.begin(),shaped.offers.end(),wanted);
+			shaped.pick(static_cast<size_t>(at-shaped.offers.begin()));
+		}
+		const std::map<std::string,unsigned> expected{{"trait18",3},{"trait23",2},{"trait51",1},{"trait83",2},{"trait9",3},{"trait92",1}};
+		require(shaped.army.mutations==expected && shaped.wave==8,"Singularity and rebirth ranks");
+		std::stringstream stored;
+		shaped.save(stored);
+		require(RoguelikeRun::restore(stored).army.mutations==expected,"Replay rebuilds reshaped ranks");
+	}
+	{
+		// Lasting growth: fallen allies, one point per victory, a leap into the improved creature, boss rebirth.
+		RoguelikeRun grown(5);
+		grown.begin(2,{1,2,3,4},3,24);
+		mustFail([&]{grown.grow(0,1,true,9);});
+		for(const std::string wanted : {"trait80","trait85","trait70"})
+		{
+			grown.finish(true,20,1,{wanted,"filler1","filler2"});
+			const auto at=std::find(grown.offers.begin(),grown.offers.end(),wanted);
+			grown.pick(static_cast<size_t>(at-grown.offers.begin()));
+		}
+		grown.finish(true,20,1,{"trait99","filler1","filler2"});
+		grown.grow(0,3,true,9);
+		require(grown.army.harvest==40 && grown.army.creature==9,"Fallen allies, learning and the leap");
+		grown.grow(0,0,true,9);
+		require(grown.army.harvest==100 && grown.army.creature==9,"A unit already in its best form grows stronger instead");
+		grown.grow(0,0,false,12);
+		require(grown.army.harvest==110 && grown.army.creature==9,"No leap without its conditions");
+		grown.rebirth();
+		require(grown.primary==(std::array<int,4>{1,2,3,4}),"World Rebirth waits for a boss");
+		const auto at=std::find(grown.offers.begin(),grown.offers.end(),"trait99");
+		grown.pick(static_cast<size_t>(at-grown.offers.begin()));
+		require(grown.boss(),"Wave five is a boss");
+		grown.finish(true,20,1,{"filler0","filler1","filler2"});
+		grown.rebirth();
+		require(grown.primary==(std::array<int,4>{2,3,4,5}),"World Rebirth after the boss");
+	}
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
 	mustFail([&]{engineInt(enormous);});
