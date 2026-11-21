@@ -2,6 +2,29 @@
 // Included by BattleActionProcessor.cpp. All changes go through VCMI's battle packets.
 namespace evolution_server
 {
+// Ground marks are real passable battlefield obstacles, so both players see them.
+// spellLevel holds the mutation id, casterSpellPower the unit that left the mark.
+constexpr int groundTag=500900;
+struct Ground { int id; BattleHex hex; int kind; int owner; BattleSide side; };
+static std::vector<Ground> groundMarks(const CBattleInfoCallback & battle)
+{
+	std::vector<Ground> result;
+	for(const auto & obstacle:battle.battleGetAllObstacles())
+	{
+		const auto * mark=dynamic_cast<const SpellCreatedObstacle *>(obstacle.get());
+		if(mark && mark->minimalDamage==groundTag)
+			result.push_back({mark->uniqueID,mark->pos,mark->spellLevel,mark->casterSpellPower,mark->casterSide});
+	}
+	return result;
+}
+
+static bool touches(const CStack * unit,BattleHex place,BattleHex centre,int reach)
+{
+	for(auto hex:unit->getHexes(place))
+		if(BattleHex::getDistance(hex,centre)<=reach) return true;
+	return false;
+}
+
 class EvolutionReactions
 {
 	CGameHandler & server;
@@ -694,6 +717,8 @@ class EvolutionReactions
 
 		if(source && source->alive() && source->unitSide() != corpse->unitSide() && rules(source).count(27))
 			copyProperty(source,corpse);
+		if(source && source->alive() && source->unitSide() != corpse->unitSide() && rules(source).count(24))
+			stain(corpse->getPosition(),24,source,-1);
 		for(auto * unit : beforeSummons)
 			if(rules(unit).count(18) && BattleHex::getDistance(unit->getPosition(),corpse->getPosition()) == 1)
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
@@ -819,6 +844,132 @@ class EvolutionReactions
 	bool attach(const CStack * target, const CStack * owner, BonusType type)
 	{
 		return afflict(target,type==BonusType::EVOLUTION_WOUND ? 1 : 0,static_cast<int>(owner->unitId()));
+	}
+
+	bool stain(BattleHex hex,int kind,const CStack * owner,int turns)
+	{
+		if(!hex.isValid()) return false;
+		for(const auto & mark:groundMarks(battle))
+			if(mark.hex==hex && mark.kind==kind && mark.side==owner->unitSide()) return false;
+		const bool pit=kind==6 || kind==13 || kind==17;
+		SpellCreatedObstacle mark;
+		mark.uniqueID=battle.nextObstacleId();
+		mark.pos=hex;
+		mark.ID=SpellID(pit ? SpellID::QUICKSAND : SpellID::LAND_MINE).getNum();
+		mark.turnsRemaining=turns;
+		mark.casterSpellPower=static_cast<int>(owner->unitId());
+		mark.spellLevel=kind;
+		mark.minimalDamage=groundTag;
+		mark.casterSide=owner->unitSide();
+		mark.trigger=SpellID::NONE;
+		mark.hidden=false;
+		mark.revealed=true;
+		mark.passable=true;
+		mark.trap=false;
+		mark.removeOnTrigger=false;
+		mark.appearSound=AudioPath::builtin(pit ? "QUIKSAND" : "LANDMINE");
+		mark.appearAnimation=AnimationPath::builtin(pit ? "C17SPE0" : "C09SPF0");
+		mark.animation=AnimationPath::builtin(pit ? "C17SPE1" : "C09SPF1");
+		mark.animationYOffset=pit ? -42 : 0;
+		mark.customSize.insert(hex);
+		BattleObstaclesChanged packet;
+		packet.battleID=battle.getBattle()->getBattleID();
+		packet.changes.emplace_back();
+		mark.toInfo(packet.changes.back());
+		server.sendAndApply(packet);
+		return true;
+	}
+
+	void wipe(const Ground & mark)
+	{
+		BattleObstaclesChanged packet;
+		packet.battleID=battle.getBattle()->getBattleID();
+		packet.changes.emplace_back(mark.id,ObstacleChanges::EOperation::REMOVE);
+		server.sendAndApply(packet);
+	}
+
+	void mend(const CStack * unit,int64_t amount)
+	{
+		if(!unit->alive() || amount<=0) return;
+		auto state = unit->acquireState();
+		state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+		BattleUnitsChanged packet;
+		packet.battleID = battle.getBattle()->getBattleID();
+		packet.changedStacks.emplace_back(unit->unitId(), UnitChanges::EOperation::RESET_STATE);
+		state->save(packet.changedStacks.back().data);
+		server.sendAndApply(packet);
+	}
+
+	int rankOf(const CStack * unit,int trait) const
+	{
+		const auto active=rules(unit);
+		const auto found=active.find(trait);
+		return found==active.end() ? 1 : std::max(1,found->second);
+	}
+
+	// Blood Trail and Living Trap fire when an enemy body enters the marked cell.
+	bool tread(const CStack * mover)
+	{
+		bool halted=false;
+		for(const auto & mark:groundMarks(battle))
+		{
+			if(!mover->alive()) break;
+			if(mark.side==mover->unitSide() || (mark.kind!=4 && mark.kind!=6) || !touches(mover,mover->getPosition(),mark.hex,0)) continue;
+			wipe(mark);
+			const auto * owner=battle.battleGetStackByID(mark.owner,false);
+			if(!owner) continue;
+			const auto size=std::max<int64_t>(1,owner->unitBaseAmount());
+			if(mark.kind==6)
+			{
+				halted=true;
+				injure(mover,owner,evolution::damageProduct(size,rankOf(owner,6)));
+			}
+			else
+			{
+				afflict(mover,1,mark.owner);
+				injure(mover,owner,evolution::damageProduct(std::max<int64_t>(1,size/2),rankOf(owner,4)));
+			}
+		}
+		return halted;
+	}
+
+	// Spore Cloud: an enemy standing in the cloud receives the bearer's parasite.
+	void inhale(const CStack * unit)
+	{
+		if(!unit->alive()) return;
+		for(const auto & mark:groundMarks(battle))
+			if(mark.kind==13 && mark.side!=unit->unitSide() && touches(unit,unit->getPosition(),mark.hex,0)
+				&& battle.battleGetStackByID(mark.owner,false)) afflict(unit,0,mark.owner);
+	}
+
+	// Mycelium: at the start of a round allies on it recover, enemies are poisoned.
+	void mycelium(const CStack * unit)
+	{
+		for(const auto & mark:groundMarks(battle))
+		{
+			if(!unit->alive()) return;
+			if(mark.kind!=17 || !touches(unit,unit->getPosition(),mark.hex,0)) continue;
+			const auto * owner=battle.battleGetStackByID(mark.owner,false);
+			if(!owner) continue;
+			if(mark.side!=unit->unitSide()) afflict(unit,4,mark.owner);
+			else mend(unit,evolution::damageProduct(std::max<int64_t>(1,owner->unitBaseAmount()),rankOf(owner,17)));
+		}
+	}
+
+	// Territorial Predator: once per round the bearer strikes the first enemy that enters
+	// its marked ground while the bearer itself stands on that ground.
+	void territory(const CStack * mover)
+	{
+		const int round=battle.battleGetRound();
+		for(const auto & mark:groundMarks(battle))
+		{
+			if(!mover->alive()) return;
+			if(mark.kind!=24 || mark.side==mover->unitSide() || !touches(mover,mover->getPosition(),mark.hex,1)) continue;
+			const auto * owner=battle.battleGetStackByID(mark.owner);
+			if(!owner || !touches(owner,owner->getPosition(),mark.hex,1) || counter(owner,500024)==~round) continue;
+			setCounter(owner,500024,~round);
+			strike(owner,mover);
+		}
 	}
 
 	const CStack * nearestFoe(const CStack * from) const
@@ -1035,11 +1186,19 @@ public:
 		}
 	}
 
-	void moved(const CStack * mover)
+	bool moved(const CStack * mover,BattleHex origin)
 	{
 		spread(mover);
 		epidemic(mover);
 		const auto landing=mover->getPosition();
+		if(origin.isValid() && origin!=landing)
+		{
+			const auto active=rules(mover);
+			if(active.count(4)) stain(origin,4,mover,5);
+			if(active.count(17)) stain(origin,17,mover,3);
+		}
+		const bool halted=tread(mover);
+		if(mover->alive() && mover->getPosition()==landing) territory(mover);
 		for(auto * guard:living())
 		{
 			if(!mover->alive() || mover->getPosition()!=landing) break;
@@ -1051,6 +1210,23 @@ public:
 			remember(guard,500020,battle.battleGetRound());
 			strike(guard,mover);
 		}
+		return halted;
+	}
+
+	void defended(const CStack * unit)
+	{
+		if(!unit->alive() || !rules(unit).count(6)) return;
+		const auto * foe=nearestFoe(unit);
+		const auto access=battle.getAccessibility(unit);
+		const auto taken=groundMarks(battle);
+		BattleHex best;
+		for(auto hex:unit->getPosition().getNeighbouringTiles())
+		{
+			if(!hex.isValid() || !access.accessible(hex,unit)) continue;
+			if(std::any_of(taken.begin(),taken.end(),[&](const Ground & mark){return mark.hex==hex && mark.kind==6 && mark.side==unit->unitSide();})) continue;
+			if(!best.isValid() || (foe && BattleHex::getDistance(hex,foe->getPosition())<BattleHex::getDistance(best,foe->getPosition()))) best=hex;
+		}
+		if(best.isValid()) stain(best,6,unit,-1);
 	}
 
 	void spellCast(const BattleSpellCast & spell)
@@ -1174,7 +1350,8 @@ public:
 			const auto active = rules(unit);
 			if(!unit->alive()) continue;
 			if(!first && (awakenHusk(unit) || hatch(unit))) continue;
-			if(!first) { parasites(unit); if(unit->alive()) epidemic(unit); }
+			if(!first) { inhale(unit); mycelium(unit); }
+			if(!first && unit->alive()) { parasites(unit); if(unit->alive()) epidemic(unit); }
 			if(!unit->alive()) continue;
 			if(active.count(32)) recycle(unit,0);
 			if(first) observe(unit);
@@ -1207,8 +1384,18 @@ public:
 	{
 		const auto active = rules(source);
 		spread(source);
+		inhale(source);
 		for(const auto & hit : packet.bsa)
-			lastStand(battle.battleGetStackByID(hit.stackAttacked,false));
+		{
+			const auto * struck=battle.battleGetStackByID(hit.stackAttacked,false);
+			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(13))
+			{
+				const auto access=battle.getAccessibility(struck);
+				for(auto hex:struck->getPosition().getNeighbouringTiles())
+					if(hex.isValid() && access.accessible(hex,struck)) stain(hex,13,struck,2);
+			}
+			lastStand(struck);
+		}
 		// The packet may contain multiple victims. A spark is indirect damage, so it dispatches
 		// death reactions but cannot recursively emit another primary attack.
 		for(const auto & hit : packet.bsa)
@@ -1349,6 +1536,9 @@ void BattleActionProcessor::evolutionSpell(const CBattleInfoCallback & battle,co
 
 bool BattleActionProcessor::evolutionThreatened(const CBattleInfoCallback & battle,const CStack * mover,BattleHex hex)
 {
+	// A walker pauses on every cell of hostile marked territory so that its owner can react.
+	for(const auto & mark:evolution_server::groundMarks(battle))
+		if(mark.kind==24 && mark.side!=mover->unitSide() && evolution_server::touches(mover,hex,mark.hex,1)) return true;
 	for(auto * guard:battle.battleGetAllStacks())
 		if(evolution_server::EvolutionReactions::threatens(mover,hex,guard))
 		{
@@ -1358,7 +1548,14 @@ bool BattleActionProcessor::evolutionThreatened(const CBattleInfoCallback & batt
 	return false;
 }
 
-void BattleActionProcessor::evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover)
+bool BattleActionProcessor::evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover,BattleHex origin)
 {
-	withEvolution(battle,[&](auto & context){context.moved(mover);});
+	bool halted=false;
+	withEvolution(battle,[&](auto & context){halted=context.moved(mover,origin);});
+	return halted;
+}
+
+void BattleActionProcessor::evolutionDefended(const CBattleInfoCallback & battle,const CStack * unit)
+{
+	if(evolutionEnabled()) withEvolution(battle,[&](auto & context){context.defended(unit);});
 }

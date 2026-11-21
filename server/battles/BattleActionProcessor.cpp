@@ -223,6 +223,7 @@ bool BattleActionProcessor::doDefendAction(const CBattleInfoCallback & battle, c
 
 	processBattleEventTriggers(battle, CombatEventType::DEFEND, stack, nullptr);
 	evolutionSignal(battle, stack, evolution::AllyGuarded);
+	evolutionDefended(battle, stack);
 	return true;
 }
 
@@ -868,8 +869,8 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 			gameHandler->sendAndApply(sm);
 			if(arenaMovement)
 			{
-				evolutionMoved(battle,currentUnit);
-				if(!currentUnit->alive() || currentUnit->getPosition()!=dest) return {static_cast<int16_t>(pathDistance),true,false};
+				const bool halted=evolutionMoved(battle,currentUnit,start);
+				if(halted || !currentUnit->alive() || currentUnit->getPosition()!=dest) return {static_cast<int16_t>(pathDistance),true,false};
 			}
 		}
 	}
@@ -1000,8 +1001,8 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 				if(arenaMovement)
 				{
 					const auto landing=currentUnit->getPosition();
-					evolutionMoved(battle,currentUnit);
-					if(!currentUnit->alive() || landing!=currentUnit->getPosition()) return {static_cast<int16_t>(pathDistance),true,false};
+					const bool halted=evolutionMoved(battle,currentUnit,start);
+					if(halted || !currentUnit->alive() || landing!=currentUnit->getPosition()) return {static_cast<int16_t>(pathDistance),true,false};
 				}
 			}
 

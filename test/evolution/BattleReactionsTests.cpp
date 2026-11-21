@@ -84,11 +84,38 @@ struct CStack {
 struct Hexes : std::vector<BattleHex>{void insert(BattleHex h){push_back(h);}};
 struct BattleStackMoved {int battleID{},stack{};bool teleporting=false;Hexes tilesToMove;};
 struct BattleUnitsChanged {int battleID{}; std::vector<UnitChanges> changedStacks;};
+struct SpellID { enum Type {NONE=-1, QUICKSAND=10, LAND_MINE=11}; int value; SpellID(int v=0):value(v){} int getNum() const{return value;} bool operator==(SpellID other) const{return value==other.value;} };
+struct AnimationPath { std::string name; static AnimationPath builtin(const std::string & n){return {n};} };
+struct AudioPath { std::string name; static AudioPath builtin(const std::string & n){return {n};} };
+struct ObstacleChanges;
+struct CObstacleInstance { BattleHex pos; int uniqueID=-1; int ID=-1; virtual ~CObstacleInstance()=default; };
+// Defaults mirror the engine constructor, including the unset trigger that callers must clear.
+struct SpellCreatedObstacle : CObstacleInstance {
+	int turnsRemaining=-1, casterSpellPower=0, spellLevel=0, minimalDamage=0;
+	BattleSide casterSide{};
+	SpellID trigger{0};
+	bool hidden=false, passable=false, trap=false, removeOnTrigger=false, revealed=false;
+	AudioPath appearSound; AnimationPath appearAnimation, animation;
+	int animationYOffset=0;
+	Hexes customSize;
+	void toInfo(ObstacleChanges & info);
+};
+struct ObstacleChanges {
+	enum class EOperation {ADD, REMOVE};
+	int id=-1; EOperation operation=EOperation::ADD; std::shared_ptr<SpellCreatedObstacle> data;
+	ObstacleChanges()=default;
+	ObstacleChanges(int id,EOperation operation):id(id),operation(operation){}
+};
+inline void SpellCreatedObstacle::toInfo(ObstacleChanges & info){info.id=uniqueID;info.operation=ObstacleChanges::EOperation::ADD;info.data=std::make_shared<SpellCreatedObstacle>(*this);}
+struct BattleObstaclesChanged {int battleID{}; std::vector<ObstacleChanges> changes;};
 struct BattleSpellCast { BattleSide side;std::set<unsigned> affectedCres,resistedCres; };
 struct StacksInjured {int battleID{};std::vector<BattleStackAttacked> stacks;};
 struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd,toRemove;};
 struct CBattleInfoCallback {
 	std::map<int,CStack> units;int round=1;
+	std::vector<std::shared_ptr<SpellCreatedObstacle>> marks;
+	auto battleGetAllObstacles() const{return std::vector<std::shared_ptr<const CObstacleInstance>>(marks.begin(),marks.end());}
+	int nextObstacleId() const{int next=0;for(const auto & mark:marks)next=std::max(next,mark->uniqueID+1);return next;}
 	mutable int lastId=0;
 	int getBattleID() const{return 1;}auto getBattle() const{return this;}
 	int battleNextUnitId() const{return lastId=std::max(lastId,units.empty()?0:units.rbegin()->first)+1;}
@@ -128,6 +155,23 @@ struct CGameHandler {
 		else field.units.at(c.id).data=c.data;
 	}}
 	void sendAndApply(const BattleStackMoved & p){field.units.at(p.stack).data.pos=p.tilesToMove.back();}
+	void sendAndApply(const BattleObstaclesChanged & p){for(const auto & change:p.changes){
+		if(change.operation==ObstacleChanges::EOperation::REMOVE)
+		{
+			auto & all=field.marks;
+			const auto before=all.size();
+			all.erase(std::remove_if(all.begin(),all.end(),[&](const auto & mark){return mark->uniqueID==change.id;}),all.end());
+			assert(all.size()+1==before);
+			continue;
+		}
+		// What the engine needs to draw the mark, let units walk over it and never cast a trigger spell.
+		const auto & mark=*change.data;
+		assert(mark.pos.isValid() && mark.passable && !mark.trap && !mark.hidden && mark.trigger==SpellID(SpellID::NONE));
+		assert(mark.customSize.size()==1 && mark.customSize.back()==mark.pos);
+		assert(!mark.animation.name.empty() && !mark.appearAnimation.name.empty() && mark.turnsRemaining!=0);
+		for(const auto & other:field.marks) assert(other->uniqueID!=mark.uniqueID);
+		field.marks.push_back(change.data);
+	}}
 };
 namespace evolution {int64_t damageProduct(int64_t a,int64_t b,int c=1){return a*b/c;}}
 namespace evolution_server {class EvolutionReactions;}
@@ -137,7 +181,8 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 	int64_t evolutionIncoming(const CBattleInfoCallback & battle, uint32_t source, const CStack * target, int64_t damage, bool ranged, bool secondary);
 	bool evolutionEnabled() const{return true;}
 	bool evolutionThreatened(const CBattleInfoCallback &,const CStack *,BattleHex);
-	void evolutionMoved(const CBattleInfoCallback &,const CStack *);
+	bool evolutionMoved(const CBattleInfoCallback &,const CStack *,BattleHex origin={});
+	void evolutionDefended(const CBattleInfoCallback &,const CStack *);
 	void evolutionDamage(const CBattleInfoCallback &,const StacksInjured &);
 	void evolutionSpell(const CBattleInfoCallback &,const BattleSpellCast &);
 	void withEvolution(const CBattleInfoCallback &,const std::function<void(evolution_server::EvolutionReactions &)> &);
@@ -165,7 +210,7 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
-	const std::vector<int> traits{1,2,3,8,9,10,15,18,19,21,23,25,27,32,35,39,48,50,51,56,57,59,60,61,67,68,71,77,78,82,87};
+	const std::vector<int> traits{1,2,3,8,9,10,13,15,18,19,21,23,24,25,27,32,35,39,48,50,51,56,57,59,60,61,67,68,71,77,78,82,87};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -495,7 +540,168 @@ static void sporesReactorAndDomino()
 	assert(before==after);
 }
 
+// The engine ages obstacles when the round packet is applied, runs the reactions, then removes expired ones.
+static void nextRound(CBattleInfoCallback & field,BattleActionProcessor & actions)
+{
+	++field.round;
+	for(auto & mark:field.marks) if(mark->turnsRemaining>0) --mark->turnsRemaining;
+	actions.evolutionRound(field,false);
+	field.marks.erase(std::remove_if(field.marks.begin(),field.marks.end(),[](const auto & mark){return mark->turnsRemaining==0;}),field.marks.end());
+}
+
+static int marksOf(const CBattleInfoCallback & field,int kind,int pos=-1)
+{
+	int found=0;
+	for(const auto & mark:field.marks) if(mark->spellLevel==kind && (pos<0 || mark->pos.pos==pos)) ++found;
+	return found;
+}
+
+static void groundMarks()
+{
+	// Blood Trail.
+	{
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		auto & bearer=field.units.emplace(1,CStack{1,{11,10,100,{5},BattleSide::LEFT},{trait(4)}}).first->second;
+		auto & ally=field.units.emplace(2,CStack{2,{12,10,100,{2},BattleSide::LEFT},{}}).first->second;
+		auto & enemy=field.units.emplace(3,CStack{3,{22,10,100,{12},BattleSide::RIGHT},{}}).first->second;
+		assert(!actions.evolutionMoved(field,&bearer,{5}) && field.marks.empty());
+		bearer.data.pos={7};
+		assert(!actions.evolutionMoved(field,&bearer,{5}) && marksOf(field,4,5)==1);
+		assert(!actions.evolutionMoved(field,&bearer,{5}) && field.marks.size()==1);
+		ally.data.pos={5};
+		assert(!actions.evolutionMoved(field,&ally,{2}) && ally.data.health==100 && field.marks.size()==1);
+		ally.data.pos={2};
+		enemy.data.pos={5};
+		assert(!actions.evolutionMoved(field,&enemy,{12}));
+		assert(enemy.data.health==95 && carries(enemy,BonusType::EVOLUTION_WOUND,0,1) && field.marks.empty());
+		// An untouched trail dries out after five rounds.
+		bearer.data.pos={8};
+		actions.evolutionMoved(field,&bearer,{7});
+		for(int i=0;i<4;++i) nextRound(field,actions);
+		assert(marksOf(field,4,7)==1);
+		nextRound(field,actions);
+		assert(field.marks.empty());
+		// The trail outlives its owner but can no longer hurt anyone.
+		bearer.data.pos={9};
+		actions.evolutionMoved(field,&bearer,{8});
+		field.units.erase(1);
+		enemy.data.pos={8};
+		actions.evolutionMoved(field,&enemy,{5});
+		assert(enemy.data.health==95 && field.marks.empty());
+	}
+	// Living Trap.
+	{
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		auto & trapper=field.units.emplace(1,CStack{1,{11,10,100,{7},BattleSide::LEFT},{trait(6)}}).first->second;
+		auto & plain=field.units.emplace(2,CStack{2,{12,10,100,{2},BattleSide::LEFT},{}}).first->second;
+		auto & enemy=field.units.emplace(3,CStack{3,{22,10,100,{12},BattleSide::RIGHT},{}}).first->second;
+		actions.evolutionDefended(field,&plain);
+		assert(field.marks.empty());
+		actions.evolutionDefended(field,&trapper);
+		assert(marksOf(field,6,8)==1 && field.marks.size()==1 && field.marks.front()->turnsRemaining==-1);
+		actions.evolutionDefended(field,&trapper);
+		assert(marksOf(field,6,6)==1 && field.marks.size()==2);
+		actions.evolutionDefended(field,&trapper);
+		assert(field.marks.size()==2);
+		for(int i=0;i<8;++i) nextRound(field,actions);
+		assert(field.marks.size()==2);
+		enemy.data.pos={8};
+		assert(actions.evolutionMoved(field,&enemy,{12}));
+		assert(enemy.data.health==90 && marksOf(field,6,8)==0 && marksOf(field,6,6)==1);
+		assert(!actions.evolutionMoved(field,&enemy,{12}));
+		(void)trapper;
+	}
+	// Spore Cloud.
+	{
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		auto & bearer=field.units.emplace(1,CStack{1,{11,30,300,{10},BattleSide::LEFT},{trait(13)}}).first->second;
+		auto & first=field.units.emplace(2,CStack{2,{22,10,100,{9},BattleSide::RIGHT},{}}).first->second;
+		auto & second=field.units.emplace(3,CStack{3,{23,10,100,{14},BattleSide::RIGHT},{}}).first->second;
+		actions.evolutionAttack(field,&first,&bearer,{{{1,2,0,false,0}}});
+		assert(field.marks.empty());
+		actions.evolutionAttack(field,&first,&bearer,{{{1,2,10,false,1}}});
+		assert(marksOf(field,13,11)==1 && field.marks.size()==1);
+		assert(!first.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		// Attacking from inside the cloud infects the attacker with the bearer's parasite.
+		second.data.pos={11};
+		actions.evolutionMoved(field,&second,{14});
+		assert(!second.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		actions.evolutionAttack(field,&second,&bearer,{{{1,3,10,false,1}}});
+		assert(carries(second,BonusType::EVOLUTION_PARASITE,0,1) && field.marks.size()==1);
+		// The parasite then feeds the bearer every round.
+		bearer.data.health=210;
+		nextRound(field,actions);
+		assert(second.data.health==93 && bearer.data.health==217);
+		nextRound(field,actions);
+		assert(field.marks.empty());
+	}
+	// Mycelium.
+	{
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		auto & grower=field.units.emplace(1,CStack{1,{11,10,100,{5},BattleSide::LEFT},{trait(17)}}).first->second;
+		auto & ally=field.units.emplace(2,CStack{2,{12,10,50,{2},BattleSide::LEFT},{}}).first->second;
+		auto & enemy=field.units.emplace(3,CStack{3,{22,10,100,{12},BattleSide::RIGHT},{}}).first->second;
+		grower.data.pos={7};
+		actions.evolutionMoved(field,&grower,{5});
+		assert(marksOf(field,17,5)==1);
+		ally.data.pos={5};
+		actions.evolutionMoved(field,&ally,{2});
+		assert(ally.data.health==50);
+		nextRound(field,actions);
+		assert(ally.data.health==60 && ally.bonuses.empty());
+		ally.data.pos={2};
+		enemy.data.pos={5};
+		actions.evolutionMoved(field,&enemy,{12});
+		assert(enemy.bonuses.empty());
+		nextRound(field,actions);
+		assert(carries(enemy,BonusType::NONE,500077,1) && enemy.data.health==98);
+		nextRound(field,actions);
+		assert(field.marks.empty() && enemy.data.health==96);
+	}
+	// Territorial Predator.
+	{
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		actions.strikeDamage=7;
+		auto & predator=field.units.emplace(1,CStack{1,{11,10,100,{5},BattleSide::LEFT},{trait(24)}}).first->second;
+		auto & prey=field.units.emplace(2,CStack{2,{22,1,0,{6},BattleSide::RIGHT},{}}).first->second;
+		auto & second=field.units.emplace(3,CStack{3,{23,10,100,{12},BattleSide::RIGHT},{}}).first->second;
+		auto & third=field.units.emplace(4,CStack{4,{24,10,100,{15},BattleSide::RIGHT},{}}).first->second;
+		assert(!actions.evolutionThreatened(field,&second,{7}));
+		actions.evolutionAttack(field,&predator,&prey,{{{2,1,10,true,1}}});
+		assert(marksOf(field,24,6)==1 && field.marks.front()->turnsRemaining==-1);
+		assert(actions.evolutionThreatened(field,&second,{7}) && !actions.evolutionThreatened(field,&second,{8}));
+		assert(!actions.evolutionThreatened(field,&predator,{7}));
+		second.data.pos={7};
+		actions.evolutionMoved(field,&second,{12});
+		assert(second.data.health==93);
+		// One free strike per round.
+		second.data.pos={12};
+		third.data.pos={7};
+		actions.evolutionMoved(field,&third,{15});
+		assert(third.data.health==100);
+		nextRound(field,actions);
+		actions.evolutionMoved(field,&third,{15});
+		assert(third.data.health==93);
+		// The predator must stand on its ground.
+		nextRound(field,actions);
+		predator.data.pos={1};
+		actions.evolutionMoved(field,&third,{15});
+		assert(third.data.health==93);
+	}
+}
+
 int main(){
+	groundMarks();
 	deathStrike();
 	packHunt();
 	sporesReactorAndDomino();

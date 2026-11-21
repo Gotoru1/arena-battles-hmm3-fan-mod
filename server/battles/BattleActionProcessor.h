@@ -104,7 +104,8 @@ class BattleActionProcessor : boost::noncopyable
 	int64_t evolutionIncoming(const CBattleInfoCallback & battle, uint32_t source, const CStack * target, int64_t damage, bool ranged, bool secondary);
 	bool evolutionEnabled() const;
 	bool evolutionThreatened(const CBattleInfoCallback & battle,const CStack * mover,BattleHex hex);
-	void evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover);
+	bool evolutionMoved(const CBattleInfoCallback & battle,const CStack * mover,BattleHex origin);
+	void evolutionDefended(const CBattleInfoCallback & battle,const CStack * unit);
 	void evolutionAttack(const CBattleInfoCallback & battle, const CStack * attacker, const CStack * defender, const BattleAttack & attack);
 public:
 	void evolutionDamage(const CBattleInfoCallback & battle,const StacksInjured & packet);

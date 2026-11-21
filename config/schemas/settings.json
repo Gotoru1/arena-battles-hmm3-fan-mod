@@ -505,7 +505,7 @@
 			"properties" : {
 				"speedFactor" : {
 					"type" : "number",
-					"default" : 2
+					"default" : 9
 				},
 				"mouseShadow" : {
 					"type" : "boolean",
