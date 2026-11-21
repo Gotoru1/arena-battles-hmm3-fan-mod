@@ -993,6 +993,76 @@
           "icon": "evolution/trait94"
         }
       ]
+    },
+    "trait29": {
+      "name": "Паразитический разум",
+      "text": "Атаки носителя заражают врага, а после убийства вражеского бойца он откладывает яйцо. В начале каждого раунда личинки его выводка сами атакуют ближайшего заражённого врага.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "29",
+          "description": "@arenabattles.evolution.trait.29",
+          "icon": "evolution/trait29"
+        }
+      ]
+    },
+    "trait45": {
+      "name": "Голодная колония",
+      "text": "После убийства вражеского бойца носитель откладывает яйцо. В начале раунда все отряды личинок его выводка сливаются в один, складывая численность и мутации.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "45",
+          "description": "@arenabattles.evolution.trait.45",
+          "icon": "evolution/trait45"
+        }
+      ]
+    },
+    "trait63": {
+      "name": "Кровавая экономика",
+      "text": "Защищаясь, носитель жертвует десятой частью своих бойцов и немедленно атакует ближайшего врага. Потерянные бойцы не возвращаются.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "63",
+          "description": "@arenabattles.evolution.trait.63",
+          "icon": "evolution/trait63"
+        }
+      ]
+    },
+    "trait81": {
+      "name": "Разумная зараза",
+      "text": "Атаки носителя заражают врага паразитом, который каждый раунд перекачивает здоровье носителю. В начале раунда зараза сама переходит на самого здорового незаражённого врага в двух клетках от заражённого.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "81",
+          "description": "@arenabattles.evolution.trait.81",
+          "icon": "evolution/trait81"
+        }
+      ]
+    },
+    "trait90": {
+      "name": "Разум роя",
+      "text": "После убийства вражеского бойца носитель откладывает яйцо. Когда носитель или любой его потомок бьёт врага, все остальные потомки, стоящие вплотную к цели, тоже атакуют её — каждый один раз за раунд.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "90",
+          "description": "@arenabattles.evolution.trait.90",
+          "icon": "evolution/trait90"
+        }
+      ]
     }
   },
   "synergies": [],

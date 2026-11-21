@@ -162,9 +162,101 @@ class EvolutionReactions
 		}
 	}
 
+	int brood(const CStack * unit) const
+	{
+		const int inherited=counter(unit,500190);
+		return inherited>0 ? inherited : static_cast<int>(unit->unitId())+1;
+	}
+
+	const CStack * broodMother(const CStack * unit,int trait) const
+	{
+		const auto * mother=battle.battleGetStackByID(brood(unit)-1);
+		return mother && mother->unitSide()==unit->unitSide() && rules(mother).count(trait) ? mother : nullptr;
+	}
+
+	// Parasitic Mind: a larva hunts the nearest infected enemy on its own at the start of a round.
+	void seek(const CStack * larva)
+	{
+		if(!larva->alive() || counter(larva,500190)<=0 || !broodMother(larva,29)) return;
+		const CStack * prey=nullptr;
+		for(auto * unit:living())
+			if(unit->unitSide()!=larva->unitSide() && unit->hasBonusOfType(BonusType::EVOLUTION_PARASITE) && (!prey ||
+				BattleHex::getDistance(larva->getPosition(),unit->getPosition())<BattleHex::getDistance(larva->getPosition(),prey->getPosition()))) prey=unit;
+		if(prey) strike(larva,prey);
+	}
+
+	// Hungry Colony: the bearer's larva stacks eat each other into one, keeping every mutation.
+	void gather(const CStack * mother)
+	{
+		std::vector<const CStack *> larvae;
+		for(auto * unit:living())
+			if(unit->unitSide()==mother->unitSide() && unit->creatureId()==larvaType() && counter(unit,500190)==static_cast<int>(mother->unitId())+1)
+				larvae.push_back(unit);
+		if(larvae.size()<2) return;
+		int64_t total=0;
+		Rules pooled;
+		for(auto * larva:larvae)
+		{
+			total+=larva->getCount();
+			for(auto rule:rules(larva)) pooled[rule.first]=std::max(pooled[rule.first],rule.second);
+		}
+		const auto place=larvae.front()->getPosition();
+		BattleUnitsChanged merge;
+		merge.battleID=battle.getBattle()->getBattleID();
+		for(auto * larva:larvae) merge.changedStacks.emplace_back(larva->unitId(),UnitChanges::EOperation::REMOVE);
+		server.sendAndApply(merge);
+		if(auto * colony=spawn(mother->unitSide(),larvaType(),headcount(total),place))
+		{
+			descend(mother,colony);
+			for(auto rule:pooled) transfer(colony,rule.first,rule.second);
+			observe(colony);
+		}
+	}
+
+	// Sentient Plague: each round the bearer's infection moves to the healthiest clean enemy near an infected one.
+	void plague(const CStack * bearer,int reach)
+	{
+		const int self=static_cast<int>(bearer->unitId());
+		for(int spread=0;spread<reach;++spread)
+		{
+			const CStack * best=nullptr;
+			for(auto * candidate:living())
+			{
+				if(candidate->unitSide()==bearer->unitSide() || suffers(candidate,0,self)) continue;
+				bool near=false;
+				for(auto * host:living())
+					if(host->unitSide()==candidate->unitSide() && suffers(host,0,self) && BattleHex::getDistance(host->getPosition(),candidate->getPosition())<=2) near=true;
+				if(near && (!best || candidate->getAvailableHealth()>best->getAvailableHealth())) best=candidate;
+			}
+			if(!best) return;
+			afflict(best,0,self);
+		}
+	}
+
+	// Swarm Mind: when one body of the brood strikes, every other body of that brood next to the target joins in.
+	void swarm(const CStack * source,const CStack * primary)
+	{
+		const int family=brood(source);
+		const auto * mother=battle.battleGetStackByID(family-1);
+		if(!mother || mother->unitSide()!=source->unitSide() || !rules(mother).count(90)) return;
+		const int round=battle.battleGetRound();
+		// The body that struck has made its move for this round and does not join again.
+		if(counter(source,500090)!=~round) setCounter(source,500090,~round);
+		for(auto * member:living())
+		{
+			if(!primary->alive()) return;
+			if(member==source || !member->alive() || member->unitSide()!=source->unitSide() || brood(member)!=family) continue;
+			if(member->creatureId()==eggType() || !touches(member,member->getPosition(),primary->getPosition(),1) || counter(member,500090)==~round) continue;
+			setCounter(member,500090,~round);
+			strike(member,primary);
+		}
+	}
+
 	void descend(const CStack * parent,const CStack * child)
 	{
 		origins[child->unitId()]=lineageRoot(parent->unitId());
+		// The brood mark outlives this chain: it names the first ancestor for Swarm Mind and the colony.
+		remember(child,500190,brood(parent));
 		auto roots=parent->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500095));
 		for(const auto & root:*roots) remember(child,500095,root->val);
 		if(rules(parent).count(95)) remember(child,500095,parent->unitId());
@@ -332,7 +424,7 @@ class EvolutionReactions
 	bool brooder(const CStack * unit) const
 	{
 		const auto active=rules(unit);
-		for(int id:{1,60,75,87,95,97}) if(active.count(id)) return true;
+		for(int id:{1,29,45,60,75,87,90,95,97}) if(active.count(id)) return true;
 		return false;
 	}
 
@@ -1376,7 +1468,7 @@ class EvolutionReactions
 			if(!owner || !owner->alive() || !target->alive() || owner->unitSide() == target->unitSide()) continue;
 			// The mark is an infection for every colony mutation. Only leeches feed through it.
 			const auto feeding=rules(owner);
-			if(!feeding.count(9) && !feeding.count(89) && !feeding.count(13)) continue;
+			if(!feeding.count(9) && !feeding.count(89) && !feeding.count(13) && !feeding.count(81)) continue;
 			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
 			mend(owner,amount);
 			reactor(amount);
@@ -1518,6 +1610,17 @@ public:
 	{
 		if(!unit->alive()) return;
 		const auto active=rules(unit);
+		if(active.count(63) && unit->getCount()>=2)
+		{
+			// Blood Economy: a tenth of the bearer's own fighters pays for an immediate attack.
+			const auto * foe=nearestFoe(unit);
+			if(foe)
+			{
+				injure(unit,unit,int64_t(std::max(1,unit->getCount()/10))*unit->getMaxHealth());
+				if(unit->alive() && foe->alive()) strike(unit,foe);
+			}
+			if(!unit->alive()) return;
+		}
 		if(active.count(5))
 			for(const auto * corpse:remains())
 			{
@@ -1753,7 +1856,12 @@ public:
 			// The Catalyst starts every battle with one new temporary mutation to react to.
 			if(first && active.count(61)) adapt(unit);
 			if(active.count(57) && battle.battleGetRound() > 0 && battle.battleGetRound() % 3 == 0) adapt(unit);
+			if(!first && unit->alive() && active.count(81)) plague(unit,active.at(81));
+			if(!first && unit->alive() && unit->creatureId()==larvaType()) seek(unit);
 		}
+		if(!first)
+			for(auto * unit : living())
+				if(unit->alive() && rules(unit).count(45)) gather(unit);
 	}
 
 	BattleHex pursue(const CStack * source,const CStack * victim) const
@@ -1848,7 +1956,7 @@ public:
 				if(owner && owner != source && owner->unitSide() == source->unitSide())
 					injure(primary,source,std::max<int64_t>(1,source->getCount()/4));
 			}
-			if(primary->alive() && (active.count(9) || active.count(89) || active.count(39) || active.count(54))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
+			if(primary->alive() && (active.count(9) || active.count(89) || active.count(39) || active.count(54) || active.count(29) || active.count(81))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
 			const int self=static_cast<int>(source->unitId());
 			if(active.count(62)) afflict(primary,2,self);
@@ -1904,6 +2012,8 @@ public:
 				}
 			}
 		}
+		if(primary->alive() && source->alive()) swarm(source,primary);
+		if(!source->alive()) return;
 		if(active.count(23))
 		{
 			auto * target = nearest(primary,primary->unitSide());

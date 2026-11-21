@@ -224,7 +224,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,30,32,33,34,35,39,40,42,43,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,64,65,66,67,68,69,71,72,73,75,77,78,82,87,89,94,95,97};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,39,40,42,43,45,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,71,72,73,75,77,78,81,82,87,89,90,94,95,97};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1276,7 +1276,113 @@ static void deathAndTransformation()
 	}
 }
 
+static void swarmGroup()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		Field(){actions.strikeDamage=7;}
+		CStack & add(int id,int count,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{10+id,count,count*10,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void hit(CStack & from,CStack & to,int killed=0){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,killed}}});}
+		std::vector<const CStack *> larvae() const
+		{
+			std::vector<const CStack *> found;
+			for(const auto & entry:field.units) if(entry.second.alive() && entry.second.data.species==501) found.push_back(&entry.second);
+			return found;
+		}
+	};
+	{
+		Field f; // Parasitic Mind: infects, broods, and its larvae hunt the infected on their own.
+		auto & mother=f.add(1,10,2,BattleSide::LEFT,{29});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		auto & clean=f.add(3,100,9,BattleSide::RIGHT);
+		f.hit(mother,enemy,1);
+		assert(carries(enemy,BonusType::EVOLUTION_PARASITE,0,1));
+		nextRound(f.field,f.actions);
+		assert(f.larvae().size()==1 && carries(*f.larvae().front(),BonusType::NONE,500190,2));
+		assert(enemy.data.health==1000);
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==993 && clean.data.health==1000 && mother.data.health==100);
+		// Without the mother the larva goes back to waiting for orders.
+		mother.data.health=0;
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==993);
+	}
+	{
+		Field f; // Hungry Colony: separate larva stacks of one brood merge at the start of a round.
+		auto & mother=f.add(1,10,2,BattleSide::LEFT,{45,23});
+		auto & enemy=f.add(2,100,8,BattleSide::RIGHT);
+		f.hit(mother,enemy,1);
+		f.hit(mother,enemy,1);
+		nextRound(f.field,f.actions);
+		const auto colony=f.larvae();
+		assert(colony.size()==1 && colony.front()->getCount()==2 && carries(*colony.front(),BonusType::NONE,500190,2));
+		// A third larva joins the colony next round.
+		f.hit(mother,enemy,1);
+		nextRound(f.field,f.actions);
+		assert(f.larvae().size()==1 && f.larvae().front()->getCount()==3);
+	}
+	{
+		Field f; // Sentient Plague: a leech that picks the healthiest clean enemy near an infected one.
+		auto & bearer=f.add(1,30,2,BattleSide::LEFT,{81});
+		auto & first=f.add(2,50,5,BattleSide::RIGHT);
+		auto & small=f.add(3,30,6,BattleSide::RIGHT);
+		auto & large=f.add(4,90,7,BattleSide::RIGHT);
+		auto & far=f.add(5,200,12,BattleSide::RIGHT);
+		bearer.data.health=150;
+		f.hit(bearer,first);
+		assert(carries(first,BonusType::EVOLUTION_PARASITE,0,1) && !large.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		nextRound(f.field,f.actions);
+		assert(carries(large,BonusType::EVOLUTION_PARASITE,0,1) && !small.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		assert(first.data.health==495 && large.data.health==895 && bearer.data.health==160);
+		nextRound(f.field,f.actions);
+		assert(carries(small,BonusType::EVOLUTION_PARASITE,0,1) && !far.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+	}
+	{
+		Field f; // Swarm Mind: the rest of the brood next to the target joins every strike, once per round each.
+		auto & queen=f.add(1,10,2,BattleSide::LEFT,{90});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		auto & left=f.add(3,5,5,BattleSide::LEFT);
+		auto & right=f.add(4,5,7,BattleSide::LEFT);
+		auto & stranger=f.add(5,5,9,BattleSide::LEFT);
+		for(auto * child:{&left,&right}) child->bonuses.push_back({BonusType::NONE,2,BonusDuration::PERMANENT,500190});
+		stranger.data.pos={7};
+		right.data.pos={7};
+		stranger.data.pos={9};
+		f.hit(queen,enemy);
+		assert(enemy.data.health==986);
+		f.hit(queen,enemy);
+		assert(enemy.data.health==986);
+		// A child's own strike calls the queen's other children too.
+		++f.field.round;
+		f.hit(left,enemy);
+		assert(enemy.data.health==979);
+		// The network needs its queen.
+		++f.field.round;
+		queen.data.health=0;
+		f.hit(left,enemy);
+		assert(enemy.data.health==979);
+	}
+	{
+		Field f; // Blood Economy: defending trades a tenth of the unit for an immediate attack.
+		auto & bearer=f.add(1,20,2,BattleSide::LEFT,{63});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		auto & single=f.add(3,1,1,BattleSide::LEFT,{63});
+		f.actions.evolutionDefended(f.field,&bearer);
+		assert(bearer.data.health==180 && enemy.data.health==993);
+		f.actions.evolutionDefended(f.field,&single);
+		assert(single.data.health==10 && enemy.data.health==993);
+	}
+}
+
 int main(){
+	swarmGroup();
 	deathAndTransformation();
 	bloodAndLinks();
 	remainsGroup();
@@ -1305,7 +1411,8 @@ int main(){
 	auto & secondary=add(7,BattleSide::RIGHT,{});
 	actions.evolutionRound(field,true);
 	assert(field.units.size()==5);
-	assert(field.units.at(5).bonuses.size()==6);
+	// Four inherited mutations, the family mark, one adaptation and the brood mark.
+	assert(field.units.at(5).bonuses.size()==7);
 	BattleAttack hit{{{enemy.id,carrier.id,30,false}}};
 	actions.evolutionAttack(field,&carrier,&enemy,hit);
 	assert(secondary.data.health==90 && enemy.data.pos.pos!=5);
