@@ -227,7 +227,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,37,38,39,40,42,43,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,85,86,87,89,90,91,92,93,94,95,96,97,98,99,100};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,89,90,91,92,93,94,95,96,97,98,99,100};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1608,7 +1608,113 @@ static void fieldTricks()
 	}
 }
 
+static void magicAndHive()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & add(int id,int count,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{10+id,count,count*10,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void hit(CStack & from,CStack & to,int damage=20){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,damage,false,0}}});}
+		void spellOn(const CStack & target,bool resisted=false)
+		{
+			BattleSpellCast cast{target.unitSide()==BattleSide::LEFT ? BattleSide::RIGHT : BattleSide::LEFT,{static_cast<unsigned>(target.id)},{}};
+			if(resisted) cast.resistedCres.insert(target.id);
+			actions.evolutionSpell(field,cast);
+		}
+	};
+	{
+		Field f; // Mirror Shard: the first enemy spell of the battle strikes back at the next round.
+		auto & bearer=f.add(1,10,2,BattleSide::LEFT,{16});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		f.spellOn(bearer,true);
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==1000);
+		f.spellOn(bearer);
+		f.spellOn(bearer);
+		assert(enemy.data.health==1000);
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==950);
+		f.spellOn(bearer);
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==950);
+
+		Field marks; // A negative mark of a mutated enemy forms the shard as well.
+		auto & victim=marks.add(1,10,2,BattleSide::LEFT,{16});
+		auto & bleeder=marks.add(2,100,3,BattleSide::RIGHT,{19});
+		marks.hit(bleeder,victim);
+		assert(carries(victim,BonusType::EVOLUTION_WOUND,0,2));
+		nextRound(marks.field,marks.actions);
+		// The wound bled the bearer down to eight fighters first, so the shard hits for 8 x 5.
+		assert(victim.data.health==75 && bleeder.data.health==960);
+	}
+	{
+		Field f; // Magic Eater: every spell is a charge; the next attack spends them all and slows.
+		auto & bearer=f.add(1,10,2,BattleSide::LEFT,{31});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		f.spellOn(bearer);
+		f.spellOn(bearer);
+		f.hit(bearer,enemy);
+		assert(enemy.data.health==940 && carries(enemy,BonusType::NONE,500177,1));
+		f.hit(bearer,enemy);
+		assert(enemy.data.health==940 && bearer.getBonusesOfType(BonusType::NONE,500031)->empty());
+	}
+	{
+		Field f; // Mirror Hunter: the last blow taken is added to the next attack once.
+		auto & bearer=f.add(1,10,2,BattleSide::LEFT,{44});
+		auto & enemy=f.add(2,100,3,BattleSide::RIGHT);
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,10,false,false)==10);
+		f.hit(enemy,bearer,50);
+		f.hit(enemy,bearer,35);
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,10,false,false)==45);
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,10,false,false)==10);
+	}
+	{
+		Field f; // Symbiotic Parasite: defending beside an ally lends it mutations and an attack charge.
+		auto & parasite=f.add(1,10,4,BattleSide::LEFT,{36,23});
+		auto & host=f.add(2,10,5,BattleSide::LEFT);
+		auto & far=f.add(3,10,9,BattleSide::LEFT);
+		auto & enemy=f.add(4,100,15,BattleSide::RIGHT);
+		parasite.data.health=80;
+		f.actions.evolutionDefended(f.field,&parasite);
+		assert(hasTrait(host,23) && !hasTrait(host,36) && far.bonuses.empty());
+		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==50);
+		host.data.pos={12};
+		f.actions.evolutionDefended(f.field,&parasite);
+		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==10);
+	}
+	{
+		Field f; // Dimensional Hive: fallen summoned descendants return once as larvae beside the bearer.
+		auto & hive=f.add(1,10,2,BattleSide::LEFT,{84});
+		auto & child=f.add(2,3,3,BattleSide::LEFT);
+		auto & stranger=f.add(3,3,4,BattleSide::LEFT);
+		auto & enemy=f.add(4,100,8,BattleSide::RIGHT);
+		child.summoned=true;
+		stranger.summoned=true;
+		child.bonuses.push_back({BonusType::NONE,2,BonusDuration::PERMANENT,500190});
+		for(auto * victim:{&child,&stranger})
+		{
+			victim->data.health=0;
+			f.actions.evolutionAttack(f.field,&enemy,victim,{{{victim->id,4,30,true,3}}});
+		}
+		assert(carries(hive,BonusType::NONE,500084,1));
+		nextRound(f.field,f.actions);
+		assert(hive.getBonusesOfType(BonusType::NONE,500084)->empty() && f.field.units.size()==5);
+		auto & returned=f.field.units.at(5);
+		assert(returned.data.species==501 && returned.getCount()==1 && carries(returned,BonusType::NONE,500184,1));
+		returned.data.health=0;
+		f.actions.evolutionAttack(f.field,&enemy,&returned,{{{5,4,10,true,1}}});
+		assert(hive.getBonusesOfType(BonusType::NONE,500084)->empty());
+	}
+}
+
 int main(){
+	magicAndHive();
 	fieldTricks();
 	runGrowthMarkers();
 	swarmGroup();

@@ -1329,6 +1329,76 @@
           "icon": "evolution/trait98"
         }
       ]
+    },
+    "trait16": {
+      "name": "Зеркальный осколок",
+      "text": "Первое за бой вражеское заклинание или отрицательная метка, попавшие по носителю, создают осколок: в начале следующего раунда он бьёт ближайшего врага.",
+      "rarity": 0,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "16",
+          "description": "@arenabattles.evolution.trait.16",
+          "icon": "evolution/trait16"
+        }
+      ]
+    },
+    "trait31": {
+      "name": "Пожиратель магии",
+      "text": "Каждое вражеское заклинание или отрицательная метка, попавшие по носителю, дают заряд магии. Следующая атака носителя тратит все заряды: наносит дополнительный урон и замедляет цель.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "31",
+          "description": "@arenabattles.evolution.trait.31",
+          "icon": "evolution/trait31"
+        }
+      ]
+    },
+    "trait36": {
+      "name": "Симбиотический паразит",
+      "text": "Защищаясь вплотную к союзному отряду, носитель подпитывает его: передаёт свои мутации до конца боя и заряд для следующей атаки в половину своего запаса здоровья.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "36",
+          "description": "@arenabattles.evolution.trait.36",
+          "icon": "evolution/trait36"
+        }
+      ]
+    },
+    "trait44": {
+      "name": "Зеркальный охотник",
+      "text": "Носитель запоминает последний полученный удар и добавляет его урон к своей следующей атаке.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "44",
+          "description": "@arenabattles.evolution.trait.44",
+          "icon": "evolution/trait44"
+        }
+      ]
+    },
+    "trait84": {
+      "name": "Улей измерений",
+      "text": "После убийства вражеского бойца носитель откладывает яйцо. Каждый погибший призванный потомок носителя становится зарядом улья: в начале раунда заряды возвращаются на поле личинками рядом с носителем. Вернувшиеся личинки новых зарядов не дают.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "84",
+          "description": "@arenabattles.evolution.trait.84",
+          "icon": "evolution/trait84"
+        }
+      ]
     }
   },
   "synergies": [],

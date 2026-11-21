@@ -429,7 +429,7 @@ class EvolutionReactions
 	bool brooder(const CStack * unit) const
 	{
 		const auto active=rules(unit);
-		for(int id:{1,29,45,60,75,87,90,93,95,97}) if(active.count(id)) return true;
+		for(int id:{1,29,45,60,75,84,87,90,93,95,97}) if(active.count(id)) return true;
 		return false;
 	}
 
@@ -945,6 +945,10 @@ class EvolutionReactions
 		if(source && source->unitSide()!=corpse->unitSide())
 			for(auto * witness:beforeSummons)
 				if(witness->unitSide()==corpse->unitSide() && rules(witness).count(8)) remember(witness,500008,source->unitId());
+		if(corpse->summoned && counter(corpse,500190)>0 && !marked(corpse,500184,1))
+			if(const auto * hive=broodMother(corpse,84))
+				if(hive->alive() && hive!=corpse)
+					setCounter(hive,500084,std::min(INT32_MAX-1,counter(hive,500084))+1);
 		// Vengeance Machine counts every allied body destroyed in this battle; the run turns the count into lasting damage.
 		if(corpse->creatureId()!=eggType() && corpse->creatureId()!=huskType())
 			for(auto * witness:beforeSummons)
@@ -1122,6 +1126,7 @@ class EvolutionReactions
 			slow.val=-2;
 			grant(target,slow);
 		}
+		hexed(target);
 		contagion.push_back({static_cast<uint32_t>(target->unitId()),kind,owner});
 		if(spreading) return true;
 		spreading=true;
@@ -1137,6 +1142,21 @@ class EvolutionReactions
 		catch(...) { spreading=false; contagion.clear(); throw; }
 		spreading=false;
 		return true;
+	}
+
+	// An enemy spell or a negative mark has just landed on the unit.
+	void hexed(const CStack * unit)
+	{
+		if(!unit->alive()) return;
+		const auto active=rules(unit);
+		// Mirror Shard: the first one of the battle forms a shard that strikes at the next round.
+		if(active.count(16) && !marked(unit,500016,1))
+		{
+			remember(unit,500016,1);
+			setCounter(unit,500116,1);
+		}
+		// Magic Eater: every one becomes a charge for the next attack.
+		if(active.count(31)) setCounter(unit,500031,std::min(INT32_MAX-1,counter(unit,500031))+1);
 	}
 
 	void resonate(const Contagion & event)
@@ -1687,6 +1707,19 @@ public:
 	{
 		if(!unit->alive()) return;
 		const auto active=rules(unit);
+		if(active.count(36))
+		{
+			// Symbiotic Parasite: defending next to an ally feeds that ally.
+			const CStack * host=nullptr;
+			for(auto * ally:living())
+				if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType()
+					&& touches(unit,unit->getPosition(),ally->getPosition(),1) && (!host || ally->unitId()<host->unitId())) host=ally;
+			if(host)
+			{
+				for(auto rule:active) if(rule.first!=36 && rule.first!=88) transfer(host,rule.first,rule.second);
+				setReserve(host,combineDamage(reserve(host,500312),static_cast<int64_t>(unit->getAvailableHealth())/2),500312);
+			}
+		}
 		if(active.count(93))
 		{
 			// Army Devourer: defending swallows the summoned allies standing next to the bearer.
@@ -1747,7 +1780,9 @@ public:
 		for(auto id:spell.affectedCres)
 		{
 			const auto * unit=battle.battleGetStackByID(id);
-			if(!unit || !unit->alive() || unit->unitSide()==spell.side || spell.resistedCres.count(id) || !rules(unit).count(21)) continue;
+			if(!unit || !unit->alive() || unit->unitSide()==spell.side || spell.resistedCres.count(id)) continue;
+			hexed(unit);
+			if(!rules(unit).count(21)) continue;
 			Bonus charge;
 			charge.type=BonusType::NONE;
 			charge.subtype=BonusCustomSubtype(500021);
@@ -1784,6 +1819,16 @@ public:
 			{
 				damage=combineDamage(damage,charge);
 				setReserve(source,0,500366);
+			}
+		}
+		if(!secondary && rules(source).count(44))
+		{
+			// Mirror Hunter: the last blow it took comes back with its next attack.
+			const auto recorded=reserve(source,500344);
+			if(recorded)
+			{
+				setReserve(source,0,500344);
+				damage=combineDamage(damage,evolution::damageProduct(recorded,rules(source).at(44)));
 			}
 		}
 		// Evolutionary Fork: the predator form hits half as hard again, the shell form takes a quarter less.
@@ -1980,6 +2025,22 @@ public:
 			if(first && active.count(61)) adapt(unit);
 			if(active.count(57) && battle.battleGetRound() > 0 && battle.battleGetRound() % 3 == 0) adapt(unit);
 			if(!first && unit->alive() && active.count(81)) plague(unit,active.at(81));
+			if(!first && unit->alive() && counter(unit,500116))
+			{
+				setCounter(unit,500116,0);
+				if(const auto * foe=nearestFoe(unit))
+					injure(foe,unit,evolution::damageProduct(int64_t(std::max(1,unit->getCount()))*5,rankOf(unit,16)));
+			}
+			if(!first && unit->alive() && active.count(84) && counter(unit,500084))
+			{
+				// Dimensional Hive: the fallen descendants come back as larvae beside the bearer.
+				const int charges=counter(unit,500084);
+				if(auto * returned=summon(unit,larvaType(),charges,unit->getPosition(),false))
+				{
+					setCounter(unit,500084,0);
+					remember(returned,500184,1);
+				}
+			}
 			if(!first && unit->alive() && unit->creatureId()==larvaType()) seek(unit);
 		}
 		if(!first)
@@ -2013,6 +2074,8 @@ public:
 				for(auto hex:struck->getPosition().getNeighbouringTiles())
 					if(hex.isValid() && access.accessible(hex,struck)) stain(hex,13,struck,2);
 			}
+			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(44))
+				setReserve(struck,hit.damageAmount,500344);
 			// Absolute Adaptation: outliving a blow of a mutated enemy is what the run remembers.
 			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(98) && !active.empty())
 				remember(struck,500098,1);
@@ -2141,6 +2204,14 @@ public:
 		for(const auto & hit : packet.bsa)
 		{
 			if(hit.stackAttacked != primary->unitId() || hit.attackerID != source->unitId() || hit.damageAmount <= 0) continue;
+			if(active.count(31) && primary->alive() && counter(source,500031))
+			{
+				// Magic Eater: all stored charges leave with this blow and slow the target.
+				const int charges=counter(source,500031);
+				setCounter(source,500031,0);
+				afflict(primary,5,static_cast<int>(source->unitId()));
+				injure(primary,source,evolution::damageProduct(int64_t(std::max(1,source->unitBaseAmount()))*3,int64_t(charges)*active.at(31)));
+			}
 			if(active.count(11) && primary->alive())
 				for(const auto & mark:groundMarks(battle))
 					if(mark.kind==11 && mark.owner==static_cast<int>(source->unitId()) && touches(primary,primary->getPosition(),mark.hex,1))
