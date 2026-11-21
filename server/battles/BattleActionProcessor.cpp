@@ -1901,6 +1901,17 @@ static CreatureID lesserForm(CreatureID id)
 	return best;
 }
 
+// Every cell of the battlefield by its index, for reactions that draw lines across the field.
+static int fieldCells()
+{
+	return GameConstants::BFIELD_SIZE;
+}
+
+static BattleHex cellAt(int index)
+{
+	return BattleHex(index);
+}
+
 static void labelStatus(Bonus & bonus, const std::string & name)
 {
 	bonus.description.appendTextID("arenabattles.evolution.status." + name);

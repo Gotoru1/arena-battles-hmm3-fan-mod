@@ -424,7 +424,7 @@ class EvolutionReactions
 	bool brooder(const CStack * unit) const
 	{
 		const auto active=rules(unit);
-		for(int id:{1,29,45,60,75,87,90,95,97}) if(active.count(id)) return true;
+		for(int id:{1,29,45,60,75,87,90,93,95,97}) if(active.count(id)) return true;
 		return false;
 	}
 
@@ -1011,6 +1011,15 @@ class EvolutionReactions
 		{
 			const auto hunter=rules(source);
 			if(hunter.count(12)) stain(corpse->getPosition(),12,source,-1);
+			if(hunter.count(37)) stain(corpse->getPosition(),37,source,3);
+			if(hunter.count(74) && !counter(source,500174))
+			{
+				// Evolutionary Fork: the third destroyed unit fixes the form for the rest of the battle.
+				const int kills=counter(source,500074)+1;
+				setCounter(source,500074,kills);
+				if(kills>=3)
+					setCounter(source,500174,source->getAvailableHealth()*2<int64_t(source->unitBaseAmount())*source->getMaxHealth() ? 1 : 2);
+			}
 			if(hunter.count(52) && fresh(corpse))
 			{
 				// Bone Puppet: a quarter of the dead unit fights for the killer for three rounds.
@@ -1173,7 +1182,8 @@ class EvolutionReactions
 		for(const auto & mark:groundMarks(battle))
 			if(mark.hex==hex && mark.kind==kind && mark.side==owner->unitSide()) return false;
 		const bool pit=kind==6 || kind==13 || kind==17;
-		const std::string look=kind==4 ? "blood" : kind==6 ? "trap" : kind==12 ? "ash" : kind==13 ? "spores" : kind==17 ? "mycelium" : "territory";
+		const std::string look=kind==4 ? "blood" : kind==6 ? "trap" : kind==11 ? "shadow" : kind==12 ? "ash" : kind==13 ? "spores"
+			: kind==17 ? "mycelium" : kind==37 ? "portal" : kind==46 ? "curse" : "territory";
 		SpellCreatedObstacle mark;
 		mark.uniqueID=battle.nextObstacleId();
 		mark.pos=hex;
@@ -1307,6 +1317,29 @@ class EvolutionReactions
 		for(const auto & mark:groundMarks(battle))
 		{
 			if(!mover->alive()) break;
+			if(mark.kind==37 && mark.side==mover->unitSide() && touches(mover,mover->getPosition(),mark.hex,0))
+			{
+				// Wormhole: the first ally to step in comes out next to the nearest enemy.
+				const auto * foe=nearestFoe(mover);
+				const auto exit=foe ? battle.getAvailableHex(mover->creatureId(),mover->unitSide(),foe->getPosition().toInt()) : BattleHex();
+				if(!exit.isValid() || exit==mover->getPosition()) continue;
+				wipe(mark);
+				BattleStackMoved jump;
+				jump.battleID=battle.getBattle()->getBattleID();
+				jump.stack=mover->unitId();
+				jump.teleporting=true;
+				jump.tilesToMove.insert(exit);
+				server.sendAndApply(jump);
+				return true;
+			}
+			if(mark.kind==46 && mark.side!=mover->unitSide() && touches(mover,mover->getPosition(),mark.hex,0))
+			{
+				// Cursed Geometry: crossing the line hurts.
+				wipe(mark);
+				if(const auto * owner=battle.battleGetStackByID(mark.owner,false))
+					injure(mover,owner,evolution::damageProduct(std::max(1,owner->unitBaseAmount()),rankOf(owner,46)));
+				continue;
+			}
 			if(mark.kind==12 && touches(mover,mover->getPosition(),mark.hex,0))
 			{
 				// Ash: an ally takes it in for its next attack, an enemy scatters it.
@@ -1606,6 +1639,13 @@ public:
 		{
 			const auto active=rules(mover);
 			if(active.count(4)) stain(origin,4,mover,5);
+			if(active.count(11))
+			{
+				// Predatory Shadow: one shadow per bearer stays on the cell it left.
+				for(const auto & old:groundMarks(battle))
+					if(old.kind==11 && old.owner==static_cast<int>(mover->unitId())) wipe(old);
+				stain(origin,11,mover,-1);
+			}
 			if(active.count(17)) stain(origin,17,mover,3);
 		}
 		const bool halted=tread(mover);
@@ -1628,6 +1668,27 @@ public:
 	{
 		if(!unit->alive()) return;
 		const auto active=rules(unit);
+		if(active.count(93))
+		{
+			// Army Devourer: defending swallows the summoned allies standing next to the bearer.
+			std::vector<const CStack *> meal;
+			for(auto * ally:living())
+				if(ally!=unit && ally->summoned && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType()
+					&& touches(unit,unit->getPosition(),ally->getPosition(),1)) meal.push_back(ally);
+			for(auto * ally:meal)
+			{
+				const auto flesh=static_cast<int64_t>(ally->getAvailableHealth());
+				for(auto rule:rules(ally)) if(rule.first!=88) transfer(unit,rule.first,rule.second);
+				BattleUnitsChanged swallow;
+				swallow.battleID=battle.getBattle()->getBattleID();
+				swallow.changedStacks.emplace_back(ally->unitId(),UnitChanges::EOperation::REMOVE);
+				server.sendAndApply(swallow);
+				// What does not fit into the bearer's own ranks arms its next attack.
+				const auto healed=std::min(flesh,missing(unit));
+				mend(unit,healed);
+				if(flesh>healed) setReserve(unit,combineDamage(reserve(unit,500312),flesh-healed),500312);
+			}
+		}
 		if(active.count(63) && unit->getCount()>=2)
 		{
 			// Blood Economy: a tenth of the bearer's own fighters pays for an immediate attack.
@@ -1706,6 +1767,9 @@ public:
 				setReserve(source,0,500366);
 			}
 		}
+		// Evolutionary Fork: the predator form hits half as hard again, the shell form takes a quarter less.
+		if(!secondary && counter(source,500174)==2) damage=combineDamage(damage,damage/2);
+		if(counter(target,500174)==1) damage-=damage/4;
 		if(!secondary && rules(source).count(43) && source->getAvailableHealth()*2>=int64_t(source->unitBaseAmount())*source->getMaxHealth())
 		{
 			// Blood Alchemy: a healthy bearer puts its charges into the strike.
@@ -1866,6 +1930,21 @@ public:
 					if(rule.first!=100 && rule.second<INT32_MAX) putTrait(unit,rule.first,rule.second+1);
 			}
 			if(first) observe(unit);
+			if(first && active.count(79))
+			{
+				// Predator Merge: the bearer and its nearest ally fight this battle with each other's mutations.
+				const CStack * mate=nullptr;
+				for(auto * ally:living())
+					if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType() && (!mate ||
+						BattleHex::getDistance(unit->getPosition(),ally->getPosition())<BattleHex::getDistance(unit->getPosition(),mate->getPosition()))) mate=ally;
+				if(!mate) adapt(unit);
+				else
+				{
+					const auto theirs=rules(mate);
+					for(auto rule:active) if(rule.first!=79 && rule.first!=88) transfer(mate,rule.first,rule.second);
+					for(auto rule:theirs) if(rule.first!=79 && rule.first!=88) transfer(unit,rule.first,rule.second);
+				}
+			}
 			if(first && active.count(59))
 				for(auto * ally : living())
 					if(ally->unitSide() == unit->unitSide() && ally->creatureId() != unit->creatureId())
@@ -2037,6 +2116,65 @@ public:
 				}
 			}
 		}
+		for(const auto & hit : packet.bsa)
+		{
+			if(hit.stackAttacked != primary->unitId() || hit.attackerID != source->unitId() || hit.damageAmount <= 0) continue;
+			if(active.count(11) && primary->alive())
+				for(const auto & mark:groundMarks(battle))
+					if(mark.kind==11 && mark.owner==static_cast<int>(source->unitId()) && touches(primary,primary->getPosition(),mark.hex,1))
+					{
+						// Predatory Shadow: the shadow next to the target repeats half of the blow and fades.
+						wipe(mark);
+						injure(primary,source,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(11),2)));
+						break;
+					}
+			if(active.count(38) && primary->alive() && source->alive())
+			{
+				// Flesh Corruption: every third blow tears a tenth of the unit away to fight for the bearer.
+				const int blows=counter(primary,500038)+1;
+				if(blows<3) setCounter(primary,500038,blows);
+				else
+				{
+					setCounter(primary,500038,0);
+					if(primary->getCount()>=2)
+					{
+						const int torn=std::max(1,primary->getCount()/10);
+						const auto species=primary->creatureId();
+						const auto place=primary->getPosition();
+						injure(primary,source,int64_t(torn)*primary->getMaxHealth());
+						if(source->alive())
+							if(auto * outcast=spawn(source->unitSide(),species,torn,place))
+							{
+								descend(source,outcast);
+								setCounter(outcast,500052,battle.battleGetRound()+2);
+								observe(outcast);
+							}
+					}
+				}
+			}
+			if(active.count(46) && source->alive())
+			{
+				// Cursed Geometry: one cursed cell per step between the bearer and the target, and two beyond it.
+				const auto from=source->getPosition();
+				const auto to=primary->getPosition();
+				const int length=BattleHex::getDistance(from,to);
+				for(int step=1;step<length+3;++step)
+				{
+					if(step==length) continue;
+					for(int index=0;index<fieldCells();++index)
+					{
+						const auto cell=cellAt(index);
+						const bool between=step<length && BattleHex::getDistance(from,cell)==step && BattleHex::getDistance(cell,to)==length-step;
+						const bool beyond=step>length && BattleHex::getDistance(from,cell)==step && BattleHex::getDistance(cell,to)==step-length;
+						if(!between && !beyond) continue;
+						stain(cell,46,source,2);
+						break;
+					}
+				}
+			}
+			break;
+		}
+		if(!source->alive()) return;
 		if(primary->alive() && source->alive()) swarm(source,primary);
 		if(!source->alive()) return;
 		if(active.count(23))

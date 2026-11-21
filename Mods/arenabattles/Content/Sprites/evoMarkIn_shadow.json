@@ -1,0 +1,14 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"mark_shadow_in0.png",
+				"mark_shadow_in1.png",
+				"mark_shadow_in2.png",
+				"mark_shadow.png"
+			]
+		}
+	]
+}

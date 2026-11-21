@@ -185,6 +185,8 @@ static std::vector<int> labelledTraits;
 static std::vector<std::string> labelledStatuses;
 static void labelTrait(Bonus &,int trait){labelledTraits.push_back(trait);}
 static void labelStatus(Bonus &,const std::string & name){labelledStatuses.push_back(name);}
+static int fieldCells(){return BattleHex::fieldSize;}
+static BattleHex cellAt(int index){return BattleHex{index};}
 // The model has one faction: species below 100 have a lesser form ten numbers lower.
 static CreatureID lesserForm(CreatureID id){return id.getNum()>=20 && id.getNum()<100 ? CreatureID(id.getNum()-10) : id;}
 }
@@ -224,7 +226,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,39,40,42,43,45,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,75,77,78,80,81,82,83,85,87,89,90,91,92,94,95,97,99,100};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34,35,37,38,39,40,42,43,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,77,78,79,80,81,82,83,85,87,89,90,91,92,93,94,95,97,99,100};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1439,7 +1441,148 @@ static void runGrowthMarkers()
 	assert(early.getBonusesOfType(BonusType::EVOLUTION_TRAIT)->size()==7);
 }
 
+static void fieldTricks()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & add(int id,int count,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{10+id,count,count*10,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void hit(CStack & from,CStack & to,int damage=20){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,damage,false,0}}});}
+		void kill(CStack & killer,CStack & victim)
+		{
+			const int count=victim.getCount();
+			victim.data.health=0;
+			actions.evolutionAttack(field,&killer,&victim,{{{victim.id,killer.id,10,true,count}}});
+		}
+		bool walk(CStack & unit,int to)
+		{
+			const BattleHex from=unit.getPosition();
+			unit.data.pos={to};
+			return actions.evolutionMoved(field,&unit,from);
+		}
+	};
+	{
+		Field f; // Predatory Shadow: one shadow per bearer; next to the target it repeats half of a blow once.
+		auto & stalker=f.add(1,10,5,BattleSide::LEFT,{11});
+		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
+		f.walk(stalker,7);
+		assert(marksOf(f.field,11,5)==1);
+		f.hit(stalker,enemy);
+		assert(enemy.data.health==990 && f.field.marks.empty());
+		f.hit(stalker,enemy);
+		assert(enemy.data.health==990);
+		f.walk(stalker,9);
+		f.walk(stalker,12);
+		assert(f.field.marks.size()==1 && marksOf(f.field,11,9)==1);
+		// A shadow far from the target stays where it is.
+		f.hit(stalker,enemy);
+		assert(enemy.data.health==990 && f.field.marks.size()==1);
+	}
+	{
+		Field f; // Wormhole: the first ally through comes out beside the nearest enemy; enemies pass over it.
+		auto & hunter=f.add(1,10,4,BattleSide::LEFT,{37});
+		auto & prey=f.add(2,3,5,BattleSide::RIGHT);
+		auto & ally=f.add(3,10,2,BattleSide::LEFT);
+		auto & enemy=f.add(4,100,15,BattleSide::RIGHT);
+		f.kill(hunter,prey);
+		assert(marksOf(f.field,37,5)==1 && f.field.marks.front()->turnsRemaining==3);
+		enemy.data.pos={5};
+		assert(!f.actions.evolutionMoved(f.field,&enemy,{15}) && f.field.marks.size()==1);
+		enemy.data.pos={15};
+		assert(f.walk(ally,5));
+		assert(ally.data.pos.pos==16 && f.field.marks.empty());
+	}
+	{
+		Field f; // Cursed Geometry: cells between the bearer and its target and two cells beyond it.
+		auto & caster=f.add(1,10,4,BattleSide::LEFT,{46});
+		auto & target=f.add(2,100,7,BattleSide::RIGHT);
+		auto & runner=f.add(3,100,12,BattleSide::RIGHT);
+		auto & friendly=f.add(4,10,1,BattleSide::LEFT);
+		f.hit(caster,target);
+		for(int cell:{5,6,8,9}) assert(marksOf(f.field,46,cell)==1);
+		assert(f.field.marks.size()==4);
+		f.walk(friendly,5);
+		assert(friendly.data.health==100 && f.field.marks.size()==4);
+		f.walk(runner,8);
+		assert(runner.data.health==990 && marksOf(f.field,46,8)==0 && f.field.marks.size()==3);
+		nextRound(f.field,f.actions);
+		nextRound(f.field,f.actions);
+		assert(f.field.marks.empty());
+	}
+	{
+		Field f; // Flesh Corruption: the third blow on one enemy tears a tenth of it away for two rounds.
+		auto & corruptor=f.add(1,10,4,BattleSide::LEFT,{38});
+		auto & host=f.add(2,30,6,BattleSide::RIGHT);
+		f.hit(corruptor,host);
+		f.hit(corruptor,host);
+		assert(host.data.health==300 && f.field.units.size()==2);
+		f.hit(corruptor,host);
+		assert(host.data.health==270 && f.field.units.size()==3);
+		const auto & outcast=f.field.units.at(3);
+		assert(outcast.getCount()==3 && outcast.data.species==host.data.species && outcast.unitSide()==BattleSide::LEFT);
+		nextRound(f.field,f.actions);
+		assert(f.field.units.count(3));
+		nextRound(f.field,f.actions);
+		assert(!f.field.units.count(3));
+	}
+	{
+		Field f; // Evolutionary Fork: the third kill fixes a form chosen by the bearer's condition.
+		auto & healthy=f.add(1,10,2,BattleSide::LEFT,{74});
+		auto & wounded=f.add(2,10,3,BattleSide::LEFT,{74});
+		auto & enemy=f.add(3,100,15,BattleSide::RIGHT);
+		wounded.data.health=40;
+		for(int i=0;i<2;++i)
+		{
+			f.kill(healthy,f.add(10+i,1,8+i,BattleSide::RIGHT));
+			f.kill(wounded,f.add(20+i,1,11+i,BattleSide::RIGHT));
+		}
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,20,false,false)==20);
+		f.kill(healthy,f.add(12,1,10,BattleSide::RIGHT));
+		f.kill(wounded,f.add(22,1,13,BattleSide::RIGHT));
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,20,false,false)==30);
+		assert(f.actions.evolutionIncoming(f.field,3,&healthy,20,false,false)==20);
+		assert(f.actions.evolutionIncoming(f.field,3,&wounded,20,false,false)==15);
+		assert(f.actions.evolutionIncoming(f.field,2,&enemy,20,false,false)==20);
+	}
+	{
+		Field f; // Predator Merge: the bearer and its nearest ally share every mutation for the battle.
+		auto & bearer=f.add(1,10,2,BattleSide::LEFT,{79,23});
+		auto & mate=f.add(2,10,3,BattleSide::LEFT,{9});
+		auto & far=f.add(3,10,9,BattleSide::LEFT,{19});
+		f.add(4,100,15,BattleSide::RIGHT);
+		f.actions.evolutionRound(f.field,true);
+		assert(hasTrait(mate,23) && hasTrait(bearer,9) && !hasTrait(mate,79) && !hasTrait(bearer,19) && !hasTrait(far,23));
+
+		Field solo;
+		auto & lone=solo.add(1,10,2,BattleSide::LEFT,{79});
+		solo.add(2,100,15,BattleSide::RIGHT);
+		solo.actions.evolutionRound(solo.field,true);
+		assert(lone.getBonusesOfType(BonusType::EVOLUTION_TRAIT)->size()==2);
+	}
+	{
+		Field f; // Army Devourer: defending swallows adjacent summoned allies, never original units.
+		auto & devourer=f.add(1,10,4,BattleSide::LEFT,{93});
+		auto & summoned=f.add(2,5,5,BattleSide::LEFT,{23});
+		auto & original=f.add(3,5,3,BattleSide::LEFT,{9});
+		auto & enemy=f.add(4,100,15,BattleSide::RIGHT);
+		summoned.summoned=true;
+		devourer.data.health=60;
+		f.actions.evolutionDefended(f.field,&devourer);
+		assert(devourer.data.health==100 && !f.field.units.count(2) && f.field.units.count(3));
+		assert(hasTrait(devourer,23) && !hasTrait(devourer,9));
+		assert(f.actions.evolutionIncoming(f.field,1,&enemy,10,false,false)==20);
+		(void)original;
+	}
+}
+
 int main(){
+	fieldTricks();
 	runGrowthMarkers();
 	swarmGroup();
 	deathAndTransformation();

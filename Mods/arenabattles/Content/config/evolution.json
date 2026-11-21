@@ -1175,6 +1175,104 @@
           "icon": "evolution/trait100"
         }
       ]
+    },
+    "trait11": {
+      "name": "Хищная тень",
+      "text": "После перемещения носитель оставляет тень на клетке, с которой ушёл. Если цель его следующего удара стоит вплотную к тени, тень повторяет половину этого удара и исчезает.",
+      "rarity": 0,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "11",
+          "description": "@arenabattles.evolution.trait.11",
+          "icon": "evolution/trait11"
+        }
+      ]
+    },
+    "trait37": {
+      "name": "Червоточина",
+      "text": "После уничтожения вражеского отряда на его клетке на три раунда открывается червоточина. Первый союзник, наступивший на неё, мгновенно переносится к ближайшему врагу.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "37",
+          "description": "@arenabattles.evolution.trait.37",
+          "icon": "evolution/trait37"
+        }
+      ]
+    },
+    "trait38": {
+      "name": "Порча плоти",
+      "text": "Каждый третий удар носителя по одному и тому же врагу вырывает из него десятую часть бойцов: они два раунда сражаются на стороне носителя.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "38",
+          "description": "@arenabattles.evolution.trait.38",
+          "icon": "evolution/trait38"
+        }
+      ]
+    },
+    "trait46": {
+      "name": "Проклятая геометрия",
+      "text": "После атаки носитель на два раунда проклинает клетки на прямой между собой и целью и две клетки за ней. Враг, наступивший на проклятую клетку, получает урон.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "46",
+          "description": "@arenabattles.evolution.trait.46",
+          "icon": "evolution/trait46"
+        }
+      ]
+    },
+    "trait74": {
+      "name": "Эволюционная развилка",
+      "text": "Уничтожив третий вражеский отряд за бой, носитель принимает одну из двух форм до конца боя: здоровый становится хищником и бьёт в полтора раза сильнее, потерявший больше половины отряда — панцирем и получает на четверть меньше урона.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "74",
+          "description": "@arenabattles.evolution.trait.74",
+          "icon": "evolution/trait74"
+        }
+      ]
+    },
+    "trait79": {
+      "name": "Слияние хищников",
+      "text": "В начале боя носитель и ближайший союзный отряд получают все мутации друг друга до конца сражения. Без союзников носитель получает случайную временную мутацию.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "79",
+          "description": "@arenabattles.evolution.trait.79",
+          "icon": "evolution/trait79"
+        }
+      ]
+    },
+    "trait93": {
+      "name": "Пожиратель армий",
+      "text": "Защищаясь, носитель поглощает стоящие вплотную призванные союзные отряды: восстанавливает за их счёт бойцов, забирает мутации, а избыток вкладывает в следующую атаку. После убийства вражеского бойца носитель откладывает яйцо.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "93",
+          "description": "@arenabattles.evolution.trait.93",
+          "icon": "evolution/trait93"
+        }
+      ]
     }
   },
   "synergies": [],

@@ -1,0 +1,11 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"mark_curse.png"
+			]
+		}
+	]
+}

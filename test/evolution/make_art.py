@@ -256,6 +256,24 @@ def ground(kind):
             img.paint(full, both(cell, ellipse(22.5 + dx, 26 + dy, r + 2.5, r + 2.5)), (120, 200, 70, 0.22))
         for dx, dy, r in dots:
             img.paint(full, both(cell, ellipse(22.5 + dx, 26 + dy, r * 0.55, r * 0.55)), shade((150, 220, 90), 22.5 + dx, 26 + dy, r, 60, 30, 0.85))
+    elif kind == "shadow":
+        img.paint(full, both(cell, ellipse(22.5, 34, 15, 7)), (10, 8, 20, 0.6))
+        img.paint(full, both(cell, ellipse(22.5, 24, 9, 14)), lambda x, y: (26, 18, 44, 0.75 - abs(y - 24) / 40))
+        for dx in (-3.5, 3.5):
+            img.paint(full, ellipse(22.5 + dx, 18, 1.8, 1.3), (230, 60, 60, 0.95))
+    elif kind == "portal":
+        for radius, color in ((17, (60, 30, 120, 0.85)), (13, (110, 70, 210, 0.9)), (9, (170, 140, 250, 0.9)), (5, (20, 10, 40, 0.95))):
+            img.paint(full, both(cell, ellipse(22.5, 27, radius, radius * 0.72)), color)
+        for i in range(6):
+            a = math.radians(i * 60 + 15)
+            img.paint(full, ellipse(22.5 + math.cos(a) * 15, 27 + math.sin(a) * 10.5, 1.5, 1.5), (240, 230, 255, 0.95))
+    elif kind == "curse":
+        img.paint(full, without(both(cell, ellipse(22.5, 26, 15, 15)), ellipse(22.5, 26, 12.5, 12.5)), (170, 40, 190, 0.85))
+        star = [(22.5 + math.sin(math.radians(a)) * 12, 26 - math.cos(math.radians(a)) * 12) for a in (0, 144, 288, 72, 216)]
+        for i in range(5):
+            x1, y1 = star[i]
+            x2, y2 = star[(i + 1) % 5]
+            img.paint(full, stroke(x1, y1, x2, y2, 1.8), (220, 90, 235, 0.95))
     elif kind == "ash":
         for dx, dy, rx, ry in ((0, 6, 15, 7), (-4, 1, 10, 6), (3, -3, 7, 5), (0, -7, 4, 3)):
             img.paint(full, both(cell, ellipse(22.5 + dx, 28 + dy, rx, ry)), shade((120, 116, 112), 22.5 + dx, 28 + dy, max(rx, ry) * 1.4, 70, 50, 0.92))
@@ -381,7 +399,7 @@ def main():
     for name, (kind, color) in status.items():
         icon(kind, (150, 44, 44), color).save(os.path.join(data, "status_%s.png" % name))
 
-    for kind in ("blood", "trap", "ash", "spores", "mycelium", "territory"):
+    for kind in ("blood", "trap", "shadow", "ash", "spores", "mycelium", "portal", "curse", "territory"):
         picture = ground(kind)
         picture.save(os.path.join(sprites, "mark_%s.png" % kind))
         for step, share in enumerate((0.3, 0.6, 0.85)):

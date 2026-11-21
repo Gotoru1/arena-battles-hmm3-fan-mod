@@ -1,0 +1,14 @@
+{
+	"basepath": "arena/evolution/",
+	"sequences": [
+		{
+			"group": 0,
+			"frames": [
+				"mark_portal_in0.png",
+				"mark_portal_in1.png",
+				"mark_portal_in2.png",
+				"mark_portal.png"
+			]
+		}
+	]
+}
