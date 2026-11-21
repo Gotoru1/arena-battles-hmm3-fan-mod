@@ -154,6 +154,8 @@ class EvolutionReactions
 				paired.insert(bearer->unitId());
 				break;
 			}
+			// Nobody to trade with: the bearer mutates on its own for this battle.
+			if(!paired.count(bearer->unitId())) adapt(bearer);
 		}
 	}
 
@@ -319,6 +321,14 @@ class EvolutionReactions
 			grant(witness,record);
 			copyProperty(witness,newcomer);
 		}
+	}
+
+	// Colony mutations are playable alone: each of them lets its bearer lay eggs on a kill.
+	bool brooder(const CStack * unit) const
+	{
+		const auto active=rules(unit);
+		for(int id:{1,60,75,87,95,97}) if(active.count(id)) return true;
+		return false;
 	}
 
 	static CreatureID eggType()
@@ -707,12 +717,16 @@ class EvolutionReactions
 			if(!all.count(id)) continue;
 			auto * heir = nearest(corpse,corpse->unitSide());
 			if(!heir) continue;
+				bool passed=false;
 			for(auto entry : rules(corpse,id == 25))
 				if(entry.first != id && rules(heir)[entry.first] < entry.second)
 				{
 					transfer(heir,entry.first,entry.second);
+					passed=true;
 					break;
 				}
+			// With nothing of its own to leave, the dying unit still mutates its heir.
+			if(!passed) adapt(heir);
 		}
 
 		if(source && source->alive() && source->unitSide() != corpse->unitSide() && rules(source).count(27))
@@ -725,12 +739,12 @@ class EvolutionReactions
 	}
 
 	// Negative marks that can travel between bodies. The value of a mark is the unit id of its source.
-	// Order: parasite, wound, breeding germ, viral tag, poison, slowing spore.
+	// Order: parasite, wound, breeding germ, viral tag, poison, slowing spore, memory mark.
 	struct Ailment { BonusType type; int subtype; };
 	static const std::vector<Ailment> & ailments()
 	{
 		static const std::vector<Ailment> all{{BonusType::EVOLUTION_PARASITE,0},{BonusType::EVOLUTION_WOUND,0},
-			{BonusType::NONE,500062},{BonusType::NONE,500026},{BonusType::NONE,500077},{BonusType::NONE,500177}};
+			{BonusType::NONE,500062},{BonusType::NONE,500026},{BonusType::NONE,500077},{BonusType::NONE,500177},{BonusType::NONE,500148}};
 		return all;
 	}
 
@@ -1022,7 +1036,8 @@ class EvolutionReactions
 		}
 	}
 
-	// Pack Hunt: the third allied hit on one target in a round gives the nearest other ally a free attack.
+	// Pack Hunt: every third allied hit on one target gives the nearest other ally a free attack,
+	// at most once per round for that target. A lone bearer takes the free attack itself.
 	void packHunt(const CStack * source,const CStack * primary)
 	{
 		bool led=false;
@@ -1031,26 +1046,21 @@ class EvolutionReactions
 		if(!led) return;
 		const int round=battle.battleGetRound();
 		const int key=500135+static_cast<int>(source->unitSide());
-		if(counter(primary,500035)!=~round)
+		const int roundKey=500235+static_cast<int>(source->unitSide());
+		const int hits=counter(primary,key)+1;
+		if(hits<3 || counter(primary,roundKey)==~round)
 		{
-			setCounter(primary,500035,~round);
-			setCounter(primary,500135,0);
-			setCounter(primary,500136,0);
-		}
-		const int hits=counter(primary,key);
-		if(hits<0) return;
-		if(hits<2)
-		{
-			setCounter(primary,key,hits+1);
+			setCounter(primary,key,std::min(hits,3));
 			return;
 		}
-		setCounter(primary,key,-1);
+		setCounter(primary,key,0);
+		setCounter(primary,roundKey,~round);
 		const CStack * ally=nullptr;
 		for(auto * unit:living())
 			if(unit!=source && unit->unitSide()==source->unitSide() && (!ally ||
 				BattleHex::getDistance(primary->getPosition(),unit->getPosition()) <
 				BattleHex::getDistance(primary->getPosition(),ally->getPosition()))) ally=unit;
-		if(ally) strike(ally,primary);
+		strike(ally ? ally : source,primary);
 	}
 
 	int64_t injure(const CStack * target, const CStack * owner, int64_t amount)
@@ -1085,6 +1095,9 @@ class EvolutionReactions
 		{
 			auto * owner = battle.battleGetStackByID(mark->val);
 			if(!owner || !owner->alive() || !target->alive() || owner->unitSide() == target->unitSide()) continue;
+			// The mark is an infection for every colony mutation. Only leeches feed through it.
+			const auto feeding=rules(owner);
+			if(!feeding.count(9) && !feeding.count(89) && !feeding.count(13)) continue;
 			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
 			if(owner->alive())
 			{
@@ -1097,6 +1110,13 @@ class EvolutionReactions
 				server.sendAndApply(packet);
 			}
 			reactor(amount);
+		}
+		// An open wound bleeds every round while the unit that opened it lives.
+		for(int id : carried(target,1))
+		{
+			const auto * owner = battle.battleGetStackByID(id);
+			if(!owner || !target->alive() || owner->unitSide() == target->unitSide()) continue;
+			reactor(injure(target,owner,std::max<int64_t>(1,owner->getCount()/4)));
 		}
 		// Poison spores keep working after their source dies, as long as its body is still known.
 		for(int id : carried(target,4))
@@ -1122,8 +1142,11 @@ public:
 				lostLarvae(target,event.amount);
 				casualties(event.amount);
 				if(event.amount) { shed(target,event.amount); split(target); }
-				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && rules(source).count(1))
+				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && brooder(source))
 					lay(source,target->getPosition());
+				// Blood Debt also remembers whoever kills the bearer's own fighters.
+				if(event.amount && source && target->alive() && source->unitSide()!=target->unitSide() && rules(target).count(8))
+					remember(target,500008,source->unitId());
 				if(event.destroyed && !target->alive()) chain.post(evolution::ReactionKind::Death,event.source,event.target);
 				break;
 			case evolution::ReactionKind::Death:
@@ -1364,6 +1387,11 @@ public:
 						break;
 					}
 			if(first && active.count(78)) summon(unit,unit->creatureId(),unit->getCount(),unit->getPosition(),true);
+			// Hive Mind alone grows a small offshoot to share its boosts with.
+			else if(first && active.count(56) && unit->getBonusesOfType(BonusType::EVOLUTION_FAMILY)->empty())
+				summon(unit,unit->creatureId(),std::max(1,unit->getCount()/10),unit->getPosition(),true);
+			// The Catalyst starts every battle with one new temporary mutation to react to.
+			if(first && active.count(61)) adapt(unit);
 			if(active.count(57) && battle.battleGetRound() > 0 && battle.battleGetRound() % 3 == 0) adapt(unit);
 		}
 	}
@@ -1440,11 +1468,15 @@ public:
 				if(owner && owner != source && owner->unitSide() == source->unitSide())
 					injure(primary,source,std::max<int64_t>(1,source->getCount()/4));
 			}
-			if(primary->alive() && (active.count(9) || active.count(89))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
+			if(primary->alive() && (active.count(9) || active.count(89) || active.count(39) || active.count(54))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
 			const int self=static_cast<int>(source->unitId());
 			if(active.count(62)) afflict(primary,2,self);
-			if(active.count(26)) afflict(primary,3,self);
+			// Each of these brings its own mark, so it works without any other mutation.
+			if(active.count(26)) { afflict(primary,5,self); afflict(primary,3,self); }
+			if(active.count(71)) afflict(primary,4,self);
+			if(active.count(48)) afflict(primary,6,self);
+			if(active.count(82) && !afflict(primary,5,self)) afflict(primary,4,self);
 			if(primary->alive() && active.count(77))
 			{
 				// Poison, slowing, bleeding or a breeding mark. Each is an ordinary mark for other mutations.
@@ -1452,6 +1484,23 @@ public:
 				afflict(primary,spores[server.getRandomGenerator().nextInt(0,3)],self);
 			}
 		}
+		if(source->alive() && active.count(48))
+			for(const auto & hit : packet.bsa)
+			{
+				if(hit.stackAttacked != primary->unitId() || hit.attackerID != source->unitId() || hit.damageAmount <= 0) continue;
+				const auto echo=std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(48),3));
+				std::vector<std::pair<size_t,int>> load;
+				for(size_t kind=0;kind<ailments().size();++kind)
+					for(int owner:carried(primary,kind)) load.emplace_back(kind,owner);
+				for(auto * other:living())
+				{
+					if(!source->alive()) break;
+					if(other==primary || other->unitSide()!=primary->unitSide()) continue;
+					if(std::any_of(load.begin(),load.end(),[&](const auto & mark){return suffers(other,mark.first,mark.second);}))
+						injure(other,source,echo);
+				}
+				break;
+			}
 		if(primary->alive() && source->alive())
 			for(const auto & hit : packet.bsa)
 				if(hit.stackAttacked == primary->unitId() && hit.attackerID == source->unitId() && hit.damageAmount > 0)

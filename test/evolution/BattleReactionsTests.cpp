@@ -294,17 +294,21 @@ static void parasiteBurstAndGenerations()
 	actions.evolutionAttack(field,&parent,&prey,{{{2,1,2,false,0}}});
 	prey.data.health=0;
 	actions.evolutionAttack(field,&parent,&prey,{{{2,1,50,true,5}}});
-	assert(field.units.size()==4);
-	auto & larva=field.units.at(4);
+	// War of Generations broods on its own: the kill leaves an egg, the burst adds a larva beside it.
+	assert(field.units.size()==5);
+	auto & egg=field.units.at(4);
+	assert(egg.data.species==500 && egg.data.pos.pos==5);
+	auto & larva=field.units.at(5);
 	assert(larva.data.pos.pos==4 && larva.unitSide()==parent.unitSide());
 	assert(larva.bonuses.size()>=3 && !larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,97)->empty());
 	assert(larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
 	// Fill both adjacent cells and kill another infected stack in the same location.
-	auto & second=field.units.emplace(5,CStack{5,{44,5,50,{5},BattleSide::RIGHT},{}}).first->second;
-	actions.evolutionAttack(field,&parent,&second,{{{5,1,2,false,0}}});
+	egg.data.health=0;
+	auto & second=field.units.emplace(6,CStack{6,{44,5,50,{5},BattleSide::RIGHT},{}}).first->second;
+	actions.evolutionAttack(field,&parent,&second,{{{6,1,2,false,0}}});
 	second.data.health=0;
-	actions.evolutionAttack(field,&parent,&second,{{{5,1,50,true,5}}});
-	assert(guard.data.health==30 && larva.data.health==10 && field.units.size()==5);
+	actions.evolutionAttack(field,&parent,&second,{{{6,1,50,true,5}}});
+	assert(guard.data.health==30 && larva.data.health==10 && field.units.size()==7 && field.units.at(7).data.species==500);
 	parent.data.health=0;
 	actions.evolutionAttack(field,&guard,&parent,{{{1,3,100,true,10}}});
 	assert(!larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
@@ -459,16 +463,17 @@ static void packHunt()
 	assert(prey.data.health==1000 && other.data.health==1000);
 	hit(leader,prey);
 	assert(prey.data.health==993);
-	// The free attack does not start a new count, and the target is spent for this round.
+	// One free attack per target per round, however many hits follow.
 	for(int i=0;i<4;++i) hit(second,prey);
 	assert(prey.data.health==993);
-	// A zero-damage hit and the enemy's own hits do not count.
+	// Hits keep adding up between rounds. A zero-damage hit and the enemy's own hits do not count.
 	++field.round;
 	actions.evolutionAttack(field,&leader,&prey,{{{4,1,0,false,0}}});
 	hit(prey,leader);
-	hit(leader,prey);
-	hit(second,prey);
 	assert(prey.data.health==993);
+	hit(leader,prey);
+	assert(prey.data.health==986);
+	hit(second,prey);
 	hit(second,prey);
 	assert(prey.data.health==986);
 	// Without a living bearer the pack does not coordinate.
@@ -476,6 +481,22 @@ static void packHunt()
 	++field.round;
 	for(int i=0;i<4;++i) hit(second,prey);
 	assert(prey.data.health==986);
+
+	// Alone, the bearer takes the free attack itself on every third hit.
+	CBattleInfoCallback solo;
+	CGameHandler soloServer{solo,{}};
+	BattleActionProcessor soloActions{&soloServer};
+	soloActions.strikeDamage=7;
+	auto & lone=solo.units.emplace(1,CStack{1,{11,10,100,{4},BattleSide::LEFT},{trait(35)}}).first->second;
+	auto & target=solo.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	for(int round=0;round<2;++round)
+	{
+		soloActions.evolutionAttack(solo,&lone,&target,{{{2,1,10,false,0}}});
+		++solo.round;
+	}
+	assert(target.data.health==1000);
+	soloActions.evolutionAttack(solo,&lone,&target,{{{2,1,10,false,0}}});
+	assert(target.data.health==993);
 }
 
 static void sporesReactorAndDomino()
@@ -497,18 +518,30 @@ static void sporesReactorAndDomino()
 	assert(carries(host,BonusType::NONE,500062,1));
 	for(int i=0;i<8;++i) hit(grower,host);
 	assert(host.getBonusesOfType(BonusType::STACKS_SPEED)->size()==1 && host.bonuses.size()==5);
-	// Poison ticks for a quarter of the grower's base count. The third tick releases the reactor.
-	for(int tick=1;tick<=2;++tick)
-	{
-		++field.round;
-		actions.evolutionRound(field,false);
-		assert(host.data.health==1000-10*tick && far.data.health==1000);
-	}
+	// The wound and the poison each tick for 10 per round. Every third tick releases 2 x 30 at all enemies.
 	++field.round;
 	actions.evolutionRound(field,false);
-	assert(host.data.health==970-60 && far.data.health==940 && grower.data.health==400);
+	assert(host.data.health==980 && far.data.health==1000);
+	++field.round;
+	actions.evolutionRound(field,false);
+	assert(host.data.health==900 && far.data.health==940);
+	++field.round;
+	actions.evolutionRound(field,false);
+	assert(host.data.health==820 && far.data.health==880 && grower.data.health==400);
 	assert(grower.getBonusesOfType(BonusType::NONE,500071)->empty() && grower.getBonusesOfType(BonusType::NONE,500471)->empty());
 
+	// The reactor works alone: its bearer's hits poison, and three ticks of that poison fire it.
+	{
+		CBattleInfoCallback lone;
+		CGameHandler loneServer{lone,{}};
+		BattleActionProcessor loneActions{&loneServer};
+		auto & core=lone.units.emplace(1,CStack{1,{11,40,400,{2},BattleSide::LEFT},{trait(71)}}).first->second;
+		auto & victim=lone.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+		loneActions.evolutionAttack(lone,&core,&victim,{{{2,1,10,false,0}}});
+		assert(carries(victim,BonusType::NONE,500077,1));
+		for(int i=0;i<3;++i){++lone.round;loneActions.evolutionRound(lone,false);}
+		assert(victim.data.health==1000-30-60);
+	}
 	// Domino Law copies one mark to the nearest enemy once a body carries two kinds.
 	CBattleInfoCallback chain;
 	CGameHandler chainServer{chain,{}};
@@ -519,9 +552,10 @@ static void sporesReactorAndDomino()
 	auto & c=chain.units.emplace(4,CStack{4,{24,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
 	auto & friendly=chain.units.emplace(5,CStack{5,{12,10,100,{1},BattleSide::LEFT},{}}).first->second;
 	chainActions.evolutionAttack(chain,&plague,&a,{{{2,1,10,false,0}}});
-	assert(carries(a,BonusType::EVOLUTION_PARASITE,0,1) && carries(a,BonusType::EVOLUTION_WOUND,0,1));
-	assert(carries(b,BonusType::EVOLUTION_PARASITE,0,1) && !b.hasBonusOfType(BonusType::EVOLUTION_WOUND));
-	assert(!c.hasBonusOfType(BonusType::EVOLUTION_PARASITE) && friendly.bonuses.empty());
+	assert(carries(a,BonusType::EVOLUTION_PARASITE,0,1) && carries(a,BonusType::EVOLUTION_WOUND,0,1) && carries(a,BonusType::NONE,500177,1));
+	// The parasite fell first, then the bearer's own slowing mark pushed the wound on, and b passed the parasite to c.
+	assert(carries(b,BonusType::EVOLUTION_PARASITE,0,1) && carries(b,BonusType::EVOLUTION_WOUND,0,1) && !carries(b,BonusType::NONE,500177,1));
+	assert(carries(c,BonusType::EVOLUTION_PARASITE,0,1) && !c.hasBonusOfType(BonusType::EVOLUTION_WOUND) && friendly.bonuses.empty());
 	assert(plague.getBonusesOfType(BonusType::NONE,500501)->empty());
 	// Memory Infection links bodies that share a mark. A mark that arrived by domino reveals the combination.
 	plague.bonuses.push_back(trait(48));
@@ -531,13 +565,42 @@ static void sporesReactorAndDomino()
 	assert(carries(c,BonusType::EVOLUTION_PARASITE,0,1));
 	assert(carries(plague,BonusType::NONE,500501,4));
 	assert(friendly.bonuses.empty());
+	// Memory Infection repeats a third of the bearer's damage on every body that shares a mark with the target.
+	assert(a.data.health==1000 && b.data.health==997 && c.data.health==997);
 	// Saturated bodies stop the cascade: repeating the attack changes nothing.
 	std::vector<size_t> before;
 	for(const auto & entry:chain.units) before.push_back(entry.second.bonuses.size());
 	chainActions.evolutionAttack(chain,&plague,&a,{{{2,1,10,false,0}}});
 	std::vector<size_t> after;
 	for(const auto & entry:chain.units) after.push_back(entry.second.bonuses.size());
-	assert(before==after);
+	assert(before==after && b.data.health==994 && c.data.health==994);
+
+	// Alone, Domino Law slows on the first hit and poisons on the second, which starts the chain.
+	CBattleInfoCallback bare;
+	CGameHandler bareServer{bare,{}};
+	BattleActionProcessor bareActions{&bareServer};
+	auto & pusher=bare.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(82)}}).first->second;
+	auto & near=bare.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & next=bare.units.emplace(3,CStack{3,{23,100,1000,{6},BattleSide::RIGHT},{}}).first->second;
+	bareActions.evolutionAttack(bare,&pusher,&near,{{{2,1,10,false,0}}});
+	assert(carries(near,BonusType::NONE,500177,1) && next.bonuses.empty());
+	bareActions.evolutionAttack(bare,&pusher,&near,{{{2,1,10,false,0}}});
+	assert(carries(near,BonusType::NONE,500077,1) && carries(next,BonusType::NONE,500077,1));
+
+	// Alone, Memory Infection marks what its bearer hits and echoes damage between marked bodies.
+	CBattleInfoCallback mind;
+	CGameHandler mindServer{mind,{}};
+	BattleActionProcessor mindActions{&mindServer};
+	auto & thinker=mind.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(48)}}).first->second;
+	auto & one=mind.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & two=mind.units.emplace(3,CStack{3,{23,100,1000,{6},BattleSide::RIGHT},{}}).first->second;
+	auto & three=mind.units.emplace(4,CStack{4,{24,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
+	mindActions.evolutionAttack(mind,&thinker,&one,{{{2,1,30,false,0}}});
+	assert(carries(one,BonusType::NONE,500148,1) && two.data.health==1000);
+	mindActions.evolutionAttack(mind,&thinker,&two,{{{3,1,30,false,0}}});
+	assert(one.data.health==990 && three.data.health==1000);
+	mindActions.evolutionAttack(mind,&thinker,&one,{{{2,1,30,false,0}}});
+	assert(two.data.health==990 && three.data.health==1000);
 }
 
 // The engine ages obstacles when the round packet is applied, runs the reactions, then removes expired ones.
@@ -582,14 +645,15 @@ static void groundMarks()
 		for(int i=0;i<4;++i) nextRound(field,actions);
 		assert(marksOf(field,4,7)==1);
 		nextRound(field,actions);
-		assert(field.marks.empty());
+		// The wound from the first trail bled twice per round in the meantime.
+		assert(field.marks.empty() && enemy.data.health==85);
 		// The trail outlives its owner but can no longer hurt anyone.
 		bearer.data.pos={9};
 		actions.evolutionMoved(field,&bearer,{8});
 		field.units.erase(1);
 		enemy.data.pos={8};
 		actions.evolutionMoved(field,&enemy,{5});
-		assert(enemy.data.health==95 && field.marks.empty());
+		assert(enemy.data.health==85 && field.marks.empty());
 	}
 	// Living Trap.
 	{
@@ -700,7 +764,95 @@ static void groundMarks()
 	}
 }
 
+static int traitCount(const CStack & unit){return static_cast<int>(unit.getBonusesOfType(BonusType::EVOLUTION_TRAIT)->size());}
+
+// Every mutation here is the only one its bearer owns and still has to change the battle.
+static void playableAlone()
+{
+	struct Arena {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & bearer;
+		CStack & ally;
+		CStack & enemy;
+		CStack & neighbour;
+		explicit Arena(int mutation)
+			:bearer(field.units.emplace(1,CStack{1,{11,10,100,{4},BattleSide::LEFT},{trait(mutation)}}).first->second)
+			,ally(field.units.emplace(2,CStack{2,{12,10,100,{3},BattleSide::LEFT},{}}).first->second)
+			,enemy(field.units.emplace(3,CStack{3,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second)
+			,neighbour(field.units.emplace(4,CStack{4,{23,100,1000,{6},BattleSide::RIGHT},{}}).first->second){}
+		void hit(CStack & from,CStack & to,int killed=0){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,killed}}});}
+		void round(bool first=false){if(!first)++field.round;actions.evolutionRound(field,first);}
+	};
+	{
+		Arena a(19); // Pulsing Wound bleeds without a second attacker.
+		a.hit(a.bearer,a.enemy);
+		a.round();
+		assert(a.enemy.data.health==998);
+	}
+	{
+		Arena a(8); // Blood Debt answers for the bearer's own dead.
+		a.hit(a.enemy,a.bearer,1);
+		assert(carries(a.bearer,BonusType::NONE,500008,3));
+		a.hit(a.bearer,a.enemy);
+		assert(a.enemy.data.health==1000);
+		a.hit(a.bearer,a.enemy);
+		assert(a.enemy.data.health==995);
+	}
+	{
+		Arena a(26); // Viral Chain brings its own slowing mark to spread.
+		a.hit(a.bearer,a.enemy);
+		assert(carries(a.enemy,BonusType::NONE,500177,1) && a.neighbour.bonuses.empty());
+		a.actions.evolutionMoved(a.field,&a.enemy);
+		assert(carries(a.neighbour,BonusType::NONE,500177,1) && a.neighbour.hasBonusOfType(BonusType::STACKS_SPEED));
+	}
+	{
+		Arena a(39); // Infected Remains infects by itself, does not drain, and leaves a cocoon.
+		a.hit(a.bearer,a.enemy);
+		assert(carries(a.enemy,BonusType::EVOLUTION_PARASITE,0,1));
+		a.round();
+		assert(a.enemy.data.health==1000 && a.bearer.data.health==100);
+		a.enemy.data.health=0;
+		a.actions.evolutionAttack(a.field,&a.bearer,&a.enemy,{{{3,1,10,true,0}}});
+		assert(a.field.units.size()==5 && a.field.units.at(5).data.species==500);
+	}
+	for(int colony:{60,75,87,95,97})
+	{
+		Arena a(colony); // Each colony mutation starts its own brood.
+		a.hit(a.bearer,a.enemy,1);
+		assert(a.field.units.size()==5 && a.field.units.at(5).data.species==500);
+		a.round();
+		assert(std::any_of(a.field.units.begin(),a.field.units.end(),[](const auto & u){return u.second.data.species==501;}));
+	}
+	{
+		Arena a(10); // Death Legacy with nothing to leave still mutates the heir.
+		a.bearer.data.health=0;
+		a.actions.evolutionAttack(a.field,&a.enemy,&a.bearer,{{{1,3,100,true,10}}});
+		assert(traitCount(a.ally)==1);
+	}
+	{
+		Arena a(50); // Mutation Exchange without a partner mutates its bearer.
+		a.round(true);
+		assert(traitCount(a.bearer)==2 && traitCount(a.ally)==0);
+	}
+	{
+		Arena a(61); // The Catalyst provides the acquisition it reacts to.
+		a.round(true);
+		assert(traitCount(a.bearer)==2);
+	}
+	{
+		Arena a(56); // Hive Mind grows an offshoot of a tenth of the unit.
+		a.round(true);
+		assert(a.field.units.size()==5 && a.field.units.at(5).getCount()==1);
+		assert(a.bearer.hasBonusOfType(BonusType::EVOLUTION_FAMILY) && a.field.units.at(5).hasBonusOfType(BonusType::EVOLUTION_FAMILY));
+		a.round();
+		assert(a.field.units.size()==5);
+	}
+}
+
 int main(){
+	playableAlone();
 	groundMarks();
 	deathStrike();
 	packHunt();
@@ -732,9 +884,10 @@ int main(){
 	assert(enemy.hasBonusOfType(BonusType::EVOLUTION_PARASITE) && enemy.hasBonusOfType(BonusType::EVOLUTION_WOUND));
 	carrier.data.health=72;field.round=3;
 	actions.evolutionRound(field,false);
-	assert(carrier.data.health==74 && enemy.data.health==98 && ally.bonuses.size()==6);
+	// The leech takes 2 for the carrier, then the open wound bleeds 2 more.
+	assert(carrier.data.health==74 && enemy.data.health==96 && ally.bonuses.size()==6);
 	actions.evolutionAttack(field,&ally,&enemy,{{{enemy.id,ally.id,8,false}}});
-	assert(enemy.data.health==96);
+	assert(enemy.data.health==94);
 	enemy.data.pos={5};enemy.data.health=0;enemy.bonuses.push_back({BonusType::FLYING,1});
 	actions.evolutionAttack(field,&carrier,&enemy,{{{enemy.id,carrier.id,30,true}}});
 	assert(carrier.hasBonusOfType(BonusType::FLYING));
@@ -776,7 +929,8 @@ int main(){
 	auto n=nest.units.size();
 	nestActions.evolutionRound(nest,false);
 	assert(nest.units.size()==n);
-	nest.units.at(2).bonuses.push_back({BonusType::EVOLUTION_PARASITE,1});
+	// Infected Remains infects with its own hits, so the first attack already left the mark.
+	assert(nest.units.at(2).getBonusesOfType(BonusType::EVOLUTION_PARASITE)->size()==1);
 	nest.units.at(2).data.health=0;
 	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,true,0}}});
 	assert(nest.units.size()==n+1);
