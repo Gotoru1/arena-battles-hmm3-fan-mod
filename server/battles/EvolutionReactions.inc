@@ -699,21 +699,219 @@ class EvolutionReactions
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
 	}
 
+	// Negative marks that can travel between bodies. The value of a mark is the unit id of its source.
+	// Order: parasite, wound, breeding germ, viral tag, poison, slowing spore.
+	struct Ailment { BonusType type; int subtype; };
+	static const std::vector<Ailment> & ailments()
+	{
+		static const std::vector<Ailment> all{{BonusType::EVOLUTION_PARASITE,0},{BonusType::EVOLUTION_WOUND,0},
+			{BonusType::NONE,500062},{BonusType::NONE,500026},{BonusType::NONE,500077},{BonusType::NONE,500177}};
+		return all;
+	}
+
+	std::vector<int> carried(const CStack * unit,size_t kind) const
+	{
+		const auto & def=ailments()[kind];
+		const auto held=def.subtype ? unit->getBonusesOfType(def.type,BonusCustomSubtype(def.subtype)) : unit->getBonusesOfType(def.type);
+		std::vector<int> owners;
+		for(const auto & mark:*held) owners.push_back(mark->val);
+		return owners;
+	}
+
+	bool suffers(const CStack * unit,size_t kind,int owner) const
+	{
+		const auto owners=carried(unit,kind);
+		return std::find(owners.begin(),owners.end(),owner)!=owners.end();
+	}
+
+	struct Contagion { uint32_t target; size_t kind; int owner; };
+	std::deque<Contagion> contagion;
+	bool spreading=false;
+
+	// Every new mark is queued. Memory Infection and Domino Law read the queue, and each
+	// unit/kind/source triple can be added only once, so a cascade always terminates.
+	bool afflict(const CStack * target,size_t kind,int owner)
+	{
+		if(!target || !target->alive() || suffers(target,kind,owner)) return false;
+		const auto & def=ailments()[kind];
+		const bool firstSlow=def.subtype==500177 && carried(target,kind).empty();
+		Bonus mark;
+		mark.type=def.type;
+		if(def.subtype) mark.subtype=BonusCustomSubtype(def.subtype);
+		mark.val=owner;
+		grant(target,mark);
+		if(firstSlow)
+		{
+			// One penalty per body keeps the slowest native creatures mobile.
+			Bonus slow;
+			slow.type=BonusType::STACKS_SPEED;
+			slow.val=-2;
+			grant(target,slow);
+		}
+		contagion.push_back({static_cast<uint32_t>(target->unitId()),kind,owner});
+		if(spreading) return true;
+		spreading=true;
+		try
+		{
+			while(!contagion.empty())
+			{
+				const auto event=contagion.front();
+				contagion.pop_front();
+				resonate(event);
+			}
+		}
+		catch(...) { spreading=false; contagion.clear(); throw; }
+		spreading=false;
+		return true;
+	}
+
+	void resonate(const Contagion & event)
+	{
+		const auto * host=battle.battleGetStackByID(event.target);
+		if(!host) return;
+		const CStack * memory=nullptr;
+		const CStack * domino=nullptr;
+		for(auto * unit:living())
+		{
+			if(unit->unitSide()==host->unitSide()) continue;
+			const auto active=rules(unit);
+			if(!memory && active.count(48)) memory=unit;
+			if(!domino && active.count(82)) domino=unit;
+		}
+		if(!memory && !domino) return;
+		std::vector<std::pair<size_t,int>> load;
+		std::set<size_t> kinds;
+		for(size_t kind=0;kind<ailments().size();++kind)
+			for(int owner:carried(host,kind))
+			{
+				load.emplace_back(kind,owner);
+				kinds.insert(kind);
+			}
+		if(memory)
+			for(auto * other:living())
+			{
+				if(other==host || other->unitSide()!=host->unitSide()) continue;
+				const bool linked=std::any_of(load.begin(),load.end(),[&](const auto & mark){
+					return (mark.first!=event.kind || mark.second!=event.owner) && suffers(other,mark.first,mark.second);});
+				if(!linked || !afflict(other,event.kind,event.owner)) continue;
+				if(marked(other,500182,1) || marked(host,500182,1)) discovery(memory,4);
+			}
+		if(!domino || kinds.size()<2) return;
+		const CStack * next=nullptr;
+		std::pair<size_t,int> passed;
+		for(auto * other:living())
+		{
+			if(other==host || other->unitSide()!=host->unitSide()) continue;
+			if(next && BattleHex::getDistance(host->getPosition(),other->getPosition())>=BattleHex::getDistance(host->getPosition(),next->getPosition())) continue;
+			for(const auto & mark:load)
+				if(!suffers(other,mark.first,mark.second))
+				{
+					next=other;
+					passed=mark;
+					break;
+				}
+		}
+		if(!next) return;
+		remember(next,500182,1);
+		afflict(next,passed.first,passed.second);
+	}
+
 	bool attach(const CStack * target, const CStack * owner, BonusType type)
 	{
-		auto marks = target->getBonusesOfType(type);
-		for(const auto & mark : *marks)
-			if(mark->val == static_cast<int>(owner->unitId())) return false;
-		Bonus mark;
-		mark.type = type;
-		mark.val = static_cast<int>(owner->unitId());
-		grant(target, mark);
-		return true;
+		return afflict(target,type==BonusType::EVOLUTION_WOUND ? 1 : 0,static_cast<int>(owner->unitId()));
+	}
+
+	const CStack * nearestFoe(const CStack * from) const
+	{
+		const CStack * best=nullptr;
+		for(auto * unit:living())
+			if(unit->unitSide()!=from->unitSide() && (!best ||
+				BattleHex::getDistance(from->getPosition(),unit->getPosition()) <
+				BattleHex::getDistance(from->getPosition(),best->getPosition()))) best=unit;
+		return best;
+	}
+
+	// Death Strike: a lethal creature hit was held back by incoming(). The bearer attacks
+	// natively at full strength, then the stored damage lands and the usual kill reactions run.
+	void lastStand(const CStack * victim)
+	{
+		if(!victim || !victim->alive()) return;
+		const auto debt=reserve(victim,500402);
+		if(!debt) return;
+		const auto * killer=battle.battleGetStackByID(counter(victim,500102)-1,false);
+		setReserve(victim,0,500402);
+		setCounter(victim,500102,0);
+		const auto * prey=killer && killer->alive() && killer->unitSide()!=victim->unitSide() ? killer : nearestFoe(victim);
+		if(prey) strike(victim,prey);
+		if(victim->alive()) injure(victim,killer ? killer : victim,debt);
+	}
+
+	// Blood Reactor: three periodic ticks anywhere on the field release the stored damage.
+	void reactor(int64_t amount)
+	{
+		if(amount<=0) return;
+		for(auto * bearer:living())
+		{
+			if(!bearer->alive()) continue;
+			const auto active=rules(bearer);
+			if(!active.count(71)) continue;
+			const auto energy=combineDamage(reserve(bearer,500471),amount);
+			const int ticks=counter(bearer,500071)+1;
+			if(ticks<3)
+			{
+				setCounter(bearer,500071,ticks);
+				setReserve(bearer,energy,500471);
+				continue;
+			}
+			setCounter(bearer,500071,0);
+			setReserve(bearer,0,500471);
+			const auto wave=combineDamage(evolution::damageProduct(energy,active.at(71)),evolution::damageProduct(energy,active.at(71)));
+			for(auto * foe:living())
+				if(bearer->alive() && foe->unitSide()!=bearer->unitSide()) injure(foe,bearer,wave);
+		}
+	}
+
+	// Pack Hunt: the third allied hit on one target in a round gives the nearest other ally a free attack.
+	void packHunt(const CStack * source,const CStack * primary)
+	{
+		bool led=false;
+		for(auto * unit:living())
+			if(unit->unitSide()==source->unitSide() && rules(unit).count(35)) led=true;
+		if(!led) return;
+		const int round=battle.battleGetRound();
+		const int key=500135+static_cast<int>(source->unitSide());
+		if(counter(primary,500035)!=~round)
+		{
+			setCounter(primary,500035,~round);
+			setCounter(primary,500135,0);
+			setCounter(primary,500136,0);
+		}
+		const int hits=counter(primary,key);
+		if(hits<0) return;
+		if(hits<2)
+		{
+			setCounter(primary,key,hits+1);
+			return;
+		}
+		setCounter(primary,key,-1);
+		const CStack * ally=nullptr;
+		for(auto * unit:living())
+			if(unit!=source && unit->unitSide()==source->unitSide() && (!ally ||
+				BattleHex::getDistance(primary->getPosition(),unit->getPosition()) <
+				BattleHex::getDistance(primary->getPosition(),ally->getPosition()))) ally=unit;
+		if(ally) strike(ally,primary);
 	}
 
 	int64_t injure(const CStack * target, const CStack * owner, int64_t amount)
 	{
 		if(!target->alive() || amount <= 0) return 0;
+		if(amount>=target->getAvailableHealth() && owner!=target && owner->alive() && owner->unitSide()!=target->unitSide()
+			&& rules(target).count(2) && !marked(target,500002,1))
+		{
+			remember(target,500002,1);
+			strike(target,owner);
+			if(!target->alive()) return 0;
+		}
 		amount = std::min<int64_t>(amount, target->getAvailableHealth());
 		BattleStackAttacked hit;
 		hit.attackerID = owner->unitId();
@@ -737,13 +935,24 @@ class EvolutionReactions
 			auto * owner = battle.battleGetStackByID(mark->val);
 			if(!owner || !owner->alive() || !target->alive() || owner->unitSide() == target->unitSide()) continue;
 			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
-			auto state = owner->acquireState();
-			state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
-			BattleUnitsChanged packet;
-			packet.battleID = battle.getBattle()->getBattleID();
-			packet.changedStacks.emplace_back(owner->unitId(), UnitChanges::EOperation::RESET_STATE);
-			state->save(packet.changedStacks.back().data);
-			server.sendAndApply(packet);
+			if(owner->alive())
+			{
+				auto state = owner->acquireState();
+				state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+				BattleUnitsChanged packet;
+				packet.battleID = battle.getBattle()->getBattleID();
+				packet.changedStacks.emplace_back(owner->unitId(), UnitChanges::EOperation::RESET_STATE);
+				state->save(packet.changedStacks.back().data);
+				server.sendAndApply(packet);
+			}
+			reactor(amount);
+		}
+		// Poison spores keep working after their source dies, as long as its body is still known.
+		for(int id : carried(target,4))
+		{
+			const auto * owner = battle.battleGetStackByID(id,false);
+			if(!owner || !target->alive() || owner->unitSide() == target->unitSide()) continue;
+			reactor(injure(target,owner,std::max<int64_t>(1,owner->unitBaseAmount()/4)));
 		}
 	}
 public:
@@ -803,29 +1012,26 @@ public:
 				if(distance<=3 && (!closest || distance<BattleHex::getDistance(carrier->getPosition(),closest->getPosition()))) closest=unit;
 			}
 			if(!closest) continue;
-			remember(closest,500062,root->val);
-			if(auto * owner=battle.battleGetStackByID(root->val,false)) attach(closest,owner,BonusType::EVOLUTION_PARASITE);
+			const int germ=root->val;
+			afflict(closest,2,germ);
+			if(auto * owner=battle.battleGetStackByID(germ,false)) attach(closest,owner,BonusType::EVOLUTION_PARASITE);
 		}
 	}
 
 	void spread(const CStack * host)
 	{
-		auto infected=host->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500026));
-		if(infected->empty()) return;
+		const auto infected=carried(host,3);
+		if(infected.empty()) return;
 		for(auto * other:living())
 		{
 			if(other->unitSide()!=host->unitSide() || other==host || BattleHex::getDistance(other->getPosition(),host->getPosition())!=1) continue;
-			for(auto type:{BonusType::EVOLUTION_PARASITE,BonusType::EVOLUTION_WOUND})
-			{
-				const auto status=host->getBonusesOfType(type);
-				for(const auto & mark:*status)
+			for(size_t kind:{size_t(0),size_t(1),size_t(4),size_t(5),size_t(2)})
+				for(int owner:carried(host,kind))
 				{
-					const auto * owner=battle.battleGetStackByID(mark->val,false);
-					if(!owner || !attach(other,owner,type)) continue;
-					remember(other,500026,(*infected->begin())->val);
+					if(!battle.battleGetStackByID(owner,false) || !afflict(other,kind,owner)) continue;
+					afflict(other,3,infected.front());
 					return;
 				}
-			}
 		}
 	}
 
@@ -919,6 +1125,14 @@ public:
 			setReserve(target,target->getAvailableHealth(),500373);
 			return 0;
 		}
+		if(active.count(2) && damage>=target->getAvailableHealth() && !marked(target,500002,1) && !reserve(target,500402))
+		{
+			// Held until the attack packet is applied. See lastStand().
+			remember(target,500002,1);
+			setCounter(target,500102,static_cast<int>(source->unitId())+1);
+			setReserve(target,damage,500402);
+			return 0;
+		}
 		if(damage>0 && active.count(53)) setCounter(target,500053,channel);
 		return damage;
 	}
@@ -950,7 +1164,11 @@ public:
 	void round(bool first)
 	{
 		if(first) exchange();
-		else settleDeferred();
+		else
+		{
+			settleDeferred();
+			for(auto * unit:living()) lastStand(unit);
+		}
 		for(auto * unit : living())
 		{
 			const auto active = rules(unit);
@@ -989,6 +1207,8 @@ public:
 	{
 		const auto active = rules(source);
 		spread(source);
+		for(const auto & hit : packet.bsa)
+			lastStand(battle.battleGetStackByID(hit.stackAttacked,false));
 		// The packet may contain multiple victims. A spark is indirect damage, so it dispatches
 		// death reactions but cannot recursively emit another primary attack.
 		for(const auto & hit : packet.bsa)
@@ -1035,9 +1255,24 @@ public:
 			}
 			if(primary->alive() && (active.count(9) || active.count(89))) attach(primary,source,BonusType::EVOLUTION_PARASITE);
 			if(primary->alive() && active.count(19)) attach(primary,source,BonusType::EVOLUTION_WOUND);
-			if(primary->alive() && active.count(62)) remember(primary,500062,source->unitId());
-			if(primary->alive() && active.count(26)) remember(primary,500026,source->unitId());
+			const int self=static_cast<int>(source->unitId());
+			if(active.count(62)) afflict(primary,2,self);
+			if(active.count(26)) afflict(primary,3,self);
+			if(primary->alive() && active.count(77))
+			{
+				// Poison, slowing, bleeding or a breeding mark. Each is an ordinary mark for other mutations.
+				static const size_t spores[]={4,5,1,2};
+				afflict(primary,spores[server.getRandomGenerator().nextInt(0,3)],self);
+			}
 		}
+		if(primary->alive() && source->alive())
+			for(const auto & hit : packet.bsa)
+				if(hit.stackAttacked == primary->unitId() && hit.attackerID == source->unitId() && hit.damageAmount > 0)
+				{
+					packHunt(source,primary);
+					break;
+				}
+		if(!source->alive()) return;
 		if(active.count(23))
 		{
 			auto * target = nearest(primary,primary->unitSide());

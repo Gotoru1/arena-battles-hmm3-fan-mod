@@ -16,7 +16,7 @@
 #include <memory>
 #include <vector>
 using BonusCustomSubtype=int;
-enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY };
+enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY, STACKS_SPEED };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
 struct NumericSubtype {
 	int value;
@@ -143,9 +143,19 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 	void withEvolution(const CBattleInfoCallback &,const std::function<void(evolution_server::EvolutionReactions &)> &);
 	void makeAttack(const CBattleInfoCallback & battle,const CStack * from,const CStack * to,int,BattleHex,bool,bool,bool){
 		auto & target=gameHandler->field.units.at(to->unitId());
-		target.data.health=0;
-		evolutionAttack(battle,from,to,{{{to->unitId(),from->unitId(),10,true,1}}});
+		if(!strikeDamage)
+		{
+			target.data.health=0;
+			evolutionAttack(battle,from,to,{{{to->unitId(),from->unitId(),10,true,1}}});
+			return;
+		}
+		const int dealt=std::min(strikeDamage,target.data.health);
+		const int before=target.getCount();
+		target.data.health-=dealt;
+		evolutionAttack(battle,from,to,{{{to->unitId(),from->unitId(),dealt,!target.alive(),before-target.getCount()}}});
 	}
+	// Zero keeps the historical model in which every reactive strike is lethal.
+	int strikeDamage=0;
 	void moveStack(const CBattleInfoCallback &,int id,BattleHex h){gameHandler->field.units.at(id).data.pos=h;}
 	void evolutionRound(const CBattleInfoCallback &,bool);
 	void evolutionAttack(const CBattleInfoCallback &,const CStack *,const CStack *,const BattleAttack &);
@@ -155,7 +165,7 @@ struct BattleActionProcessor {CGameHandler * gameHandler;
 static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
-	const std::vector<int> traits{1,3,8,9,10,15,18,19,21,23,25,27,32,39,50,51,56,57,59,60,61,67,68,78,87};
+	const std::vector<int> traits{1,2,3,8,9,10,15,18,19,21,23,25,27,32,35,39,48,50,51,56,57,59,60,61,67,68,71,77,78,82,87};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -329,7 +339,166 @@ static void adaptiveDamageAndDebt()
 	assert(!b.alive());
 }
 
+static bool carries(const CStack & unit,BonusType type,int subtype,int value)
+{
+	const auto marks=subtype ? unit.getBonusesOfType(type,subtype) : unit.getBonusesOfType(type);
+	return std::any_of(marks->begin(),marks->end(),[&](const auto & mark){return mark->val==value;});
+}
+
+static void deathStrike()
+{
+	// A lethal creature hit is held back, the bearer answers at full strength, then dies.
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	actions.strikeDamage=30;
+	auto & bearer=field.units.emplace(1,CStack{1,{11,10,100,{4},BattleSide::LEFT},{trait(2)}}).first->second;
+	auto & killer=field.units.emplace(2,CStack{2,{22,10,100,{5},BattleSide::RIGHT},{trait(68)}}).first->second;
+	assert(actions.evolutionIncoming(field,2,&bearer,40,false,false)==40);
+	assert(actions.evolutionIncoming(field,2,&bearer,500,false,false)==0);
+	assert(bearer.alive() && carries(bearer,BonusType::NONE,500002,1));
+	actions.evolutionAttack(field,&killer,&bearer,{{{1,2,0,false,0}}});
+	assert(!bearer.alive() && killer.data.health==70);
+	// The original killer keeps the kill: its Recursive Hunter raises a ghost.
+	assert(field.units.size()==3 && field.units.at(3).unitSide()==BattleSide::RIGHT);
+	assert(bearer.getBonusesOfType(BonusType::NONE,500402)->empty() && bearer.getBonusesOfType(BonusType::NONE,500102)->empty());
+	// Once per battle: a revived bearer takes the next lethal hit normally.
+	bearer.data.health=20;
+	assert(actions.evolutionIncoming(field,2,&bearer,500,false,false)==500);
+
+	// Two bearers cannot bounce the strike forever.
+	CBattleInfoCallback duel;
+	CGameHandler duelServer{duel,{}};
+	BattleActionProcessor duelActions{&duelServer};
+	auto & first=duel.units.emplace(1,CStack{1,{11,10,100,{4},BattleSide::LEFT},{trait(2)}}).first->second;
+	auto & second=duel.units.emplace(2,CStack{2,{22,10,100,{5},BattleSide::RIGHT},{trait(2)}}).first->second;
+	assert(duelActions.evolutionIncoming(duel,1,&second,500,false,false)==0);
+	duelActions.evolutionAttack(duel,&first,&second,{{{2,1,0,false,0}}});
+	assert(!first.alive() && !second.alive());
+
+	// Reaction damage: a lethal spark lets the bearer hit the spark's owner first.
+	CBattleInfoCallback sparks;
+	CGameHandler sparkServer{sparks,{}};
+	BattleActionProcessor sparkActions{&sparkServer};
+	auto & caster=sparks.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(23)}}).first->second;
+	auto & front=sparks.units.emplace(2,CStack{2,{22,10,100,{3},BattleSide::RIGHT},{}}).first->second;
+	auto & frail=sparks.units.emplace(3,CStack{3,{33,1,10,{5},BattleSide::RIGHT},{trait(2)}}).first->second;
+	front.data.health=70;
+	sparkActions.evolutionAttack(sparks,&caster,&front,{{{2,1,30,false,3}}});
+	assert(!caster.alive() && !frail.alive() && front.alive());
+	// A spell has no creature to answer, so the bearer simply dies.
+	CBattleInfoCallback spell;
+	CGameHandler spellServer{spell,{}};
+	BattleActionProcessor spellActions{&spellServer};
+	auto & doomed=spell.units.emplace(1,CStack{1,{11,10,0,{4},BattleSide::LEFT},{trait(2)}}).first->second;
+	auto & witness=spell.units.emplace(2,CStack{2,{22,10,100,{5},BattleSide::RIGHT},{}}).first->second;
+	spellActions.evolutionDamage(spell,{1,{{1,-1,100,true,10}}});
+	assert(!doomed.alive() && witness.data.health==100);
+}
+
+static void packHunt()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	actions.strikeDamage=7;
+	auto & leader=field.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(35)}}).first->second;
+	auto & second=field.units.emplace(2,CStack{2,{12,10,100,{3},BattleSide::LEFT},{}}).first->second;
+	field.units.emplace(3,CStack{3,{13,10,100,{6},BattleSide::LEFT},{}});
+	auto & prey=field.units.emplace(4,CStack{4,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & other=field.units.emplace(5,CStack{5,{23,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
+	auto hit=[&](CStack & from,CStack & to){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,0}}});};
+	hit(leader,prey);
+	hit(second,other);
+	hit(second,prey);
+	assert(prey.data.health==1000 && other.data.health==1000);
+	hit(leader,prey);
+	assert(prey.data.health==993);
+	// The free attack does not start a new count, and the target is spent for this round.
+	for(int i=0;i<4;++i) hit(second,prey);
+	assert(prey.data.health==993);
+	// A zero-damage hit and the enemy's own hits do not count.
+	++field.round;
+	actions.evolutionAttack(field,&leader,&prey,{{{4,1,0,false,0}}});
+	hit(prey,leader);
+	hit(leader,prey);
+	hit(second,prey);
+	assert(prey.data.health==993);
+	hit(second,prey);
+	assert(prey.data.health==986);
+	// Without a living bearer the pack does not coordinate.
+	leader.data.health=0;
+	++field.round;
+	for(int i=0;i<4;++i) hit(second,prey);
+	assert(prey.data.health==986);
+}
+
+static void sporesReactorAndDomino()
+{
+	CBattleInfoCallback field;
+	CGameHandler server{field,{}};
+	BattleActionProcessor actions{&server};
+	auto & grower=field.units.emplace(1,CStack{1,{11,40,400,{2},BattleSide::LEFT},{trait(77),trait(71)}}).first->second;
+	auto & host=field.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & far=field.units.emplace(3,CStack{3,{23,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
+	auto hit=[&](CStack & from,CStack & to){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,0}}});};
+	hit(grower,host);
+	assert(carries(host,BonusType::NONE,500077,1));
+	hit(grower,host);
+	assert(carries(host,BonusType::NONE,500177,1) && host.getBonusesOfType(BonusType::STACKS_SPEED)->front()->val==-2);
+	hit(grower,host);
+	assert(carries(host,BonusType::EVOLUTION_WOUND,0,1));
+	hit(grower,host);
+	assert(carries(host,BonusType::NONE,500062,1));
+	for(int i=0;i<8;++i) hit(grower,host);
+	assert(host.getBonusesOfType(BonusType::STACKS_SPEED)->size()==1 && host.bonuses.size()==5);
+	// Poison ticks for a quarter of the grower's base count. The third tick releases the reactor.
+	for(int tick=1;tick<=2;++tick)
+	{
+		++field.round;
+		actions.evolutionRound(field,false);
+		assert(host.data.health==1000-10*tick && far.data.health==1000);
+	}
+	++field.round;
+	actions.evolutionRound(field,false);
+	assert(host.data.health==970-60 && far.data.health==940 && grower.data.health==400);
+	assert(grower.getBonusesOfType(BonusType::NONE,500071)->empty() && grower.getBonusesOfType(BonusType::NONE,500471)->empty());
+
+	// Domino Law copies one mark to the nearest enemy once a body carries two kinds.
+	CBattleInfoCallback chain;
+	CGameHandler chainServer{chain,{}};
+	BattleActionProcessor chainActions{&chainServer};
+	auto & plague=chain.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(9),trait(19),trait(82)}}).first->second;
+	auto & a=chain.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & b=chain.units.emplace(3,CStack{3,{23,100,1000,{6},BattleSide::RIGHT},{}}).first->second;
+	auto & c=chain.units.emplace(4,CStack{4,{24,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
+	auto & friendly=chain.units.emplace(5,CStack{5,{12,10,100,{1},BattleSide::LEFT},{}}).first->second;
+	chainActions.evolutionAttack(chain,&plague,&a,{{{2,1,10,false,0}}});
+	assert(carries(a,BonusType::EVOLUTION_PARASITE,0,1) && carries(a,BonusType::EVOLUTION_WOUND,0,1));
+	assert(carries(b,BonusType::EVOLUTION_PARASITE,0,1) && !b.hasBonusOfType(BonusType::EVOLUTION_WOUND));
+	assert(!c.hasBonusOfType(BonusType::EVOLUTION_PARASITE) && friendly.bonuses.empty());
+	assert(plague.getBonusesOfType(BonusType::NONE,500501)->empty());
+	// Memory Infection links bodies that share a mark. A mark that arrived by domino reveals the combination.
+	plague.bonuses.push_back(trait(48));
+	plague.bonuses.push_back(trait(62));
+	chainActions.evolutionAttack(chain,&plague,&a,{{{2,1,10,false,0}}});
+	assert(carries(b,BonusType::NONE,500062,1) && carries(b,BonusType::EVOLUTION_WOUND,0,1));
+	assert(carries(c,BonusType::EVOLUTION_PARASITE,0,1));
+	assert(carries(plague,BonusType::NONE,500501,4));
+	assert(friendly.bonuses.empty());
+	// Saturated bodies stop the cascade: repeating the attack changes nothing.
+	std::vector<size_t> before;
+	for(const auto & entry:chain.units) before.push_back(entry.second.bonuses.size());
+	chainActions.evolutionAttack(chain,&plague,&a,{{{2,1,10,false,0}}});
+	std::vector<size_t> after;
+	for(const auto & entry:chain.units) after.push_back(entry.second.bonuses.size());
+	assert(before==after);
+}
+
 int main(){
+	deathStrike();
+	packHunt();
+	sporesReactorAndDomino();
 	adaptiveDamageAndDebt();
 	growingEnemyArmies();
 	parasiteBurstAndGenerations();
