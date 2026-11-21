@@ -358,6 +358,9 @@ void BattleFlowProcessor::activateNextStack(const CBattleInfoCallback & battle)
 		{
 			// No stacks to move - start next round
 			startNextRound(battle, false);
+			// Round-start reactions (poison, parasites, deferred strikes) may have ended the battle.
+			if (owner->checkBattleStateChanges(battle))
+				return;
 			next = getNextStack(battle);
 			if (!next)
 				throw std::runtime_error("Failed to find valid stack to act!");

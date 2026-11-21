@@ -1245,6 +1245,9 @@ void BattleActionProcessor::makeAttack(const CBattleInfoCallback & battle, const
 			pack.battleID = battle.getBattle()->getBattleID();
 			pack.stacks.push_back(bsa);
 			gameHandler->sendAndApply(pack);
+			// Fire shield damage is not a spell packet, so report the attacker's losses here.
+			if(evolutionEnabled())
+				evolutionDamage(battle, pack);
 
 			// TODO: this is already implemented in Damage::describeEffect()
 			{

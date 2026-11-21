@@ -56,6 +56,10 @@ struct CStack {
 	int id;Data data;std::vector<Bonus> bonuses;
 	struct TemporaryHealth{int getResurrected() const{return 0;}} health;
 	bool base=true;
+	// Engine flags for bodies that vanish on death. The model has no summoned units.
+	bool ghostPending=false, summoned=false;
+	bool isGhost() const{return false;} bool isClone() const{return false;}
+	static bool isMeleeAttackPossible(const CStack *,const CStack *){return true;}
 	int unitId() const{return id;} bool alive() const{return data.health>0;}
 	int getCount() const{return (data.health+9)/10;}
 	int getMaxHealth() const{return 10;}
@@ -139,6 +143,7 @@ struct CBattleInfoCallback {
 		return {};
 	}
 	int battleGetRound() const{return round;}
+	bool battleCanShoot(const CStack *) const{return false;}
 };
 struct Rng {int value=0;int nextInt(int lo,int hi){return lo+(value++%(hi-lo+1));}operator int&(){return value;}};
 struct CGameHandler {

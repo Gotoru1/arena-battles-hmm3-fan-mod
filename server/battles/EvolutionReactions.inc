@@ -515,6 +515,8 @@ class EvolutionReactions
 			auto temporaryHP=int64_t(temporary)*child->getMaxHealth();
 			detached->damage(temporaryHP);
 			detached->heal(temporaryHP,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			// Emptying a summoned body flags it for removal. The heal does not clear the flag.
+			detached->ghostPending=false;
 			packet.changedStacks.emplace_back(child->unitId(),UnitChanges::EOperation::RESET_STATE);
 			detached->save(packet.changedStacks.back().data);
 		}
@@ -584,11 +586,13 @@ class EvolutionReactions
 		BattleUnitsChanged packet;
 		packet.battleID=battle.getBattle()->getBattleID();
 		packet.changedStacks.emplace_back(shell->unitId(),UnitChanges::EOperation::REMOVE);
-		if(!original->alive())
+		// A body the engine already removed from the field cannot come back.
+		if(!original->alive() && !original->isGhost())
 		{
 			auto restored=original->acquireState();
 			int64_t hp=int64_t(std::max(1,original->unitBaseAmount()/4))*original->getMaxHealth();
 			restored->heal(hp,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			restored->ghostPending=false;
 			packet.changedStacks.emplace_back(original->unitId(),UnitChanges::EOperation::RESET_STATE);
 			packet.changedStacks.back().healthDelta=restored->getAvailableHealth();
 			restored->save(packet.changedStacks.back().data);
@@ -653,7 +657,8 @@ class EvolutionReactions
 			if(auto * owner=battle.battleGetStackByID(germ->val,false))
 				if(auto * carrier=summon(owner,larvaType(),1,corpse->getPosition(),false))
 					remember(carrier,500162,owner->unitId());
-		if(legacy.count(22) && !marked(corpse,500022,1))
+		// Summoned bodies and clones are removed by the engine when they die, so they cannot feign death.
+		if(legacy.count(22) && !marked(corpse,500022,1) && !corpse->summoned && !corpse->isClone())
 		{
 			if(auto * shell=spawn(corpse->unitSide(),huskType(),1,corpse->getPosition()))
 			{
@@ -1547,7 +1552,9 @@ void BattleActionProcessor::withEvolution(const CBattleInfoCallback & battle,con
 {
 	if(activeReaction) { work(*activeReaction); return; }
 	evolution_server::EvolutionReactions context(*gameHandler,battle,++reactionSerial,[&](const CStack * hunter,const CStack * prey){
-		makeAttack(battle,hunter,prey,0,prey->getPosition(),true,false,false);
+		// A shooter that cannot reach its target in melee answers with a shot.
+		const bool shot=!CStack::isMeleeAttackPossible(hunter,prey) && battle.battleCanShoot(hunter);
+		makeAttack(battle,hunter,prey,0,prey->getPosition(),true,shot,false);
 	});
 	struct Reset { evolution_server::EvolutionReactions * & active; ~Reset(){active=nullptr;} } reset{activeReaction};
 	activeReaction=&context;
