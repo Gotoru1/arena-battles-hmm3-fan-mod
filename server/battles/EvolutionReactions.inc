@@ -706,6 +706,13 @@ class EvolutionReactions
 
 	void fallen(const CStack * source, const CStack * corpse)
 	{
+		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && (counter(source,500169)>0 || counter(source,500069)>0))
+		{
+			// Entwined Fates: the twin's kill brings back a third of what the bearer has lost.
+			const auto * bearer=counter(source,500169)>0 ? partner(source,500169) : source;
+			if(bearer && bearer->alive() && (bearer!=source || partner(source,500069)==source))
+				mend(bearer,std::max<int64_t>(1,missing(bearer)/3));
+		}
 		auto beforeSummons = living();
 		const auto legacy=rules(corpse);
 		if(legacy.count(97)) passGeneration(corpse,legacy,beforeSummons);
@@ -1011,16 +1018,86 @@ class EvolutionReactions
 		server.sendAndApply(packet);
 	}
 
+	int64_t missing(const CStack * unit) const
+	{
+		return std::max<int64_t>(0,int64_t(unit->unitBaseAmount())*unit->getMaxHealth()-unit->getAvailableHealth());
+	}
+
+	// Every heal of the reactions goes through here, so that healing beyond full strength
+	// reaches Blood Cloning and Blood Alchemy.
 	void mend(const CStack * unit,int64_t amount,bool lasting=false)
 	{
 		if(!unit->alive() || amount<=0) return;
-		auto state = unit->acquireState();
-		state->heal(amount,EHealLevel::RESURRECT,lasting ? EHealPower::PERMANENT : EHealPower::ONE_BATTLE);
-		BattleUnitsChanged packet;
-		packet.battleID = battle.getBattle()->getBattleID();
-		packet.changedStacks.emplace_back(unit->unitId(), UnitChanges::EOperation::RESET_STATE);
-		state->save(packet.changedStacks.back().data);
-		server.sendAndApply(packet);
+		const auto useful=std::min(amount,missing(unit));
+		if(useful>0)
+		{
+			auto state = unit->acquireState();
+			auto portion=useful;
+			state->heal(portion,EHealLevel::RESURRECT,lasting ? EHealPower::PERMANENT : EHealPower::ONE_BATTLE);
+			BattleUnitsChanged packet;
+			packet.battleID = battle.getBattle()->getBattleID();
+			packet.changedStacks.emplace_back(unit->unitId(), UnitChanges::EOperation::RESET_STATE);
+			state->save(packet.changedStacks.back().data);
+			server.sendAndApply(packet);
+		}
+		surplus(unit,amount-useful);
+	}
+
+	// Grow a copy once enough spare material has gathered: at least a tenth of the unit.
+	void bud(const CStack * unit,int key)
+	{
+		const auto stock=reserve(unit,key);
+		const auto body=std::max<int64_t>(1,unit->getMaxHealth());
+		const auto fighters=stock/body;
+		if(fighters<std::max(1,unit->unitBaseAmount()/10)) return;
+		if(summon(unit,unit->creatureId(),headcount(fighters),unit->getPosition(),true))
+			setReserve(unit,stock-std::min<int64_t>(fighters,INT32_MAX)*body,key);
+	}
+
+	void surplus(const CStack * unit,int64_t extra)
+	{
+		if(extra<=0 || !unit->alive()) return;
+		const auto active=rules(unit);
+		if(active.count(43)) setReserve(unit,combineDamage(reserve(unit,500343),extra),500343);
+		if(active.count(30))
+		{
+			setReserve(unit,combineDamage(reserve(unit,500330),evolution::damageProduct(extra,active.at(30))),500330);
+			bud(unit,500330);
+		}
+	}
+
+	// Living Chain and Entwined Fates pick the nearest ally at the start of the battle.
+	const CStack * partner(const CStack * unit,int key) const
+	{
+		const int id=counter(unit,key);
+		if(id<=0) return nullptr;
+		const auto * other=battle.battleGetStackByID(id-1);
+		return other && other->unitSide()==unit->unitSide() ? other : nullptr;
+	}
+
+	void bind(const CStack * unit,int key,int reverseKey)
+	{
+		if(counter(unit,key)) return;
+		const CStack * best=nullptr;
+		for(auto * other:living())
+			if(other!=unit && other->unitSide()==unit->unitSide() && !counter(other,reverseKey) && other->creatureId()!=eggType() && other->creatureId()!=huskType()
+				&& (!best || BattleHex::getDistance(unit->getPosition(),other->getPosition())<BattleHex::getDistance(unit->getPosition(),best->getPosition()))) best=other;
+		// Alone, the bearer is bound to itself.
+		if(!best) best=unit;
+		setCounter(unit,key,static_cast<int>(best->unitId())+1);
+		if(best!=unit) setCounter(best,reverseKey,static_cast<int>(unit->unitId())+1);
+	}
+
+	// The part of a hit that Living Chain moved to the partner lands after the attack packet.
+	void settleShared(const CStack * source)
+	{
+		for(auto * unit:living())
+		{
+			const auto share=reserve(unit,500433);
+			if(!share) continue;
+			setReserve(unit,0,500433);
+			if(unit->alive()) injure(unit,source && source->unitSide()!=unit->unitSide() ? source : unit,share);
+		}
 	}
 
 	int rankOf(const CStack * unit,int trait) const
@@ -1217,16 +1294,7 @@ class EvolutionReactions
 			const auto feeding=rules(owner);
 			if(!feeding.count(9) && !feeding.count(89) && !feeding.count(13)) continue;
 			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
-			if(owner->alive())
-			{
-				auto state = owner->acquireState();
-				state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
-				BattleUnitsChanged packet;
-				packet.battleID = battle.getBattle()->getBattleID();
-				packet.changedStacks.emplace_back(owner->unitId(), UnitChanges::EOperation::RESET_STATE);
-				state->save(packet.changedStacks.back().data);
-				server.sendAndApply(packet);
-			}
+			mend(owner,amount);
 			reactor(amount);
 		}
 		// An open wound bleeds every round while the unit that opened it lives.
@@ -1259,6 +1327,14 @@ public:
 			case evolution::ReactionKind::Loss:
 				lostLarvae(target,event.amount);
 				casualties(event.amount);
+				if(event.amount && counter(target,500069)>0)
+					if(const auto * twin=partner(target,500069))
+						if(twin->alive())
+						{
+							// Entwined Fates: the fallen fighters arm the twin's next attack.
+							const auto gift=evolution::damageProduct(int64_t(event.amount)*target->getMaxHealth(),rankOf(target,69));
+							setReserve(twin,combineDamage(reserve(twin,500312),gift),500312);
+						}
 				if(event.amount) { shed(target,event.amount); split(target); }
 				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && brooder(source))
 					lay(source,target->getPosition());
@@ -1425,8 +1501,41 @@ public:
 				setReserve(source,0,500366);
 			}
 		}
+		if(!secondary && rules(source).count(43) && source->getAvailableHealth()*2>=int64_t(source->unitBaseAmount())*source->getMaxHealth())
+		{
+			// Blood Alchemy: a healthy bearer puts its charges into the strike.
+			const auto charges=reserve(source,500343);
+			if(charges)
+			{
+				setReserve(source,0,500343);
+				damage=combineDamage(damage,charges);
+			}
+		}
 		const auto active = rules(target);
 		const int round = battle.battleGetRound();
+		if(active.count(43))
+		{
+			// The charges of a hard-pressed bearer soak up to half of a hit.
+			const auto charges=reserve(target,500343);
+			const auto soaked=std::min(charges,damage/2);
+			if(soaked>0)
+			{
+				setReserve(target,charges-soaked,500343);
+				damage-=soaked;
+			}
+		}
+		if(counter(target,500033)>0 || counter(target,500133)>0)
+		{
+			const auto * other=partner(target,counter(target,500033)>0 ? 500033 : 500133);
+			if(other==target) damage-=damage/5;
+			else if(other && other->alive() && damage>1)
+			{
+				// Living Chain: half of the hit is carried by the bound ally after this attack.
+				const auto share=damage/2;
+				setReserve(other,combineDamage(reserve(other,500433),share),500433);
+				damage-=share;
+			}
+		}
 		if(active.count(47) && ranged && counter(target,500047) != ~round)
 		{
 			setCounter(target,500047,~round);
@@ -1500,9 +1609,19 @@ public:
 
 	void round(bool first)
 	{
-		if(first) exchange();
+		if(first)
+		{
+			exchange();
+			for(auto * unit:living())
+			{
+				const auto bound=rules(unit);
+				if(bound.count(33)) bind(unit,500033,500133);
+				if(bound.count(69)) bind(unit,500069,500169);
+			}
+		}
 		else
 		{
+			settleShared(nullptr);
 			settleDeferred();
 			for(auto * unit:living()) lastStand(unit);
 			rebirths();
@@ -1580,6 +1699,26 @@ public:
 					if(hex.isValid() && access.accessible(hex,struck)) stain(hex,13,struck,2);
 			}
 			lastStand(struck);
+		}
+		settleShared(source);
+		for(const auto & hit : packet.bsa)
+		{
+			if(hit.attackerID!=source->unitId() || hit.damageAmount<=0) continue;
+			const auto * struck=battle.battleGetStackByID(hit.stackAttacked,false);
+			if(!struck || struck->unitSide()==source->unitSide()) continue;
+			// Blood Cloning and Blood Alchemy drink a quarter of the damage their bearer deals.
+			if(source->alive() && (active.count(30) || active.count(43))) mend(source,std::max<int64_t>(1,hit.damageAmount/4));
+			const auto spikes=rules(struck);
+			if(struck->alive() && source->alive() && spikes.count(40) && !packet.shot())
+			{
+				// Shard Breeding: a quarter of a melee hit is thrown back and the shards gather into a copy.
+				const auto thrown=injure(source,struck,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,spikes.at(40),4)));
+				if(struck->alive() && thrown>0)
+				{
+					setReserve(struck,combineDamage(reserve(struck,500340),thrown),500340);
+					bud(struck,500340);
+				}
+			}
 		}
 		// The packet may contain multiple victims. A spark is indirect damage, so it dispatches
 		// death reactions but cannot recursively emit another primary attack.

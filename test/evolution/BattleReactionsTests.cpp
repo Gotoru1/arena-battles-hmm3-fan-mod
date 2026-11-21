@@ -51,7 +51,7 @@ struct UnitChanges {enum class EOperation {ADD, RESET_STATE, REMOVE};int id; EOp
 struct BattleStackAttacked {
 	int stackAttacked{},attackerID{}; int64_t damageAmount{};bool dead=false;int killedAmount=0;bool killed() const{return dead;}
 };
-struct BattleAttack {std::vector<BattleStackAttacked> bsa;};
+struct BattleAttack {std::vector<BattleStackAttacked> bsa;bool ranged=false;bool shot() const{return ranged;}};
 struct CStack {
 	int id;Data data;std::vector<Bonus> bonuses;
 	struct TemporaryHealth{int getResurrected() const{return 0;}} health;
@@ -222,7 +222,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,32,35,39,47,48,49,50,51,52,53,54,56,57,59,60,61,62,65,66,67,68,71,72,73,75,77,78,82,87,89,95,97};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,30,32,33,35,39,40,43,47,48,49,50,51,52,53,54,56,57,59,60,61,62,65,66,67,68,69,71,72,73,75,77,78,82,87,89,95,97};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1012,7 +1012,121 @@ static void remainsGroup()
 	}
 }
 
+static void bloodAndLinks()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & add(int id,int count,int health,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{10+id,count,health,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void hit(CStack & from,CStack & to,int damage,int killed=0,bool ranged=false)
+		{
+			BattleAttack packet{{{to.id,from.id,damage,!to.alive(),killed}}};
+			packet.ranged=ranged;
+			actions.evolutionAttack(field,&from,&to,packet);
+		}
+		int64_t incoming(CStack & from,CStack & to,int64_t damage){return actions.evolutionIncoming(field,from.id,&to,damage,false,false);}
+	};
+	{
+		Field f; // Blood Cloning: a quarter of dealt damage heals; what does not fit becomes a copy.
+		auto & bearer=f.add(1,10,60,4,BattleSide::LEFT,{30});
+		auto & enemy=f.add(2,100,1000,5,BattleSide::RIGHT);
+		f.hit(bearer,enemy,40);
+		assert(bearer.data.health==70 && f.field.units.size()==2);
+		bearer.data.health=100;
+		f.hit(bearer,enemy,40);
+		assert(f.field.units.size()==3 && f.field.units.at(3).getCount()==1 && f.field.units.at(3).unitSide()==BattleSide::LEFT);
+		assert(f.field.units.at(3).hasBonusOfType(BonusType::EVOLUTION_FAMILY) && bearer.getBonusesOfType(BonusType::NONE,500330)->empty());
+		// A hit that feeds nothing back makes nothing.
+		f.actions.evolutionAttack(f.field,&bearer,&enemy,{{{2,1,0,false,0}}});
+		assert(f.field.units.size()==3);
+	}
+	{
+		Field f; // Blood Alchemy: spare healing arms a healthy bearer and shields a wounded one.
+		auto & bearer=f.add(1,10,100,4,BattleSide::LEFT,{43});
+		auto & enemy=f.add(2,100,1000,5,BattleSide::RIGHT);
+		f.hit(bearer,enemy,40);
+		assert(f.incoming(bearer,enemy,20)==30 && f.incoming(bearer,enemy,20)==20);
+		f.hit(bearer,enemy,40);
+		bearer.data.health=40;
+		assert(f.incoming(bearer,enemy,20)==20);
+		assert(f.incoming(enemy,bearer,12)==6);
+		assert(f.incoming(enemy,bearer,12)==8 && f.incoming(enemy,bearer,12)==12);
+	}
+	{
+		Field f; // Living Chain: half of a hit on either bound unit lands on the other after the attack.
+		auto & bearer=f.add(1,10,100,4,BattleSide::LEFT,{33});
+		auto & ally=f.add(2,10,100,3,BattleSide::LEFT);
+		auto & third=f.add(3,10,100,1,BattleSide::LEFT);
+		auto & enemy=f.add(4,100,1000,6,BattleSide::RIGHT);
+		f.actions.evolutionRound(f.field,true);
+		assert(f.incoming(enemy,bearer,40)==20 && ally.data.health==100);
+		f.hit(enemy,bearer,20);
+		assert(ally.data.health==80 && third.data.health==100);
+		assert(f.incoming(enemy,ally,40)==20);
+		f.hit(enemy,ally,20);
+		assert(bearer.data.health==80);
+		assert(f.incoming(enemy,third,40)==40);
+		// With the partner gone the full hit arrives.
+		ally.data.health=0;
+		assert(f.incoming(enemy,bearer,40)==40);
+
+		Field solo; // Alone the chain is bound to its bearer and takes a fifth off every hit.
+		auto & lone=solo.add(1,10,100,4,BattleSide::LEFT,{33});
+		auto & foe=solo.add(2,100,1000,6,BattleSide::RIGHT);
+		solo.actions.evolutionRound(solo.field,true);
+		assert(solo.incoming(foe,lone,40)==32);
+	}
+	{
+		Field f; // Entwined Fates: the bearer's dead arm the twin; the twin's kills bring a third of them back.
+		auto & bearer=f.add(1,10,100,4,BattleSide::LEFT,{69});
+		auto & twin=f.add(2,10,100,3,BattleSide::LEFT);
+		auto & enemy=f.add(3,100,1000,6,BattleSide::RIGHT);
+		auto & weak=f.add(4,1,10,8,BattleSide::RIGHT);
+		auto & other=f.add(5,1,10,9,BattleSide::RIGHT);
+		f.actions.evolutionRound(f.field,true);
+		bearer.data.health=60;
+		f.hit(enemy,bearer,40,4);
+		assert(f.incoming(twin,enemy,10)==50 && f.incoming(twin,enemy,10)==10);
+		// The bearer's own kill does not heal it while it has a twin.
+		other.data.health=0;
+		f.hit(bearer,other,10,1);
+		assert(bearer.data.health==60);
+		weak.data.health=0;
+		f.hit(twin,weak,10,1);
+		assert(bearer.data.health==73);
+
+		Field solo; // Alone the bearer is its own twin.
+		auto & lone=solo.add(1,10,100,4,BattleSide::LEFT,{69});
+		auto & foe=solo.add(2,100,1000,6,BattleSide::RIGHT);
+		auto & prey=solo.add(3,1,10,8,BattleSide::RIGHT);
+		solo.actions.evolutionRound(solo.field,true);
+		lone.data.health=70;
+		solo.hit(foe,lone,30,3);
+		assert(solo.incoming(lone,foe,10)==40);
+		prey.data.health=0;
+		solo.hit(lone,prey,10,1);
+		assert(lone.data.health==80);
+	}
+	{
+		Field f; // Shard Breeding: a quarter of a melee hit goes back and the shards build a copy.
+		auto & bearer=f.add(1,10,100,4,BattleSide::LEFT,{40});
+		auto & enemy=f.add(2,100,1000,5,BattleSide::RIGHT);
+		f.hit(enemy,bearer,40,0,true);
+		assert(enemy.data.health==1000 && f.field.units.size()==2);
+		f.hit(enemy,bearer,40);
+		assert(enemy.data.health==990 && f.field.units.size()==3 && f.field.units.at(3).getCount()==1);
+		assert(f.field.units.at(3).unitSide()==BattleSide::LEFT);
+	}
+}
+
 int main(){
+	bloodAndLinks();
 	remainsGroup();
 	playableAlone();
 	groundMarks();
