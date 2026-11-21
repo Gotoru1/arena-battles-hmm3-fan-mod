@@ -895,6 +895,104 @@
           "icon": "evolution/trait69"
         }
       ]
+    },
+    "trait28": {
+      "name": "Обратная эволюция",
+      "text": "При первой гибели отряд возвращается существами уровнем ниже из той же фракции в прежнем числе; у существ первого уровня возвращается половина отряда. Возвращённые бьют дважды и сохраняют остальные мутации.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "28",
+          "description": "@arenabattles.evolution.trait.28",
+          "icon": "evolution/trait28"
+        }
+      ]
+    },
+    "trait34": {
+      "name": "Теневая армия",
+      "text": "После каждой второй атаки носителя рядом появляется теневая копия — четверть его отряда. Тень действует самостоятельно и рассеивается через два раунда.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "34",
+          "description": "@arenabattles.evolution.trait.34",
+          "icon": "evolution/trait34"
+        }
+      ]
+    },
+    "trait42": {
+      "name": "Расщепление души",
+      "text": "При гибели отряда треть его бойцов остаётся на поле в призрачной форме: призраки летают над препятствиями и сохраняют остальные мутации.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "42",
+          "description": "@arenabattles.evolution.trait.42",
+          "icon": "evolution/trait42"
+        }
+      ]
+    },
+    "trait55": {
+      "name": "Перенос сознания",
+      "text": "При гибели носителя все его мутации и заряд для следующей атаки в половину запаса здоровья отряда переходят к ближайшему союзному отряду до конца сражения.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "55",
+          "description": "@arenabattles.evolution.trait.55",
+          "icon": "evolution/trait55"
+        }
+      ]
+    },
+    "trait58": {
+      "name": "Переписывание смерти",
+      "text": "Первый погибший союзный отряд возвращается как враждебное эхо вполовину меньше. Если победить эхо, оно возрождается на твоей стороне с дополнительной мутацией. Один раз за бой.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "58",
+          "description": "@arenabattles.evolution.trait.58",
+          "icon": "evolution/trait58"
+        }
+      ]
+    },
+    "trait64": {
+      "name": "Фрактальная армия",
+      "text": "После гибели отряда из шести и более бойцов он распадается на две независимые копии по шестой части отряда, которые сохраняют мутации.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "64",
+          "description": "@arenabattles.evolution.trait.64",
+          "icon": "evolution/trait64"
+        }
+      ]
+    },
+    "trait94": {
+      "name": "Эхо бесконечности",
+      "text": "Каждый раз, когда носитель уничтожает вражеский отряд, он немедленно повторяет атаку по ближайшему врагу. Эхо активирует эффекты попадания и убийства и может запускать новые эхо.",
+      "rarity": 3,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "94",
+          "description": "@arenabattles.evolution.trait.94",
+          "icon": "evolution/trait94"
+        }
+      ]
     }
   },
   "synergies": [],

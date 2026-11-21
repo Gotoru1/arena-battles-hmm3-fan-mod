@@ -22,6 +22,7 @@
 #include "../widgets/CComponentHolder.h"
 #include "../widgets/GraphicalPrimitiveCanvas.h"
 #include "../widgets/Images.h"
+#include "../widgets/MiscWidgets.h"
 #include "../widgets/TextControls.h"
 #include "../widgets/ObjectLists.h"
 #include "../windows/GUIClasses.h"
@@ -321,7 +322,27 @@ CStackWindow::BonusLineSection::BonusLineSection(CStackWindow * owner, size_t li
 			if (!bi.imagePath.empty())
 				icon[leftRight] = std::make_shared<CPicture>(bi.imagePath, position.x, position.y);
 
-			description[leftRight] = std::make_shared<CMultiLineLabel>(Rect(position.x + 60, position.y, 137, 50), FONT_TINY, ETextAlignment::TOPLEFT, Colors::WHITE, bi.description);
+			// The line holds about four short rows. A longer description (Evolution Arena mutations)
+			// is cut at a word, and the whole text opens on a click or a right click on the line.
+			constexpr size_t visibleCharacters = 96;
+			std::string shown = bi.description;
+			size_t characters = 0;
+			size_t lastSpace = std::string::npos;
+			for(size_t i = 0; i < shown.size(); ++i)
+			{
+				if((static_cast<unsigned char>(shown[i]) & 0xC0) == 0x80)
+					continue; // continuation byte of a UTF-8 character
+				if(shown[i] == ' ')
+					lastSpace = i;
+				if(++characters > visibleCharacters)
+				{
+					shown.resize(lastSpace == std::string::npos ? i : lastSpace);
+					shown += "...";
+					fullText[leftRight] = std::make_shared<LRClickableAreaWText>(Rect(position.x, position.y, 197, 52), "", bi.description);
+					break;
+				}
+			}
+			description[leftRight] = std::make_shared<CMultiLineLabel>(Rect(position.x + 60, position.y, 137, 50), FONT_TINY, ETextAlignment::TOPLEFT, Colors::WHITE, shown);
 			drawBonusSource(leftRight, Point(position.x - 1, position.y - 1), bi);
 		}
 	}

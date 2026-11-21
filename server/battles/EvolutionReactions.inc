@@ -33,6 +33,9 @@ class EvolutionReactions
 	evolution::BattleChain chain;
 	std::function<void(const CStack *,const CStack *)> strike;
 	std::map<uint32_t,uint32_t> origins;
+	// Bodies created by this causal chain. Killing one of them cannot extend the chain,
+	// otherwise a summon-on-death and a strike-on-kill would feed each other forever.
+	std::set<uint32_t> newborn;
 	mutable std::map<std::pair<uint32_t,bool>,Rules> ruleCache;
 
 	uint32_t lineageRoot(uint32_t id) const
@@ -248,6 +251,7 @@ class EvolutionReactions
 		packet.changedStacks.emplace_back(info.id,UnitChanges::EOperation::ADD);
 		info.save(packet.changedStacks.back().data);
 		server.sendAndApply(packet);
+		newborn.insert(info.id);
 		return battle.battleGetStackByID(info.id);
 	}
 
@@ -732,6 +736,82 @@ class EvolutionReactions
 			if(auto * owner=battle.battleGetStackByID(germ->val,false))
 				if(auto * carrier=summon(owner,larvaType(),1,corpse->getPosition(),false))
 					remember(carrier,500162,owner->unitId());
+		const bool original=!corpse->summoned && !corpse->isClone();
+		if(legacy.count(64) && original && corpse->unitBaseAmount()>=6 && !marked(corpse,500064,1))
+		{
+			// Fractal Army: two independent copies, a sixth of the unit each.
+			remember(corpse,500064,1);
+			for(int i=0;i<2;++i)
+				summon(corpse,corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/6),corpse->getPosition(),true);
+		}
+		if(legacy.count(28) && original && !marked(corpse,500028,1))
+		{
+			// Reverse Evolution: the unit returns one level lower and strikes twice.
+			remember(corpse,500028,1);
+			const auto lesser=lesserForm(corpse->creatureId());
+			const int count=lesser==corpse->creatureId() ? std::max(1,corpse->unitBaseAmount()/2) : corpse->unitBaseAmount();
+			if(auto * reborn=spawn(corpse->unitSide(),lesser,count,corpse->getPosition()))
+			{
+				descend(corpse,reborn);
+				for(auto rule:legacy) if(rule.first!=28) transfer(reborn,rule.first,rule.second);
+				Bonus extra;
+				extra.type=BonusType::ADDITIONAL_ATTACK;
+				extra.val=1;
+				grant(reborn,extra);
+				observe(reborn);
+			}
+		}
+		if(legacy.count(42) && original && !marked(corpse,500042,1))
+		{
+			// Soul Split: a third of the unit stays as flying ghosts.
+			remember(corpse,500042,1);
+			if(auto * ghost=spawn(corpse->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/3),corpse->getPosition()))
+			{
+				descend(corpse,ghost);
+				for(auto rule:legacy) if(rule.first!=42) transfer(ghost,rule.first,rule.second);
+				if(!ghost->hasBonusOfType(BonusType::FLYING))
+				{
+					Bonus wings;
+					wings.type=BonusType::FLYING;
+					wings.val=1;
+					grant(ghost,wings);
+				}
+				observe(ghost);
+			}
+		}
+		if(legacy.count(55))
+			if(auto * heir=nearest(corpse,corpse->unitSide()))
+			{
+				// Mind Transfer: every mutation and half of the unit's health pool as an attack charge.
+				for(auto rule:legacy) if(rule.first!=55) transfer(heir,rule.first,rule.second);
+				setReserve(heir,combineDamage(reserve(heir,500312),int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth()/2),500312);
+			}
+		if(counter(corpse,500158)>0)
+		{
+			// A defeated echo returns to the side that lost the original, with one more mutation.
+			if(const auto * owner=battle.battleGetStackByID(counter(corpse,500158)-1))
+				if(auto * reborn=spawn(owner->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()),corpse->getPosition()))
+				{
+					descend(owner,reborn);
+					adapt(reborn);
+					observe(reborn);
+				}
+			setCounter(corpse,500158,0);
+		}
+		else if(original)
+			for(auto * witness:beforeSummons)
+			{
+				// Rewritten Death: the first fallen ally comes back as a hostile echo of half its size.
+				if(witness->unitSide()!=corpse->unitSide() || !rules(witness).count(58) || marked(witness,500058,1)) continue;
+				const auto * foe=nearestFoe(witness);
+				if(!foe) break;
+				if(auto * echo=spawn(foe->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/2),corpse->getPosition()))
+				{
+					remember(witness,500058,1);
+					setCounter(echo,500158,static_cast<int>(witness->unitId())+1);
+				}
+				break;
+			}
 		// Summoned bodies and clones are removed by the engine when they die, so they cannot feign death.
 		if(legacy.count(22) && !marked(corpse,500022,1) && !corpse->summoned && !corpse->isClone())
 		{
@@ -848,6 +928,10 @@ class EvolutionReactions
 		for(auto * unit : beforeSummons)
 			if(rules(unit).count(18) && BattleHex::getDistance(unit->getPosition(),corpse->getPosition()) == 1)
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
+		// Echo of Infinity: every destroyed enemy unit repeats the bearer's attack on the nearest enemy.
+		if(source && source->alive() && source->unitSide()!=corpse->unitSide() && rules(source).count(94) && !newborn.count(corpse->unitId()))
+			if(const auto * prey=nearestFoe(source))
+				strike(source,prey);
 	}
 
 	// Negative marks that can travel between bodies. The value of a mark is the unit id of its source.
@@ -1632,7 +1716,7 @@ public:
 			if(!unit->alive()) continue;
 			if(!first && counter(unit,500052) && counter(unit,500052)<=battle.battleGetRound())
 			{
-				// The puppet falls apart.
+				// Puppets and shadows fall apart when their time is up.
 				BattleUnitsChanged crumble;
 				crumble.battleID=battle.getBattle()->getBattleID();
 				crumble.changedStacks.emplace_back(unit->unitId(),UnitChanges::EOperation::REMOVE);
@@ -1805,6 +1889,21 @@ public:
 					break;
 				}
 		if(!source->alive()) return;
+		if(active.count(34))
+		{
+			// Shadow Army: every second attack leaves a shadow of a quarter of the unit for two rounds.
+			if(!counter(source,500034)) setCounter(source,500034,1);
+			else
+			{
+				setCounter(source,500034,0);
+				if(auto * shade=spawn(source->unitSide(),source->creatureId(),std::max(1,source->getCount()/4),source->getPosition()))
+				{
+					descend(source,shade);
+					setCounter(shade,500052,battle.battleGetRound()+2);
+					observe(shade);
+				}
+			}
+		}
 		if(active.count(23))
 		{
 			auto * target = nearest(primary,primary->unitSide());

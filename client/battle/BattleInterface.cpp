@@ -834,13 +834,29 @@ void BattleInterface::onAnimationsFinished()
 
 void BattleInterface::waitForAnimations()
 {
+	// A unit added outside of a spell or an attack (an Evolution Arena summon) stages its
+	// fade-in and stays transparent until that stage runs. Dropping the stage here used to
+	// leave such units invisible for the rest of the battle, so play it instead.
+	// Each pass removes at least one stage, so the loop ends.
+	for(int pass = 0; pass < static_cast<int>(EAnimationEvents::COUNT) + 1; ++pass)
+	{
+		{
+			auto unlockInterface = vstd::makeUnlockGuard(ENGINE->interfaceMutex);
+			ongoingAnimationsState.waitWhileBusy();
+		}
+
+		if(awaitingEvents.empty())
+			break;
+
+		executeStagedAnimations();
+	}
+
 	{
 		auto unlockInterface = vstd::makeUnlockGuard(ENGINE->interfaceMutex);
 		ongoingAnimationsState.waitWhileBusy();
 	}
 
 	assert(!hasAnimations());
-	assert(awaitingEvents.empty());
 
 	if (!awaitingEvents.empty())
 	{

@@ -16,7 +16,7 @@
 #include <memory>
 #include <vector>
 using BonusCustomSubtype=int;
-enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY, STACKS_SPEED };
+enum class BonusType { NONE, EVOLUTION_BROOD, EVOLUTION_FAMILY, EVOLUTION_SEEN, EVOLUTION_TRAIT, EVOLUTION_WOUND, EVOLUTION_PARASITE, FLYING, BLOCKS_RETALIATION, TWO_HEX_ATTACK_BREATH, ATTACKS_ALL_ADJACENT, NO_MELEE_PENALTY, NO_DISTANCE_PENALTY, STACKS_SPEED, ADDITIONAL_ATTACK };
 enum class BonusDuration { PERMANENT, ONE_BATTLE };
 struct NumericSubtype {
 	int value;
@@ -40,10 +40,10 @@ struct BattleHex {
 static Bonus trait(int id){return {BonusType::EVOLUTION_TRAIT,1,BonusDuration::PERMANENT,id};}
 enum class EHealLevel { RESURRECT };
 enum class EHealPower { ONE_BATTLE, PERMANENT };
-struct Data {int species{}, count{}, health{}; BattleHex pos; BattleSide side{};};
+struct Data {int species{}, count{}, health{}; BattleHex pos; BattleSide side{}; bool summoned=false;};
 namespace battle {
 struct UnitInfo {int id{}, type{}, count{}; BattleHex position; BattleSide side{};bool summoned=false;
-	void save(Data & out){out={type,count,count*10,position,side};}
+	void save(Data & out){out={type,count,count*10,position,side,summoned};}
 };}
 struct UnitChanges {enum class EOperation {ADD, RESET_STATE, REMOVE};int id; EOperation op; Data data;int64_t healthDelta=0;
 	UnitChanges(int id,EOperation op):id(id),op(op){}
@@ -155,7 +155,7 @@ struct CGameHandler {
 	} for(auto & v:p.toAdd)for(auto b:v.second)field.units.at(v.first).bonuses.push_back(b);}
 	void sendAndApply(const StacksInjured & p){for(auto & h:p.stacks)field.units.at(h.stackAttacked).data.health-=int(h.damageAmount);}
 	void sendAndApply(const BattleUnitsChanged & p){for(auto & c:p.changedStacks){
-		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}, {}, false});
+		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}, {}, false}).first->second.summoned=c.data.summoned;
 		else if(c.op==UnitChanges::EOperation::REMOVE) field.units.erase(c.id);
 		else field.units.at(c.id).data=c.data;
 	}}
@@ -185,6 +185,8 @@ static std::vector<int> labelledTraits;
 static std::vector<std::string> labelledStatuses;
 static void labelTrait(Bonus &,int trait){labelledTraits.push_back(trait);}
 static void labelStatus(Bonus &,const std::string & name){labelledStatuses.push_back(name);}
+// The model has one faction: species below 100 have a lesser form ten numbers lower.
+static CreatureID lesserForm(CreatureID id){return id.getNum()>=20 && id.getNum()<100 ? CreatureID(id.getNum()-10) : id;}
 }
 struct BattleActionProcessor {CGameHandler * gameHandler;
 	uint64_t reactionSerial=0;
@@ -222,7 +224,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,30,32,33,35,39,40,43,47,48,49,50,51,52,53,54,56,57,59,60,61,62,65,66,67,68,69,71,72,73,75,77,78,82,87,89,95,97};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,30,32,33,34,35,39,40,42,43,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,64,65,66,67,68,69,71,72,73,75,77,78,82,87,89,94,95,97};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -1125,7 +1127,149 @@ static void bloodAndLinks()
 	}
 }
 
+static bool hasTrait(const CStack & unit,int id){return !unit.getBonusesOfType(BonusType::EVOLUTION_TRAIT,id)->empty();}
+
+static void deathAndTransformation()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & add(int id,int species,int count,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{species,count,count*10,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void kill(CStack & killer,CStack & victim)
+		{
+			const int count=victim.getCount();
+			victim.data.health=0;
+			actions.evolutionAttack(field,&killer,&victim,{{{victim.id,killer.id,10,true,count}}});
+		}
+	};
+	{
+		Field f; // Fractal Army: two copies of a sixth each keep the mutations; the copies do not fracture again.
+		auto & big=f.add(1,30,30,4,BattleSide::LEFT,{64,23});
+		auto & enemy=f.add(2,40,100,8,BattleSide::RIGHT);
+		f.kill(enemy,big);
+		assert(f.field.units.size()==4);
+		for(int id:{3,4})
+		{
+			auto & copy=f.field.units.at(id);
+			assert(copy.getCount()==5 && copy.data.species==30 && copy.unitSide()==BattleSide::LEFT && hasTrait(copy,23) && copy.summoned);
+		}
+		f.field.units.at(3).data.count=12;
+		f.kill(enemy,f.field.units.at(3));
+		assert(f.field.units.size()==4);
+		auto & small=f.add(9,31,5,1,BattleSide::LEFT,{64});
+		f.kill(enemy,small);
+		assert(f.field.units.size()==5);
+	}
+	{
+		Field f; // Reverse Evolution: one level lower, the same head count, a second strike, once.
+		auto & high=f.add(1,30,8,4,BattleSide::LEFT,{28,23});
+		auto & low=f.add(2,15,8,1,BattleSide::LEFT,{28});
+		auto & enemy=f.add(3,40,100,8,BattleSide::RIGHT);
+		f.kill(enemy,high);
+		auto & reborn=f.field.units.at(4);
+		assert(reborn.data.species==20 && reborn.getCount()==8 && reborn.unitSide()==BattleSide::LEFT);
+		assert(hasTrait(reborn,23) && !hasTrait(reborn,28) && reborn.getBonusesOfType(BonusType::ADDITIONAL_ATTACK)->front()->val==1);
+		f.kill(enemy,reborn);
+		assert(f.field.units.size()==4);
+		// A first-level creature has nothing below it: half of the unit returns as it was.
+		f.kill(enemy,low);
+		assert(f.field.units.at(5).data.species==15 && f.field.units.at(5).getCount()==4);
+	}
+	{
+		Field f; // Soul Split: a third stays as flying ghosts with the other mutations.
+		auto & body=f.add(1,30,9,4,BattleSide::LEFT,{42,23});
+		auto & enemy=f.add(2,40,100,8,BattleSide::RIGHT);
+		f.kill(enemy,body);
+		auto & ghost=f.field.units.at(3);
+		assert(ghost.getCount()==3 && ghost.data.species==30 && ghost.hasBonusOfType(BonusType::FLYING) && hasTrait(ghost,23) && !hasTrait(ghost,42));
+		f.kill(enemy,ghost);
+		assert(f.field.units.size()==3);
+	}
+	{
+		Field f; // Mind Transfer: all mutations and half of the health pool as one attack charge.
+		auto & mind=f.add(1,30,10,4,BattleSide::LEFT,{55,23,9});
+		auto & heir=f.add(2,31,10,3,BattleSide::LEFT);
+		auto & far=f.add(3,32,10,0,BattleSide::LEFT);
+		auto & enemy=f.add(4,40,100,8,BattleSide::RIGHT);
+		f.kill(enemy,mind);
+		assert(hasTrait(heir,23) && hasTrait(heir,9) && !hasTrait(heir,55) && far.bonuses.empty());
+		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==60);
+		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==10);
+	}
+	{
+		Field f; // Rewritten Death: a hostile echo of half the size, won back with a new mutation, once per battle.
+		auto & writer=f.add(1,30,10,2,BattleSide::LEFT,{58});
+		auto & first=f.add(2,31,8,4,BattleSide::LEFT);
+		auto & second=f.add(3,32,8,0,BattleSide::LEFT);
+		auto & enemy=f.add(4,40,100,8,BattleSide::RIGHT);
+		f.kill(enemy,first);
+		auto & echo=f.field.units.at(5);
+		assert(echo.unitSide()==BattleSide::RIGHT && echo.data.species==31 && echo.getCount()==4);
+		f.kill(enemy,second);
+		assert(f.field.units.size()==5);
+		f.kill(writer,echo);
+		auto & back=f.field.units.at(6);
+		assert(back.unitSide()==BattleSide::LEFT && back.data.species==31 && back.getCount()==4);
+		assert(back.getBonusesOfType(BonusType::EVOLUTION_TRAIT)->size()==1);
+		// The returned unit is an ordinary summoned body: killing it again makes no further echo.
+		f.kill(enemy,back);
+		assert(f.field.units.size()==6);
+	}
+	{
+		Field f; // Echo of Infinity: each destroyed enemy unit repeats the attack on the nearest enemy.
+		f.actions.strikeDamage=7;
+		auto & hunter=f.add(1,30,10,2,BattleSide::LEFT,{94});
+		auto & weak=f.add(2,40,1,3,BattleSide::RIGHT);
+		auto & tough=f.add(3,41,100,5,BattleSide::RIGHT);
+		f.kill(hunter,weak);
+		assert(tough.data.health==993);
+		// A hit that destroys nobody has no echo.
+		f.actions.evolutionAttack(f.field,&hunter,&tough,{{{3,1,10,false,1}}});
+		assert(tough.data.health==993);
+
+		Field chain; // In the lethal strike model the echo runs through the whole enemy line and then stops.
+		auto & reaper=chain.add(1,30,10,1,BattleSide::LEFT,{94});
+		for(int i=2;i<=9;++i) chain.add(i,40,1,i+1,BattleSide::RIGHT);
+		chain.kill(reaper,chain.field.units.at(2));
+		for(int i=2;i<=9;++i) assert(!chain.field.units.at(i).alive());
+		assert(reaper.alive());
+
+		Field loop; // A Scavenger raising a body from every death next to it must not feed the echo forever.
+		auto & echoer=loop.add(1,30,10,1,BattleSide::LEFT,{94});
+		auto & bait=loop.add(2,40,1,3,BattleSide::RIGHT);
+		auto & scavenger=loop.add(3,41,10,4,BattleSide::RIGHT,{18});
+		scavenger.data.pos={4};
+		loop.kill(echoer,bait);
+		// The raised body took the echo. Its own death raised one more, which ended the chain.
+		assert(loop.field.units.size()==5 && !loop.field.units.at(4).alive() && loop.field.units.at(5).alive() && scavenger.alive());
+	}
+	{
+		Field f; // Shadow Army: every second attack leaves a quarter of the unit for two rounds.
+		auto & caster=f.add(1,30,8,4,BattleSide::LEFT,{34,23});
+		auto & enemy=f.add(2,40,100,8,BattleSide::RIGHT);
+		auto hit=[&]{f.actions.evolutionAttack(f.field,&caster,&enemy,{{{2,1,10,false,0}}});};
+		hit();
+		assert(f.field.units.size()==2);
+		hit();
+		auto & shade=f.field.units.at(3);
+		assert(shade.getCount()==2 && shade.data.species==30 && shade.unitSide()==BattleSide::LEFT && !hasTrait(shade,34));
+		hit();
+		assert(f.field.units.size()==3);
+		nextRound(f.field,f.actions);
+		assert(f.field.units.count(3));
+		nextRound(f.field,f.actions);
+		assert(!f.field.units.count(3));
+	}
+}
+
 int main(){
+	deathAndTransformation();
 	bloodAndLinks();
 	remainsGroup();
 	playableAlone();

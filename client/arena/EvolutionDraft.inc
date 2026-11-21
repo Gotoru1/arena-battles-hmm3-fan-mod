@@ -52,6 +52,11 @@ namespace
 	{
 		ArenaOffer card;
 		card.description = title;
+		// A long text does not fit on the card: holding the right mouse button shows all of it.
+		card.popup = [title, detail]()
+		{
+			CRClickPopup::createAndPush("{" + title + "}\n\n" + detail);
+		};
 		card.build = [title, detail, color](Widgets & widgets)
 		{
 			widgets.push_back(std::make_shared<CLabel>(CARD_CENTER, 62, FONT_BIG,

@@ -19,7 +19,9 @@
 
 #include "../CGameHandler.h"
 
+#include "../../lib/CCreatureHandler.h"
 #include "../../lib/CStack.h"
+#include "../../lib/GameLibrary.h"
 #include "../../lib/IGameSettings.h"
 #include "../../lib/battle/CBattleInfoCallback.h"
 #include "../../lib/battle/CObstacleInstance.h"
@@ -1877,6 +1879,26 @@ static void labelTrait(Bonus & bonus, int trait)
 {
 	bonus.description.appendTextID("arenabattles.evolution.trait." + std::to_string(trait));
 	bonus.customIconPath = ImagePath::builtin("evolution/trait" + std::to_string(trait));
+}
+
+// Reverse Evolution: the strongest creature one level below in the same faction.
+// A first-level creature has no lesser form and is returned unchanged.
+static CreatureID lesserForm(CreatureID id)
+{
+	const auto * current = id.toCreature();
+	CreatureID best = id;
+	int32_t bestValue = 0;
+	for(const auto & creature : LIBRARY->creh->objects)
+	{
+		if(!creature || creature->special || creature->getFactionID() != current->getFactionID() || creature->getLevel() != current->getLevel() - 1)
+			continue;
+		if(creature->getAIValue() > bestValue)
+		{
+			best = creature->getId();
+			bestValue = creature->getAIValue();
+		}
+	}
+	return best;
 }
 
 static void labelStatus(Bonus & bonus, const std::string & name)
