@@ -741,6 +741,90 @@
           "icon": "evolution/trait24"
         }
       ]
+    },
+    "trait5": {
+      "name": "Пожирание трупов",
+      "text": "Защищаясь вплотную к останкам любого отряда, носитель пожирает их и навсегда возвращает в строй своих погибших бойцов. Одни останки можно съесть один раз.",
+      "rarity": 0,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "5",
+          "description": "@arenabattles.evolution.trait.5",
+          "icon": "evolution/trait5"
+        }
+      ]
+    },
+    "trait12": {
+      "name": "Пепельные останки",
+      "text": "После уничтожения вражеского отряда носителем на его месте остаётся куча пепла. Союзник, наступивший на неё, усиливает свою следующую атаку; враг, наступив, развеивает пепел.",
+      "rarity": 0,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "12",
+          "description": "@arenabattles.evolution.trait.12",
+          "icon": "evolution/trait12"
+        }
+      ]
+    },
+    "trait49": {
+      "name": "Хищное возрождение",
+      "text": "Если носитель погиб, а останки убитого им врага ещё целы, в начале следующего раунда он возрождается с третью отряда, поглотив эти останки. Один раз за бой.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "49",
+          "description": "@arenabattles.evolution.trait.49",
+          "icon": "evolution/trait49"
+        }
+      ]
+    },
+    "trait52": {
+      "name": "Костяная марионетка",
+      "text": "После уничтожения вражеского отряда носитель поднимает из его останков куклу — четверть отряда того же вида на вашей стороне. Кукла рассыпается через три раунда.",
+      "rarity": 1,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "52",
+          "description": "@arenabattles.evolution.trait.52",
+          "icon": "evolution/trait52"
+        }
+      ]
+    },
+    "trait65": {
+      "name": "Хищная ассимиляция",
+      "text": "После уничтожения вражеского отряда носитель превращает часть его останков в отдельный отряд собственного вида, который получает одно свойство поглощённой цели.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "65",
+          "description": "@arenabattles.evolution.trait.65",
+          "icon": "evolution/trait65"
+        }
+      ]
+    },
+    "trait72": {
+      "name": "Повелитель останков",
+      "text": "В начале каждого раунда носитель поднимает отряд скелетов из ближайших нетронутых останков на поле. Чем крупнее был погибший отряд, тем больше скелетов.",
+      "rarity": 2,
+      "effects": [
+        {
+          "type": "EVOLUTION_TRAIT",
+          "val": 1,
+          "subtype": "72",
+          "description": "@arenabattles.evolution.trait.72",
+          "icon": "evolution/trait72"
+        }
+      ]
     }
   },
   "synergies": [],

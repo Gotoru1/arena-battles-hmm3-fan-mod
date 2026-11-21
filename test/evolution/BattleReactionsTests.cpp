@@ -39,7 +39,7 @@ struct BattleHex {
 };
 static Bonus trait(int id){return {BonusType::EVOLUTION_TRAIT,1,BonusDuration::PERMANENT,id};}
 enum class EHealLevel { RESURRECT };
-enum class EHealPower { ONE_BATTLE };
+enum class EHealPower { ONE_BATTLE, PERMANENT };
 struct Data {int species{}, count{}, health{}; BattleHex pos; BattleSide side{};};
 namespace battle {
 struct UnitInfo {int id{}, type{}, count{}; BattleHex position; BattleSide side{};bool summoned=false;
@@ -222,7 +222,7 @@ static std::vector<int> randomRun(unsigned seed)
 {
 	std::mt19937 random(seed);
 	// Every battle mutation of the active catalog.
-	const std::vector<int> traits{1,2,3,4,6,7,8,9,10,13,14,15,17,18,19,20,21,22,23,24,25,26,27,32,35,39,47,48,50,51,53,54,56,57,59,60,61,62,66,67,68,71,73,75,77,78,82,87,89,95,97};
+	const std::vector<int> traits{1,2,3,4,5,6,7,8,9,10,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,32,35,39,47,48,49,50,51,52,53,54,56,57,59,60,61,62,65,66,67,68,71,72,73,75,77,78,82,87,89,95,97};
 	CBattleInfoCallback field;
 	CGameHandler server{field,{}};
 	BattleActionProcessor actions{&server};
@@ -890,7 +890,130 @@ static void playableAlone()
 	}
 }
 
+static void remainsGroup()
+{
+	struct Field {
+		CBattleInfoCallback field;
+		CGameHandler server{field,{}};
+		BattleActionProcessor actions{&server};
+		CStack & add(int id,int species,int count,int health,int pos,BattleSide side,std::vector<int> mutations={})
+		{
+			auto & unit=field.units.emplace(id,CStack{id,{species,count,health,{pos},side},{}}).first->second;
+			for(int m:mutations) unit.bonuses.push_back(trait(m));
+			return unit;
+		}
+		void kill(CStack & killer,CStack & victim)
+		{
+			const int count=victim.getCount();
+			victim.data.health=0;
+			actions.evolutionAttack(field,&killer,&victim,{{{victim.id,killer.id,10,true,count}}});
+		}
+	};
+	const auto used=[](const CStack & corpse){return carries(corpse,BonusType::NONE,500905,1);};
+	{
+		Field f; // Corpse Eater: defending next to a body restores a third of its health pool, once per body.
+		auto & eater=f.add(1,11,10,40,4,BattleSide::LEFT,{5});
+		auto & near=f.add(2,22,6,0,5,BattleSide::RIGHT);
+		auto & far=f.add(3,23,6,0,9,BattleSide::RIGHT);
+		f.add(4,24,6,60,12,BattleSide::RIGHT);
+		f.actions.evolutionDefended(f.field,&eater);
+		assert(eater.data.health==60 && used(near) && !used(far));
+		f.actions.evolutionDefended(f.field,&eater);
+		assert(eater.data.health==60 && !used(far));
+	}
+	{
+		Field f; // Ash Remains: an ally carries the ash into its next attack, an enemy scatters it.
+		auto & hunter=f.add(1,11,10,100,4,BattleSide::LEFT,{12});
+		auto & prey=f.add(2,22,6,60,5,BattleSide::RIGHT);
+		auto & ally=f.add(3,12,10,100,2,BattleSide::LEFT);
+		auto & enemy=f.add(4,23,50,500,9,BattleSide::RIGHT);
+		auto & second=f.add(5,24,6,60,7,BattleSide::RIGHT);
+		f.kill(hunter,prey);
+		assert(marksOf(f.field,12,5)==1);
+		ally.data.pos={5};
+		assert(!f.actions.evolutionMoved(f.field,&ally,{2}) && f.field.marks.empty());
+		assert(f.actions.evolutionIncoming(f.field,3,&enemy,10,false,true)==10);
+		assert(f.actions.evolutionIncoming(f.field,3,&enemy,10,false,false)==30);
+		assert(f.actions.evolutionIncoming(f.field,3,&enemy,10,false,false)==10);
+		ally.data.pos={2};
+		f.kill(hunter,second);
+		assert(marksOf(f.field,12,7)==1);
+		enemy.data.pos={7};
+		f.actions.evolutionMoved(f.field,&enemy,{9});
+		assert(f.field.marks.empty() && f.actions.evolutionIncoming(f.field,4,&hunter,10,false,false)==10);
+	}
+	{
+		Field f; // Predatory Rebirth: once, at the next round, by using up the body of its own kill.
+		auto & bearer=f.add(1,11,9,90,4,BattleSide::LEFT,{49});
+		auto & prey=f.add(2,22,6,60,5,BattleSide::RIGHT);
+		auto & killer=f.add(3,23,50,500,6,BattleSide::RIGHT);
+		f.kill(bearer,prey);
+		assert(carries(prey,BonusType::NONE,500049,1) && !used(prey));
+		f.kill(killer,bearer);
+		assert(!bearer.alive());
+		nextRound(f.field,f.actions);
+		assert(bearer.data.health==30 && used(prey));
+		// A second kill leaves a fresh body, but the rebirth is spent.
+		auto & another=f.add(4,24,6,60,3,BattleSide::RIGHT);
+		f.kill(bearer,another);
+		f.kill(killer,bearer);
+		nextRound(f.field,f.actions);
+		assert(!bearer.alive() && !used(another));
+	}
+	{
+		Field f; // Without a body of its own kill the bearer stays dead.
+		auto & bearer=f.add(1,11,9,90,4,BattleSide::LEFT,{49});
+		auto & stranger=f.add(2,22,6,0,5,BattleSide::RIGHT);
+		auto & killer=f.add(3,23,50,500,6,BattleSide::RIGHT);
+		f.kill(killer,bearer);
+		nextRound(f.field,f.actions);
+		assert(!bearer.alive() && !used(stranger));
+	}
+	{
+		Field f; // Bone Puppet: a quarter of the victim serves for three rounds.
+		auto & master=f.add(1,11,10,100,4,BattleSide::LEFT,{52,65});
+		auto & prey=f.add(2,22,8,80,5,BattleSide::RIGHT);
+		f.add(3,23,50,500,9,BattleSide::RIGHT);
+		f.kill(master,prey);
+		// The body is used once: the puppet took it, so nothing is left to assimilate.
+		assert(f.field.units.size()==4 && used(prey));
+		const auto & puppet=f.field.units.at(4);
+		assert(puppet.data.species==22 && puppet.getCount()==2 && puppet.unitSide()==BattleSide::LEFT);
+		nextRound(f.field,f.actions);
+		nextRound(f.field,f.actions);
+		assert(f.field.units.count(4));
+		nextRound(f.field,f.actions);
+		assert(!f.field.units.count(4));
+	}
+	{
+		Field f; // Predatory Assimilation: the remains become fighters of the killer's own kind.
+		auto & hunter=f.add(1,11,10,100,4,BattleSide::LEFT,{65});
+		auto & prey=f.add(2,22,8,80,5,BattleSide::RIGHT);
+		prey.bonuses.push_back({BonusType::FLYING,1});
+		f.add(3,23,50,500,9,BattleSide::RIGHT);
+		f.kill(hunter,prey);
+		assert(f.field.units.size()==4 && used(prey));
+		const auto & kin=f.field.units.at(4);
+		assert(kin.data.species==11 && kin.getCount()==2 && kin.unitSide()==BattleSide::LEFT && kin.hasBonusOfType(BonusType::FLYING));
+	}
+	{
+		Field f; // Lord of Remains: one body per round, nearest first, half its size in skeletons.
+		auto & lord=f.add(1,11,10,100,2,BattleSide::LEFT,{72});
+		auto & far=f.add(2,22,8,0,9,BattleSide::RIGHT);
+		auto & near=f.add(3,23,4,0,5,BattleSide::LEFT);
+		f.add(4,24,50,500,12,BattleSide::RIGHT);
+		nextRound(f.field,f.actions);
+		assert(used(near) && !used(far) && f.field.units.at(5).getCount()==2 && f.field.units.at(5).unitSide()==BattleSide::LEFT);
+		nextRound(f.field,f.actions);
+		assert(used(far) && f.field.units.at(6).getCount()==4);
+		nextRound(f.field,f.actions);
+		assert(f.field.units.size()==6);
+		(void)lord;
+	}
+}
+
 int main(){
+	remainsGroup();
 	playableAlone();
 	groundMarks();
 	deathStrike();

@@ -256,6 +256,11 @@ def ground(kind):
             img.paint(full, both(cell, ellipse(22.5 + dx, 26 + dy, r + 2.5, r + 2.5)), (120, 200, 70, 0.22))
         for dx, dy, r in dots:
             img.paint(full, both(cell, ellipse(22.5 + dx, 26 + dy, r * 0.55, r * 0.55)), shade((150, 220, 90), 22.5 + dx, 26 + dy, r, 60, 30, 0.85))
+    elif kind == "ash":
+        for dx, dy, rx, ry in ((0, 6, 15, 7), (-4, 1, 10, 6), (3, -3, 7, 5), (0, -7, 4, 3)):
+            img.paint(full, both(cell, ellipse(22.5 + dx, 28 + dy, rx, ry)), shade((120, 116, 112), 22.5 + dx, 28 + dy, max(rx, ry) * 1.4, 70, 50, 0.92))
+        for dx, dy in ((-9, 8), (7, 5), (-2, 0), (4, 11), (-6, 3), (10, 9)):
+            img.paint(full, ellipse(22.5 + dx, 28 + dy, 1.4, 1.2), (236, 150, 60, 0.95))
     elif kind == "mycelium":
         for i in range(7):
             a = math.radians(i * 360 / 7 + 12)
@@ -376,7 +381,7 @@ def main():
     for name, (kind, color) in status.items():
         icon(kind, (150, 44, 44), color).save(os.path.join(data, "status_%s.png" % name))
 
-    for kind in ("blood", "trap", "spores", "mycelium", "territory"):
+    for kind in ("blood", "trap", "ash", "spores", "mycelium", "territory"):
         picture = ground(kind)
         picture.save(os.path.join(sprites, "mark_%s.png" % kind))
         for step, share in enumerate((0.3, 0.6, 0.85)):

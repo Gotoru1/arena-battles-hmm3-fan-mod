@@ -544,6 +544,74 @@ class EvolutionReactions
 		return id;
 	}
 
+	static CreatureID skeletonType()
+	{
+		static const CreatureID id(CreatureID::decode("core:skeleton"));
+		return id;
+	}
+
+	// Remains are the bodies of original units that still lie on the field. A summoned body
+	// is removed by the engine when it dies, and each body can be used up only once.
+	std::vector<const CStack *> remains() const
+	{
+		std::vector<const CStack *> result;
+		for(const auto * unit:battle.battleGetAllStacks())
+			if(!unit->alive() && !unit->isGhost() && !unit->summoned && unit->getPosition().isValid() && !marked(unit,500905,1)
+				&& unit->creatureId()!=eggType() && unit->creatureId()!=huskType()) result.push_back(unit);
+		std::sort(result.begin(),result.end(),[](auto * a,auto * b){return a->unitId()<b->unitId();});
+		return result;
+	}
+
+	bool fresh(const CStack * corpse) const
+	{
+		return !corpse->alive() && !corpse->isGhost() && !corpse->summoned && !marked(corpse,500905,1);
+	}
+
+	void consume(const CStack * corpse)
+	{
+		remember(corpse,500905,1);
+	}
+
+	static int headcount(int64_t amount)
+	{
+		return static_cast<int>(std::max<int64_t>(1,std::min<int64_t>(amount,INT32_MAX)));
+	}
+
+	// Predatory Rebirth: the dead bearer returns at the start of the next round by using up
+	// the untouched remains of an enemy it destroyed.
+	void rebirths()
+	{
+		for(const auto * dead:battle.battleGetAllStacks())
+		{
+			if(dead->alive() || dead->isGhost() || !marked(dead,500249,1)) continue;
+			setCounter(dead,500249,0);
+			const CStack * fuel=nullptr;
+			for(const auto * prey:remains())
+				if(prey!=dead && marked(prey,500049,dead->unitId())) { fuel=prey; break; }
+			if(!fuel) continue;
+			bool blocked=false;
+			for(auto occupied:dead->getHexes())
+				for(auto * body:living())
+				{
+					const auto & cells=body->getHexes();
+					if(std::find(cells.begin(),cells.end(),occupied)!=cells.end()) blocked=true;
+				}
+			if(blocked) continue;
+			consume(fuel);
+			remember(dead,500149,1);
+			auto restored=dead->acquireState();
+			int64_t hp=int64_t(std::max(1,dead->unitBaseAmount()/3))*dead->getMaxHealth();
+			restored->heal(hp,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+			restored->ghostPending=false;
+			BattleUnitsChanged packet;
+			packet.battleID=battle.getBattle()->getBattleID();
+			packet.changedStacks.emplace_back(dead->unitId(),UnitChanges::EOperation::RESET_STATE);
+			packet.changedStacks.back().healthDelta=restored->getAvailableHealth();
+			restored->save(packet.changedStacks.back().data);
+			server.sendAndApply(packet);
+		}
+	}
+
 	void shed(const CStack * unit,unsigned losses)
 	{
 		if(!unit || !unit->alive() || !losses || uint64_t(losses)*4 < uint64_t(unit->unitBaseAmount()) || !rules(unit).count(7) || marked(unit,500007,1)) return;
@@ -739,6 +807,37 @@ class EvolutionReactions
 			copyProperty(source,corpse);
 		if(source && source->alive() && source->unitSide() != corpse->unitSide() && rules(source).count(24))
 			stain(corpse->getPosition(),24,source,-1);
+		if(source && source->unitSide() != corpse->unitSide() && rules(source).count(49))
+			remember(corpse,500049,source->unitId());
+		if(legacy.count(49) && !marked(corpse,500149,1) && !corpse->summoned && !corpse->isClone())
+			remember(corpse,500249,1);
+		if(source && source->alive() && source->unitSide() != corpse->unitSide())
+		{
+			const auto hunter=rules(source);
+			if(hunter.count(12)) stain(corpse->getPosition(),12,source,-1);
+			if(hunter.count(52) && fresh(corpse))
+			{
+				// Bone Puppet: a quarter of the dead unit fights for the killer for three rounds.
+				if(auto * puppet=spawn(source->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/4),corpse->getPosition()))
+				{
+					consume(corpse);
+					descend(source,puppet);
+					setCounter(puppet,500052,battle.battleGetRound()+3);
+					observe(puppet);
+				}
+			}
+			if(hunter.count(65) && fresh(corpse))
+			{
+				// Predatory Assimilation: part of the remains becomes a unit of the killer's own kind.
+				const auto flesh=int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth();
+				const int grown=headcount(evolution::damageProduct(flesh,hunter.at(65),4)/std::max(1,int(source->getMaxHealth())));
+				if(auto * kin=summon(source,source->creatureId(),grown,corpse->getPosition(),false))
+				{
+					consume(corpse);
+					copyProperty(kin,corpse);
+				}
+			}
+		}
 		for(auto * unit : beforeSummons)
 			if(rules(unit).count(18) && BattleHex::getDistance(unit->getPosition(),corpse->getPosition()) == 1)
 				summon(unit,corpse->creatureId(),1,corpse->getPosition(),false);
@@ -874,7 +973,7 @@ class EvolutionReactions
 		for(const auto & mark:groundMarks(battle))
 			if(mark.hex==hex && mark.kind==kind && mark.side==owner->unitSide()) return false;
 		const bool pit=kind==6 || kind==13 || kind==17;
-		const std::string look=kind==4 ? "blood" : kind==6 ? "trap" : kind==13 ? "spores" : kind==17 ? "mycelium" : "territory";
+		const std::string look=kind==4 ? "blood" : kind==6 ? "trap" : kind==12 ? "ash" : kind==13 ? "spores" : kind==17 ? "mycelium" : "territory";
 		SpellCreatedObstacle mark;
 		mark.uniqueID=battle.nextObstacleId();
 		mark.pos=hex;
@@ -912,11 +1011,11 @@ class EvolutionReactions
 		server.sendAndApply(packet);
 	}
 
-	void mend(const CStack * unit,int64_t amount)
+	void mend(const CStack * unit,int64_t amount,bool lasting=false)
 	{
 		if(!unit->alive() || amount<=0) return;
 		auto state = unit->acquireState();
-		state->heal(amount,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
+		state->heal(amount,EHealLevel::RESURRECT,lasting ? EHealPower::PERMANENT : EHealPower::ONE_BATTLE);
 		BattleUnitsChanged packet;
 		packet.battleID = battle.getBattle()->getBattleID();
 		packet.changedStacks.emplace_back(unit->unitId(), UnitChanges::EOperation::RESET_STATE);
@@ -938,6 +1037,15 @@ class EvolutionReactions
 		for(const auto & mark:groundMarks(battle))
 		{
 			if(!mover->alive()) break;
+			if(mark.kind==12 && touches(mover,mover->getPosition(),mark.hex,0))
+			{
+				// Ash: an ally takes it in for its next attack, an enemy scatters it.
+				wipe(mark);
+				const auto * owner=battle.battleGetStackByID(mark.owner,false);
+				if(mark.side==mover->unitSide() && owner)
+					setReserve(mover,combineDamage(reserve(mover,500312),evolution::damageProduct(int64_t(std::max(1,owner->unitBaseAmount()))*2,rankOf(owner,12))),500312);
+				continue;
+			}
 			if(mark.side==mover->unitSide() || (mark.kind!=4 && mark.kind!=6) || !touches(mover,mover->getPosition(),mark.hex,0)) continue;
 			wipe(mark);
 			const auto * owner=battle.battleGetStackByID(mark.owner,false);
@@ -1248,7 +1356,18 @@ public:
 
 	void defended(const CStack * unit)
 	{
-		if(!unit->alive() || !rules(unit).count(6)) return;
+		if(!unit->alive()) return;
+		const auto active=rules(unit);
+		if(active.count(5))
+			for(const auto * corpse:remains())
+			{
+				// Corpse Eater: defending next to remains restores fallen fighters for good.
+				if(!touches(unit,unit->getPosition(),corpse->getPosition(),1)) continue;
+				consume(corpse);
+				mend(unit,evolution::damageProduct(int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth(),active.at(5),3),true);
+				break;
+			}
+		if(!active.count(6)) return;
 		const auto * foe=nearestFoe(unit);
 		const auto access=battle.getAccessibility(unit);
 		const auto taken=groundMarks(battle);
@@ -1286,6 +1405,15 @@ public:
 			{
 				setReserve(source,0);
 				damage = combineDamage(damage,stored);
+			}
+		}
+		if(!secondary)
+		{
+			const auto ash=reserve(source,500312);
+			if(ash)
+			{
+				setReserve(source,0,500312);
+				damage=combineDamage(damage,ash);
 			}
 		}
 		if(!secondary && rules(source).count(66))
@@ -1377,11 +1505,30 @@ public:
 		{
 			settleDeferred();
 			for(auto * unit:living()) lastStand(unit);
+			rebirths();
 		}
 		for(auto * unit : living())
 		{
 			const auto active = rules(unit);
 			if(!unit->alive()) continue;
+			if(!first && counter(unit,500052) && counter(unit,500052)<=battle.battleGetRound())
+			{
+				// The puppet falls apart.
+				BattleUnitsChanged crumble;
+				crumble.battleID=battle.getBattle()->getBattleID();
+				crumble.changedStacks.emplace_back(unit->unitId(),UnitChanges::EOperation::REMOVE);
+				server.sendAndApply(crumble);
+				continue;
+			}
+			if(!first && active.count(72))
+			{
+				// Lord of Remains: one untouched body per round rises as skeletons.
+				const CStack * nearestBody=nullptr;
+				for(const auto * corpse:remains())
+					if(!nearestBody || BattleHex::getDistance(unit->getPosition(),corpse->getPosition())<BattleHex::getDistance(unit->getPosition(),nearestBody->getPosition())) nearestBody=corpse;
+				if(nearestBody && summon(unit,skeletonType(),headcount(evolution::damageProduct(nearestBody->unitBaseAmount(),active.at(72),2)),nearestBody->getPosition(),false))
+					consume(nearestBody);
+			}
 			if(!first && (awakenHusk(unit) || hatch(unit))) continue;
 			if(!first) { inhale(unit); mycelium(unit); }
 			if(!first && unit->alive()) { parasites(unit); if(unit->alive()) epidemic(unit); }

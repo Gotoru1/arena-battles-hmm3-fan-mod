@@ -70,8 +70,8 @@ class CatalogTests(unittest.TestCase):
             self.assertIn("arenabattles.evolution.status." + name, texts)
             self.assertTrue((content / "Data/evolution" / ("status_%s.png" % name)).is_file(), name)
         # Battlefield pictures: every referenced animation and every frame in it must ship with the mod.
-        animations = {"evoMark_" + look for look in re.findall(r'"(blood|trap|spores|mycelium|territory)"', reactions)}
-        self.assertEqual(len(animations), 5)
+        animations = {"evoMark_" + look for look in re.findall(r'"(blood|trap|ash|spores|mycelium|territory)"', reactions)}
+        self.assertEqual(len(animations), 6)
         animations |= {name.replace("evoMark_", "evoMarkIn_") for name in animations}
         creatures = json.loads((content / "config/evolutionCreatures.json").read_text(encoding="utf-8"))
         for creature in creatures.values():
