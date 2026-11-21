@@ -660,8 +660,7 @@ try
 	}
 
 	std::string detail = "Твоя армия:" + roster;
-	detail += "
-Лазарет: после победы в строй вернётся " + std::to_string(evolution::RoguelikeRun::hospitalShare(run->wave)) + "% потерь каждого выжившего отряда.";
+	detail += "\nЛазарет: после победы в строй вернётся " + std::to_string(evolution::RoguelikeRun::hospitalShare(run->wave)) + "% потерь каждого выжившего отряда.";
 	if(run->boss())
 		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
 	const std::array<std::string,3> formations{"Смешанное войско", "Орда", "Ударный отряд"};
