@@ -99,6 +99,22 @@ public:
 	std::vector<std::string> synergies;
 	std::vector<std::string> offers;
 	Phase phase = Phase::Draft;
+	// For each unit that is still in the army after the last battle: the slot it fought in.
+	std::vector<size_t> lastSlots;
+	// A unit that took a mutation after the previous wave rests for one wave.
+	bool restRule = true;
+
+	bool resting(size_t slot) const
+	{
+		return restRule && !history.empty() && !armyReward(history.back()) && recipients.back() == stack(slot).identity;
+	}
+
+	bool allResting() const
+	{
+		for(size_t slot = 0; slot < rosterSize(); ++slot)
+			if(!resting(slot)) return false;
+		return true;
+	}
 
 	bool boss() const { return wave % 5 == 0; }
 
@@ -208,6 +224,12 @@ public:
 		{
 			stack(i).harvest += growth[i];
 			stack(i).borrowedTrait=trophies.at(i);
+			if(remaining[i] == 0)
+			{
+				// A unit destroyed to the last fighter is gone for the rest of the run.
+				stack(i).count = 0;
+				continue;
+			}
 			stack(i).count = remaining[i] + recruits[i];
 			Amount reinforcement = i==0 ? Amount(5+wave*2) : Amount(1+wave/(i+1));
 			if(claimed("reward.edict.vanguard"))
@@ -215,10 +237,32 @@ public:
 			if(claimed("reward.edict.supply")) reinforcement+=1+wave/2;
 			stack(i).count+=reinforcement;
 		}
+		std::vector<Lineage> standing;
+		lastSlots.clear();
+		for(size_t i = 0; i < rosterSize(); ++i)
+			if(stack(i).count > 0)
+			{
+				standing.push_back(stack(i));
+				lastSlots.push_back(i);
+			}
+		if(standing.empty())
+		{
+			// The battle was won by summoned bodies alone: nobody is left to continue.
+			phase = Phase::Defeat;
+			return;
+		}
+		army = standing.front();
+		companions.assign(standing.begin()+1, standing.end());
+		for(auto it = alternateForms.begin(); it != alternateForms.end();)
+		{
+			bool owned = false;
+			for(size_t i = 0; i < rosterSize(); ++i) owned |= stack(i).identity == it->first;
+			it = owned ? std::next(it) : alternateForms.erase(it);
+		}
 		offers.clear();
 		for(int slot = 0; slot < 3; ++slot)
 		{
-			const std::array<int, 4> chances = boss() ? std::array<int,4>{35, 37, 23, 5} : std::array<int,4>{53, 32, 13, 2};
+			const std::array<int, 4> chances = boss() ? std::array<int,4>{45, 32, 18, 5} : std::array<int,4>{62, 26, 10, 2};
 			std::array<int,4> weights = chances;
 			for(size_t tier = 0; tier < groups.size(); ++tier)
 				if(groups[tier].empty()) weights[tier] = 0;
@@ -242,6 +286,17 @@ public:
 		extras.erase(std::remove_if(extras.begin(),extras.end(),[&](const std::string & id){
 			return !armyReward(id) || (id.rfind("reward.stat.",0)!=0 && claimed(id));
 		}),extras.end());
+		if(allResting() && extras.size() >= 3)
+		{
+			// Nobody may take a mutation this wave, so all three cards are rewards for the whole army.
+			for(auto & offer : offers)
+			{
+				const auto index = std::uniform_int_distribution<size_t>(0,extras.size()-1)(random);
+				offer = extras[index];
+				extras.erase(extras.begin()+index);
+			}
+			return;
+		}
 		if(extras.empty() || (wave%3!=0 && std::uniform_int_distribution<int>(0,2)(random)!=0)) return;
 		offers.back()=extras[std::uniform_int_distribution<size_t>(0,extras.size()-1)(random)];
 	}
@@ -273,6 +328,7 @@ public:
 		}
 		else
 		{
+			if(resting(slot)) throw std::logic_error("Этот отряд получил мутацию после прошлой волны и сейчас отдыхает");
 			const auto level=rank(id,slot);
 			if(level==std::numeric_limits<unsigned>::max()) throw std::overflow_error("Mutation rank exceeds unsigned range");
 			if(alternateForm && level!=1) throw std::logic_error("Evolution needs rank two");
@@ -451,19 +507,23 @@ public:
 			for(size_t i=0;i<result.rosterSize();++i) result.stack(i).identity=static_cast<uint32_t>(i+1);
 			result.nextIdentity=static_cast<uint32_t>(result.rosterSize()+1);
 		}
+		// The owner of a past reward may have been destroyed since. Its slot is then `gone`.
+		const size_t gone = std::numeric_limits<size_t>::max();
+		size_t encoded=0;
 		auto readOwner=[&](){
-			size_t encoded=0;
+			encoded=0;
 			if(version!="EA2" && !(in>>encoded)) throw invalid;
 			for(size_t slot=0;slot<result.rosterSize();++slot)
 				if(encoded==(identified?result.stack(slot).identity:slot)) return slot;
-			throw invalid;
+			if(!identified || !encoded || encoded>=result.nextIdentity) throw invalid;
+			return gone;
 		};
 		Amount replayed = 1;
 		for(const auto & id : result.history)
 		{
 			const auto slot=readOwner();
-			result.recipients.push_back(result.stack(slot).identity);
-			if(!armyReward(id)) gain(result.stack(slot),id);
+			result.recipients.push_back(slot==gone ? static_cast<uint32_t>(encoded) : result.stack(slot).identity);
+			if(slot!=gone && !armyReward(id)) gain(result.stack(slot),id);
 			result.seasons(++replayed);
 		}
 		if(version == "EA4" || identified)
@@ -474,7 +534,7 @@ public:
 			{
 				const auto slot=readOwner();
 				std::string id;
-				if(!(in >> std::quoted(id)) || result.rank(id,slot) < 2
+				if(!(in >> std::quoted(id)) || slot==gone || result.rank(id,slot) < 2
 					|| !result.alternateForms.emplace(result.stack(slot).identity,id).second) throw invalid;
 			}
 		}
@@ -497,7 +557,11 @@ public:
 	// The first ten waves ramp up from half strength so that a new army can find its build.
 	static Amount introduction(const Amount & wave)
 	{
-		return wave >= 11 ? Amount(100) : Amount(45 + 5 * wave);
+		// Waves 1-5 start gently (50% to 70%), full strength comes on wave 8,
+		// and every later wave adds another tenth on top of the growing budget.
+		if(wave <= 5) return Amount(45 + 5 * wave);
+		if(wave <= 8) return Amount(20 + 10 * wave);
+		return Amount(100 + 10 * (wave - 8));
 	}
 
 	Amount threat() const

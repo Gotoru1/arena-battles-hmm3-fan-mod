@@ -1725,7 +1725,24 @@ static void magicAndHive()
 	}
 }
 
+static void rarityTiers()
+{
+	using namespace evolution_server;
+	tiersOn=true;
+	assert(potency(1)==60 && potency(25)==60 && potency(26)==80 && potency(55)==80 && potency(56)==100 && potency(85)==100 && potency(86)==130 && potency(100)==130);
+	assert(tier(4,100)==60 && tier(40,100)==80 && tier(70,100)==100 && tier(93,100)==130);
+	// A weakened effect never rounds down to nothing, and nothing never becomes something.
+	assert(tier(4,1)==1 && tier(4,0)==0 && tier(93,1)==1);
+	// A shared effect takes the strength of the best mutation behind it.
+	assert(tierAmong({{9,1}},{9,13,81,89},100)==60 && tierAmong({{9,1},{89,1}},{9,13,81,89},100)==130 && tierAmong({{2,1}},{9,13,81,89},100)==100);
+	for(unsigned seed=1;seed<=150;++seed) assert(randomRun(seed)==randomRun(seed));
+	tiersOn=false;
+	assert(tier(4,100)==100 && tier(93,100)==100);
+}
+
 int main(){
+	// The scenario checks below use the unscaled numbers of every mutation.
+	evolution_server::tiersOn=false;
 	magicAndHive();
 	fieldTricks();
 	runGrowthMarkers();
@@ -1974,4 +1991,5 @@ int main(){
 	broodActions.evolutionAttack(brood,&brood.units.at(1),&brood.units.at(2),{{{2,1,10,false,1}}});
 	broodActions.evolutionRound(brood,false);
 	assert(brood.units.at(6).getCount()==2);
+	rarityTiers();
 }

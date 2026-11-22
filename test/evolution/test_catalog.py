@@ -44,6 +44,10 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual([sum(row["rarity"] == r for row in design) for r in range(4)], [25,30,30,15])
         self.assertEqual(len({row["name"] for row in design}),100)
         self.assertEqual({item["rarity"] for item in DATA["mutations"].values()}, set(range(4)))
+        # The battle code derives the strength of a mutation from its id: 1-25, 26-55, 56-85, 86-100.
+        for key, entry in DATA["mutations"].items():
+            number = int(key[5:])
+            self.assertEqual(entry["rarity"], 0 if number <= 25 else 1 if number <= 55 else 2 if number <= 85 else 3, key)
         for key, entry in DATA["mutations"].items():
             effect, = entry["effects"]
             self.check_effect(effect)

@@ -25,6 +25,29 @@ static bool touches(const CStack * unit,BattleHex place,BattleHex centre,int rea
 	return false;
 }
 
+// Rarity sets how hard a mutation works: the numbers of a common one are scaled to 60%,
+// rare to 80%, epic to 100% and legendary to 130%. Ids are grouped by rarity in the catalog.
+inline bool tiersOn=true;
+inline int potency(int trait)
+{
+	if(!tiersOn) return 100;
+	return trait<=25 ? 60 : trait<=55 ? 80 : trait<=85 ? 100 : 130;
+}
+inline int64_t tier(int trait,int64_t value)
+{
+	const int percent=potency(trait);
+	if(percent==100 || value<=0) return value;
+	return std::max<int64_t>(1,evolution::damageProduct(value,percent,100));
+}
+// A shared effect works at the strength of the best mutation that feeds it.
+inline int64_t tierAmong(const std::map<int,int> & active,std::initializer_list<int> traits,int64_t value)
+{
+	int best=0;
+	for(int trait:traits) if(active.count(trait)) best=std::max(best,potency(trait));
+	if(!best || best==100 || value<=0) return value;
+	return std::max<int64_t>(1,evolution::damageProduct(value,best,100));
+}
+
 class EvolutionReactions
 {
 	CGameHandler & server;
@@ -712,7 +735,7 @@ class EvolutionReactions
 			consume(fuel);
 			remember(dead,500149,1);
 			auto restored=dead->acquireState();
-			int64_t hp=int64_t(std::max(1,dead->unitBaseAmount()/3))*dead->getMaxHealth();
+			int64_t hp=tier(49,std::max(1,dead->unitBaseAmount()/3))*dead->getMaxHealth();
 			restored->heal(hp,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
 			restored->ghostPending=false;
 			BattleUnitsChanged packet;
@@ -770,7 +793,7 @@ class EvolutionReactions
 		if(!original->alive() && !original->isGhost())
 		{
 			auto restored=original->acquireState();
-			int64_t hp=int64_t(std::max(1,original->unitBaseAmount()/4))*original->getMaxHealth();
+			int64_t hp=tier(22,std::max(1,original->unitBaseAmount()/4))*original->getMaxHealth();
 			restored->heal(hp,EHealLevel::RESURRECT,EHealPower::ONE_BATTLE);
 			restored->ghostPending=false;
 			packet.changedStacks.emplace_back(original->unitId(),UnitChanges::EOperation::RESET_STATE);
@@ -792,7 +815,7 @@ class EvolutionReactions
 		if(spawned) return;
 		for(auto * neighbour : living())
 			if(neighbour->unitSide()!=killer->unitSide() && BattleHex::getDistance(neighbour->getPosition(),corpse->getPosition())==1)
-				injure(neighbour,killer,std::max<int64_t>(1,corpse->getMaxHealth()));
+				injure(neighbour,killer,tier(54,std::max<int64_t>(1,corpse->getMaxHealth())));
 	}
 
 	void passGeneration(const CStack * corpse,const Rules & legacy,const std::vector<const CStack *> & survivors)
@@ -857,7 +880,7 @@ class EvolutionReactions
 			// Reverse Evolution: the unit returns one level lower and strikes twice.
 			remember(corpse,500028,1);
 			const auto lesser=lesserForm(corpse->creatureId());
-			const int count=lesser==corpse->creatureId() ? std::max(1,corpse->unitBaseAmount()/2) : corpse->unitBaseAmount();
+			const int count=headcount(tier(28,lesser==corpse->creatureId() ? std::max(1,corpse->unitBaseAmount()/2) : corpse->unitBaseAmount()));
 			if(auto * reborn=spawn(corpse->unitSide(),lesser,count,corpse->getPosition()))
 			{
 				descend(corpse,reborn);
@@ -873,7 +896,7 @@ class EvolutionReactions
 		{
 			// Soul Split: a third of the unit stays as flying ghosts.
 			remember(corpse,500042,1);
-			if(auto * ghost=spawn(corpse->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/3),corpse->getPosition()))
+			if(auto * ghost=spawn(corpse->unitSide(),corpse->creatureId(),headcount(tier(42,std::max(1,corpse->unitBaseAmount()/3))),corpse->getPosition()))
 			{
 				descend(corpse,ghost);
 				for(auto rule:legacy) if(rule.first!=42) transfer(ghost,rule.first,rule.second);
@@ -892,7 +915,7 @@ class EvolutionReactions
 			{
 				// Mind Transfer: every mutation and half of the unit's health pool as an attack charge.
 				for(auto rule:legacy) if(rule.first!=55) transfer(heir,rule.first,rule.second);
-				setReserve(heir,combineDamage(reserve(heir,500312),int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth()/2),500312);
+				setReserve(heir,combineDamage(reserve(heir,500312),tier(55,int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth()/2)),500312);
 			}
 		if(counter(corpse,500158)>0)
 		{
@@ -981,7 +1004,7 @@ class EvolutionReactions
 			const auto traits=rules(carrier);
 			if(traits.count(89) && !marked(corpse,500089,1))
 			{
-				if(auto * converted=summon(carrier,corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/2),corpse->getPosition(),false))
+				if(auto * converted=summon(carrier,corpse->creatureId(),headcount(tier(89,std::max(1,corpse->unitBaseAmount()/2))),corpse->getPosition(),false))
 				{
 					remember(corpse,500089,1);
 					copyProperty(converted,corpse);
@@ -1046,7 +1069,7 @@ class EvolutionReactions
 			if(hunter.count(52) && fresh(corpse))
 			{
 				// Bone Puppet: a quarter of the dead unit fights for the killer for three rounds.
-				if(auto * puppet=spawn(source->unitSide(),corpse->creatureId(),std::max(1,corpse->unitBaseAmount()/4),corpse->getPosition()))
+				if(auto * puppet=spawn(source->unitSide(),corpse->creatureId(),headcount(tier(52,std::max(1,corpse->unitBaseAmount()/4))),corpse->getPosition()))
 				{
 					consume(corpse);
 					descend(source,puppet);
@@ -1300,10 +1323,10 @@ class EvolutionReactions
 	{
 		if(extra<=0 || !unit->alive()) return;
 		const auto active=rules(unit);
-		if(active.count(43)) setReserve(unit,combineDamage(reserve(unit,500343),extra),500343);
+		if(active.count(43)) setReserve(unit,combineDamage(reserve(unit,500343),tier(43,extra)),500343);
 		if(active.count(30))
 		{
-			setReserve(unit,combineDamage(reserve(unit,500330),evolution::damageProduct(extra,active.at(30))),500330);
+			setReserve(unit,combineDamage(reserve(unit,500330),tier(30,evolution::damageProduct(extra,active.at(30)))),500330);
 			bud(unit,500330);
 		}
 	}
@@ -1376,7 +1399,7 @@ class EvolutionReactions
 				// Cursed Geometry: crossing the line hurts.
 				wipe(mark);
 				if(const auto * owner=battle.battleGetStackByID(mark.owner,false))
-					injure(mover,owner,evolution::damageProduct(std::max(1,owner->unitBaseAmount()),rankOf(owner,46)));
+					injure(mover,owner,tier(46,evolution::damageProduct(std::max(1,owner->unitBaseAmount()),rankOf(owner,46))));
 				continue;
 			}
 			if(mark.kind==12 && touches(mover,mover->getPosition(),mark.hex,0))
@@ -1385,7 +1408,7 @@ class EvolutionReactions
 				wipe(mark);
 				const auto * owner=battle.battleGetStackByID(mark.owner,false);
 				if(mark.side==mover->unitSide() && owner)
-					setReserve(mover,combineDamage(reserve(mover,500312),evolution::damageProduct(int64_t(std::max(1,owner->unitBaseAmount()))*2,rankOf(owner,12))),500312);
+					setReserve(mover,combineDamage(reserve(mover,500312),tier(12,evolution::damageProduct(int64_t(std::max(1,owner->unitBaseAmount()))*2,rankOf(owner,12)))),500312);
 				continue;
 			}
 			if(mark.side==mover->unitSide() || (mark.kind!=4 && mark.kind!=6) || !touches(mover,mover->getPosition(),mark.hex,0)) continue;
@@ -1396,12 +1419,12 @@ class EvolutionReactions
 			if(mark.kind==6)
 			{
 				halted=true;
-				injure(mover,owner,evolution::damageProduct(size,rankOf(owner,6)));
+				injure(mover,owner,tier(6,evolution::damageProduct(size,rankOf(owner,6))));
 			}
 			else
 			{
 				afflict(mover,1,mark.owner);
-				injure(mover,owner,evolution::damageProduct(std::max<int64_t>(1,size/2),rankOf(owner,4)));
+				injure(mover,owner,tier(4,evolution::damageProduct(std::max<int64_t>(1,size/2),rankOf(owner,4))));
 			}
 		}
 		return halted;
@@ -1426,7 +1449,7 @@ class EvolutionReactions
 			const auto * owner=battle.battleGetStackByID(mark.owner,false);
 			if(!owner) continue;
 			if(mark.side!=unit->unitSide()) afflict(unit,4,mark.owner);
-			else mend(unit,evolution::damageProduct(std::max<int64_t>(1,owner->unitBaseAmount()),rankOf(owner,17)));
+			else mend(unit,tier(17,evolution::damageProduct(std::max<int64_t>(1,owner->unitBaseAmount()),rankOf(owner,17))));
 		}
 	}
 
@@ -1558,7 +1581,7 @@ class EvolutionReactions
 			// The mark is an infection for every colony mutation. Only leeches feed through it.
 			const auto feeding=rules(owner);
 			if(!feeding.count(9) && !feeding.count(89) && !feeding.count(13) && !feeding.count(81)) continue;
-			auto amount = injure(target, owner, std::max<int64_t>(1,owner->getCount()/3));
+			auto amount = injure(target, owner, tierAmong(feeding,{9,13,81,89},std::max<int64_t>(1,owner->getCount()/3)));
 			mend(owner,amount);
 			reactor(amount);
 		}
@@ -1567,7 +1590,7 @@ class EvolutionReactions
 		{
 			const auto * owner = battle.battleGetStackByID(id);
 			if(!owner || !target->alive() || owner->unitSide() == target->unitSide()) continue;
-			reactor(injure(target,owner,std::max<int64_t>(1,owner->getCount()/4)));
+			reactor(injure(target,owner,tierAmong(rules(owner),{4,19,77},std::max<int64_t>(1,owner->getCount()/4))));
 		}
 		// Poison spores keep working after their source dies, as long as its body is still known.
 		for(int id : carried(target,4))
@@ -1717,7 +1740,7 @@ public:
 			if(host)
 			{
 				for(auto rule:active) if(rule.first!=36 && rule.first!=88) transfer(host,rule.first,rule.second);
-				setReserve(host,combineDamage(reserve(host,500312),static_cast<int64_t>(unit->getAvailableHealth())/2),500312);
+				setReserve(host,combineDamage(reserve(host,500312),tier(36,static_cast<int64_t>(unit->getAvailableHealth())/2)),500312);
 			}
 		}
 		if(active.count(93))
@@ -1729,7 +1752,7 @@ public:
 					&& touches(unit,unit->getPosition(),ally->getPosition(),1)) meal.push_back(ally);
 			for(auto * ally:meal)
 			{
-				const auto flesh=static_cast<int64_t>(ally->getAvailableHealth());
+				const auto flesh=tier(93,static_cast<int64_t>(ally->getAvailableHealth()));
 				for(auto rule:rules(ally)) if(rule.first!=88) transfer(unit,rule.first,rule.second);
 				BattleUnitsChanged swallow;
 				swallow.battleID=battle.getBattle()->getBattleID();
@@ -1758,7 +1781,7 @@ public:
 				// Corpse Eater: defending next to remains restores fallen fighters for good.
 				if(!touches(unit,unit->getPosition(),corpse->getPosition(),1)) continue;
 				consume(corpse);
-				mend(unit,evolution::damageProduct(int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth(),active.at(5),3),true);
+				mend(unit,tier(5,evolution::damageProduct(int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth(),active.at(5),3)),true);
 				break;
 			}
 		if(!active.count(6)) return;
@@ -1828,7 +1851,7 @@ public:
 			if(recorded)
 			{
 				setReserve(source,0,500444);
-				damage=combineDamage(damage,evolution::damageProduct(recorded,rules(source).at(44)));
+				damage=combineDamage(damage,tier(44,evolution::damageProduct(recorded,rules(source).at(44))));
 			}
 		}
 		// Evolutionary Fork: the predator form hits half as hard again, the shell form takes a quarter less.
@@ -1872,7 +1895,7 @@ public:
 		if(active.count(47) && ranged && counter(target,500047) != ~round)
 		{
 			setCounter(target,500047,~round);
-			setReserve(target,combineDamage(reserve(target),damage));
+			setReserve(target,combineDamage(reserve(target),tier(47,damage)));
 			return 0;
 		}
 		if(active.count(14))
@@ -1886,7 +1909,7 @@ public:
 			if(charges>0)
 			{
 				setCounter(target,500114,charges-1);
-				damage -= std::min(damage,std::max<int64_t>(1,target->getAvailableHealth()/8));
+				damage -= std::min(damage,tier(14,std::max<int64_t>(1,target->getAvailableHealth()/8)));
 				if(charges==1) setCounter(target,500214,1);
 			}
 		}
@@ -2029,7 +2052,7 @@ public:
 			{
 				setCounter(unit,500116,0);
 				if(const auto * foe=nearestFoe(unit))
-					injure(foe,unit,evolution::damageProduct(int64_t(std::max(1,unit->getCount()))*5,rankOf(unit,16)));
+					injure(foe,unit,tier(16,evolution::damageProduct(int64_t(std::max(1,unit->getCount()))*5,rankOf(unit,16))));
 			}
 			if(!first && unit->alive() && active.count(84) && counter(unit,500084))
 			{
@@ -2099,7 +2122,7 @@ public:
 			if(struck->alive() && source->alive() && spikes.count(40) && !packet.shot())
 			{
 				// Shard Breeding: a quarter of a melee hit is thrown back and the shards gather into a copy.
-				const auto thrown=injure(source,struck,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,spikes.at(40),4)));
+				const auto thrown=injure(source,struck,tier(40,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,spikes.at(40),4))));
 				if(struck->alive() && thrown>0)
 				{
 					setReserve(struck,combineDamage(reserve(struck,500340),thrown),500340);
@@ -2135,14 +2158,14 @@ public:
 		{
 			const int side=static_cast<int>(source->unitSide());
 			if(marked(primary,500108,side))
-				injure(primary,source,std::max<int64_t>(1,source->getCount()/2));
+				injure(primary,source,tier(8,std::max<int64_t>(1,source->getCount()/2)));
 			else if(active.count(8) && marked(source,500008,primary->unitId()))
 				remember(primary,500108,side);
 			auto charges=spellCharges(source);
 			if(!charges.empty())
 			{
 				spend(source,charges);
-				injure(primary,source,evolution::damageProduct(source->getCount(),static_cast<int64_t>(charges.size())));
+				injure(primary,source,tier(21,evolution::damageProduct(source->getCount(),static_cast<int64_t>(charges.size()))));
 			}
 			const auto wounds = primary->getBonusesOfType(BonusType::EVOLUTION_WOUND);
 			for(const auto & wound : *wounds)
@@ -2171,7 +2194,7 @@ public:
 			for(const auto & hit : packet.bsa)
 			{
 				if(hit.stackAttacked != primary->unitId() || hit.attackerID != source->unitId() || hit.damageAmount <= 0) continue;
-				const auto echo=std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(48),3));
+				const auto echo=tier(48,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(48),3)));
 				std::vector<std::pair<size_t,int>> load;
 				for(size_t kind=0;kind<ailments().size();++kind)
 					for(int owner:carried(primary,kind)) load.emplace_back(kind,owner);
@@ -2199,7 +2222,7 @@ public:
 			else
 			{
 				setCounter(source,500034,0);
-				if(auto * shade=spawn(source->unitSide(),source->creatureId(),std::max(1,source->getCount()/4),source->getPosition()))
+				if(auto * shade=spawn(source->unitSide(),source->creatureId(),headcount(tier(34,std::max(1,source->getCount()/4))),source->getPosition()))
 				{
 					descend(source,shade);
 					setCounter(shade,500052,battle.battleGetRound()+2);
@@ -2216,7 +2239,7 @@ public:
 				const int charges=counter(source,500031);
 				setCounter(source,500031,0);
 				afflict(primary,5,static_cast<int>(source->unitId()));
-				injure(primary,source,evolution::damageProduct(int64_t(std::max(1,source->unitBaseAmount()))*3,int64_t(charges)*active.at(31)));
+				injure(primary,source,tier(31,evolution::damageProduct(int64_t(std::max(1,source->unitBaseAmount()))*3,int64_t(charges)*active.at(31))));
 			}
 			if(active.count(11) && primary->alive())
 				for(const auto & mark:groundMarks(battle))
@@ -2224,7 +2247,7 @@ public:
 					{
 						// Predatory Shadow: the shadow next to the target repeats half of the blow and fades.
 						wipe(mark);
-						injure(primary,source,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(11),2)));
+						injure(primary,source,tier(11,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(11),2))));
 						break;
 					}
 			if(active.count(38) && primary->alive() && source->alive())
@@ -2237,7 +2260,7 @@ public:
 					setCounter(primary,500038,0);
 					if(primary->getCount()>=2)
 					{
-						const int torn=std::max(1,primary->getCount()/10);
+						const int torn=headcount(tier(38,std::max(1,primary->getCount()/10)));
 						const auto species=primary->creatureId();
 						const auto place=primary->getPosition();
 						injure(primary,source,int64_t(torn)*primary->getMaxHealth());
@@ -2282,7 +2305,7 @@ public:
 			for(const auto & hit : packet.bsa)
 				if(target && hit.stackAttacked == primary->unitId() && hit.damageAmount > 0)
 				{
-					injure(target,source,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(23),3)));
+					injure(target,source,tier(23,std::max<int64_t>(1,evolution::damageProduct(hit.damageAmount,active.at(23),3))));
 					break;
 				}
 		}

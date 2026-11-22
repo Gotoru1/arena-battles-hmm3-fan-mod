@@ -48,6 +48,13 @@ namespace
 		return "{"+Colors::colorToHexString(rarityColor(entry))+"|"+words+"}";
 	}
 
+	// Rarity sets how hard the numbers of a mutation work in battle. See potency() on the server.
+	std::string potencyText(const JsonNode & entry)
+	{
+		static const std::array<const char *,4> strength{"60%","80%","100%","130%"};
+		return std::string("Сила эффектов: ")+strength.at(entry["rarity"].Integer());
+	}
+
 	ArenaOffer evolutionCard(std::string title, std::string detail, ColorRGBA color = Colors::YELLOW)
 	{
 		ArenaOffer card;
@@ -126,6 +133,8 @@ void ArenaDraft::verificationFrame()
 {
 	if(!verifying)
 		return;
+	// The scripted run always takes the first unit and the first card, so it plays without the rest rule.
+	if(run) run->restRule = false;
 	if(verificationResult >= 0)
 		GAME->onShutdownRequested(false);
 	if(auto result = ENGINE->windows().topWindow<BattleResultWindow>())
@@ -344,15 +353,17 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 		reserves.push_back(won ? evolution::engineInt(evolution::RoguelikeRun::afterHospital(run->stack(slot).count, survivors[slot], run->wave)) : survivors[slot]);
 	const auto leaders = won ? evolution::RoguelikeRun::afterHospital(run->army.count, survivors[0], run->wave) : evolution::Amount(survivors[0]);
 	run->finish(won, leaders, casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
-	if(won)
+	if(won && run->phase == evolution::Phase::Reward)
 	{
 		// Lasting growth: Vengeance Machine, Self-Learning Flesh, Evolutionary Leap, Eternal Metamorphosis, World Rebirth.
+		// Destroyed units have left the army, so each remaining unit looks up the slot it fought in.
 		for(size_t slot = 0; slot < run->rosterSize(); ++slot)
 		{
+			const auto fought = run->lastSlots.at(slot);
 			const auto * creature = CreatureID(run->stack(slot).creature).toCreature();
 			const int upgrade = creature->upgrades.empty() ? -1 : creature->upgrades.begin()->getNum();
-			run->grow(slot, alliesLost[slot], leaps[slot] != 0, upgrade);
-			run->keep(slot, properties[slot], adapted[slot] != 0, taken[slot], absorbed[slot]);
+			run->grow(slot, alliesLost.at(fought), leaps.at(fought) != 0, upgrade);
+			run->keep(slot, properties.at(fought), adapted.at(fought) != 0, taken.at(fought), absorbed.at(fought));
 		}
 		run->rebirth();
 		std::vector<std::string> extra;
@@ -399,13 +410,18 @@ void ArenaDraft::afterEvolutionGame()
 void ArenaDraft::chooseEvolutionReward(size_t offset)
 {
 	if(verifying && run->rosterSize() == 1) { showEvolutionCards(0); return; }
+	// Every unit took a mutation after the previous wave: this wave offers rewards for the whole army only.
+	if(run->allResting()) { showEvolutionCards(0); return; }
 	std::vector<ArenaOffer> options;
 	const auto total = run->rosterSize();
 	const auto end = total <= 3 ? total : std::min(total,offset + 2);
 	for(size_t i = offset; i < end; ++i)
 	{
 		const auto & line = run->stack(i);
-		if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
+		if(run->resting(i))
+			options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated() + " — отдыхает",
+				"Этот отряд получил мутацию после прошлой волны. Следующую мутацию он сможет взять через одну волну. Награду для всей армии можно взять и сейчас."));
+		else if(line.count <= INT32_MAX) options.push_back(creatureOffer(CreatureID(line.creature), evolution::engineInt(line.count)));
 		else options.push_back(evolutionCard(CreatureID(line.creature).toCreature()->getNamePluralTranslated(), evolution::displayAmount(line.count)));
 	}
 	if(total > 3) options.push_back(evolutionCard("Другие отряды","Перелистнуть список. Сейчас показаны отряды " + std::to_string(offset+1) + "–" + std::to_string(end) + " из " + std::to_string(total) + "."));
@@ -422,7 +438,7 @@ void ArenaDraft::chooseEvolutionReward(size_t offset)
 
 void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 {
-	if(!mutationsOnly && run->boss() && run->rank("trait88",slot))
+	if(!mutationsOnly && run->boss() && run->rank("trait88",slot) && !run->resting(slot))
 	{
 		const auto & data = evolutionCatalog();
 		const auto & others = data["otherBosses"].Vector();
@@ -452,7 +468,7 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 		static const std::array<std::string, 4> labels{"Обычная", "Редкая", "Эпическая", "Легендарная"};
 		if(armyReward)
 		{
-			cards.push_back(evolutionCard(entry["name"].String(),entry["category"].String()+"\n"+rarityText(entry,labels.at(entry["rarity"].Integer()))+"\n\n"+entry["text"].String(),rarityColor(entry)));
+			cards.push_back(evolutionCard(entry["name"].String(),entry["category"].String()+"\n"+rarityText(entry,labels.at(entry["rarity"].Integer()))+" · "+potencyText(entry)+"\n\n"+entry["text"].String(),rarityColor(entry)));
 			continue;
 		}
 		std::string hint;
@@ -469,15 +485,24 @@ void ArenaDraft::showEvolutionCards(size_t slot, bool mutationsOnly)
 				if(includesCard && otherRanksReady)
 					hint += "\nОткроет: " + combo["name"].String();
 			}
-		cards.push_back(evolutionCard(entry["name"].String(), rarityText(entry,labels.at(entry["rarity"].Integer())) + "\n\n" + entry["text"].String()
+		cards.push_back(evolutionCard(entry["name"].String(), rarityText(entry,labels.at(entry["rarity"].Integer())) + " · " + potencyText(entry) + "\n\n" + entry["text"].String()
 			+ "\n\nТекущий ранг: " + std::to_string(run->rank(id, slot)) + hint, rarityColor(entry)));
 	}
 	auto self = shared_from_this();
 	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Волна " + run->wave.str() + " пройдена",
-		"Мутация для отряда: " + CreatureID(run->stack(slot).creature).toCreature()->getNamePluralTranslated(), cards,
+		run->allResting() ? std::string("Все отряды отдыхают после мутации. Выбери награду для всей армии")
+			: run->resting(slot) ? CreatureID(run->stack(slot).creature).toCreature()->getNamePluralTranslated() + " отдыхают: доступны только награды для всей армии"
+			: "Мутация для отряда: " + CreatureID(run->stack(slot).creature).toCreature()->getNamePluralTranslated(), cards,
 		[self, slot](int index)
 		{
 			const auto & id = run->offers.at(index);
+			if(!evolution::RoguelikeRun::armyReward(id) && run->resting(slot))
+			{
+				// The rule of one mutation per unit every other wave.
+				self->chooseEvolutionReward();
+				CInfoWindow::showInfoDialog("Этот отряд получил мутацию после прошлой волны и сейчас отдыхает. Выбери другой отряд или награду для всей армии.",{});
+				return;
+			}
 			const auto & entry = evolution::RoguelikeRun::armyReward(id) ? evolutionCatalog()["rewards"][id] : evolutionCatalog()["mutations"][id];
 			if(run->rank(id,slot) != 1 || entry["alternate"].isNull())
 			{
