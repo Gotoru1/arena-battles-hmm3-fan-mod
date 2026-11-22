@@ -838,7 +838,8 @@ void BattleInterface::waitForAnimations()
 	// fade-in and stays transparent until that stage runs. Dropping the stage here used to
 	// leave such units invisible for the rest of the battle, so play it instead.
 	// Each pass removes at least one stage, so the loop ends.
-	for(int pass = 0; pass < static_cast<int>(EAnimationEvents::COUNT) + 1; ++pass)
+	// The tactics phase calls this from the interface thread, which must not wait for its own animations.
+	for(int pass = 0; !tacticsMode && pass < static_cast<int>(EAnimationEvents::COUNT) + 1; ++pass)
 	{
 		{
 			auto unlockInterface = vstd::makeUnlockGuard(ENGINE->interfaceMutex);

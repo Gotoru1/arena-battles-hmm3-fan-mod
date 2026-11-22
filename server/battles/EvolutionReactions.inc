@@ -223,10 +223,10 @@ class EvolutionReactions
 			for(auto * candidate:living())
 			{
 				if(candidate->unitSide()==bearer->unitSide() || suffers(candidate,0,self)) continue;
-				bool near=false;
+				bool adjacent=false;
 				for(auto * host:living())
-					if(host->unitSide()==candidate->unitSide() && suffers(host,0,self) && BattleHex::getDistance(host->getPosition(),candidate->getPosition())<=2) near=true;
-				if(near && (!best || candidate->getAvailableHealth()>best->getAvailableHealth())) best=candidate;
+					if(host->unitSide()==candidate->unitSide() && suffers(host,0,self) && BattleHex::getDistance(host->getPosition(),candidate->getPosition())<=2) adjacent=true;
+				if(adjacent && (!best || candidate->getAvailableHealth()>best->getAvailableHealth())) best=candidate;
 			}
 			if(!best) return;
 			afflict(best,0,self);
@@ -695,8 +695,8 @@ class EvolutionReactions
 	{
 		for(const auto * dead:battle.battleGetAllStacks())
 		{
-			if(dead->alive() || dead->isGhost() || !marked(dead,500249,1)) continue;
-			setCounter(dead,500249,0);
+			if(dead->alive() || dead->isGhost() || !marked(dead,500449,1)) continue;
+			setCounter(dead,500449,0);
 			const CStack * fuel=nullptr;
 			for(const auto * prey:remains())
 				if(prey!=dead && marked(prey,500049,dead->unitId())) { fuel=prey; break; }
@@ -1015,7 +1015,7 @@ class EvolutionReactions
 		if(source && source->unitSide() != corpse->unitSide() && rules(source).count(49))
 			remember(corpse,500049,source->unitId());
 		if(legacy.count(49) && !marked(corpse,500149,1) && !corpse->summoned && !corpse->isClone())
-			remember(corpse,500249,1);
+			remember(corpse,500449,1);
 		if(source && source->alive() && source->unitSide() != corpse->unitSide())
 		{
 			const auto hunter=rules(source);
@@ -1824,10 +1824,10 @@ public:
 		if(!secondary && rules(source).count(44))
 		{
 			// Mirror Hunter: the last blow it took comes back with its next attack.
-			const auto recorded=reserve(source,500344);
+			const auto recorded=reserve(source,500444);
 			if(recorded)
 			{
-				setReserve(source,0,500344);
+				setReserve(source,0,500444);
 				damage=combineDamage(damage,evolution::damageProduct(recorded,rules(source).at(44)));
 			}
 		}
@@ -2081,7 +2081,7 @@ public:
 					if(hex.isValid() && access.accessible(hex,struck)) stain(hex,13,struck,2);
 			}
 			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(44))
-				setReserve(struck,hit.damageAmount,500344);
+				setReserve(struck,hit.damageAmount,500444);
 			// Absolute Adaptation: outliving a blow of a mutated enemy is what the run remembers.
 			if(struck && struck->alive() && hit.damageAmount>0 && struck->unitSide()!=source->unitSide() && rules(struck).count(98) && !active.empty())
 				remember(struck,500098,1);

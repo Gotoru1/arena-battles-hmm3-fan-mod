@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Exercise the production reaction dispatcher with a small packet-applying battlefield.
+// Exercise the production reaction dispatcher with a minor packet-applying battlefield.
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
@@ -144,8 +144,8 @@ struct CBattleInfoCallback {
 		return result;
 	}
 	const auto & getAccessibility(const CStack*) const{return *this;}
-	BattleHex getAvailableHex(int,BattleSide,int near) const{
-		for(int d=0;d<BattleHex::fieldSize;++d)for(int p:{near+d,near-d})if(accessible({p},nullptr))return {p};
+	BattleHex getAvailableHex(int,BattleSide,int close) const{
+		for(int d=0;d<BattleHex::fieldSize;++d)for(int p:{close+d,close-d})if(accessible({p},nullptr))return {p};
 		return {};
 	}
 	int battleGetRound() const{return round;}
@@ -570,7 +570,7 @@ static void sporesReactorAndDomino()
 	BattleActionProcessor actions{&server};
 	auto & grower=field.units.emplace(1,CStack{1,{11,40,400,{2},BattleSide::LEFT},{trait(77),trait(71)}}).first->second;
 	auto & host=field.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
-	auto & far=field.units.emplace(3,CStack{3,{23,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
+	auto & distant=field.units.emplace(3,CStack{3,{23,100,1000,{9},BattleSide::RIGHT},{}}).first->second;
 	auto hit=[&](CStack & from,CStack & to){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,0}}});};
 	hit(grower,host);
 	assert(carries(host,BonusType::NONE,500077,1));
@@ -585,13 +585,13 @@ static void sporesReactorAndDomino()
 	// The wound and the poison each tick for 10 per round. Every third tick releases 2 x 30 at all enemies.
 	++field.round;
 	actions.evolutionRound(field,false);
-	assert(host.data.health==980 && far.data.health==1000);
+	assert(host.data.health==980 && distant.data.health==1000);
 	++field.round;
 	actions.evolutionRound(field,false);
-	assert(host.data.health==900 && far.data.health==940);
+	assert(host.data.health==900 && distant.data.health==940);
 	++field.round;
 	actions.evolutionRound(field,false);
-	assert(host.data.health==820 && far.data.health==880 && grower.data.health==400);
+	assert(host.data.health==820 && distant.data.health==880 && grower.data.health==400);
 	assert(grower.getBonusesOfType(BonusType::NONE,500071)->empty() && grower.getBonusesOfType(BonusType::NONE,500471)->empty());
 
 	// The reactor works alone: its bearer's hits poison, and three ticks of that poison fire it.
@@ -644,12 +644,12 @@ static void sporesReactorAndDomino()
 	CGameHandler bareServer{bare,{}};
 	BattleActionProcessor bareActions{&bareServer};
 	auto & pusher=bare.units.emplace(1,CStack{1,{11,10,100,{2},BattleSide::LEFT},{trait(82)}}).first->second;
-	auto & near=bare.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
+	auto & close=bare.units.emplace(2,CStack{2,{22,100,1000,{5},BattleSide::RIGHT},{}}).first->second;
 	auto & next=bare.units.emplace(3,CStack{3,{23,100,1000,{6},BattleSide::RIGHT},{}}).first->second;
-	bareActions.evolutionAttack(bare,&pusher,&near,{{{2,1,10,false,0}}});
-	assert(carries(near,BonusType::NONE,500177,1) && next.bonuses.empty());
-	bareActions.evolutionAttack(bare,&pusher,&near,{{{2,1,10,false,0}}});
-	assert(carries(near,BonusType::NONE,500077,1) && carries(next,BonusType::NONE,500077,1));
+	bareActions.evolutionAttack(bare,&pusher,&close,{{{2,1,10,false,0}}});
+	assert(carries(close,BonusType::NONE,500177,1) && next.bonuses.empty());
+	bareActions.evolutionAttack(bare,&pusher,&close,{{{2,1,10,false,0}}});
+	assert(carries(close,BonusType::NONE,500077,1) && carries(next,BonusType::NONE,500077,1));
 
 	// Alone, Memory Infection marks what its bearer hits and echoes damage between marked bodies.
 	CBattleInfoCallback mind;
@@ -938,13 +938,13 @@ static void remainsGroup()
 	{
 		Field f; // Corpse Eater: defending next to a body restores a third of its health pool, once per body.
 		auto & eater=f.add(1,11,10,40,4,BattleSide::LEFT,{5});
-		auto & near=f.add(2,22,6,0,5,BattleSide::RIGHT);
-		auto & far=f.add(3,23,6,0,9,BattleSide::RIGHT);
+		auto & close=f.add(2,22,6,0,5,BattleSide::RIGHT);
+		auto & distant=f.add(3,23,6,0,9,BattleSide::RIGHT);
 		f.add(4,24,6,60,12,BattleSide::RIGHT);
 		f.actions.evolutionDefended(f.field,&eater);
-		assert(eater.data.health==60 && used(near) && !used(far));
+		assert(eater.data.health==60 && used(close) && !used(distant));
 		f.actions.evolutionDefended(f.field,&eater);
-		assert(eater.data.health==60 && !used(far));
+		assert(eater.data.health==60 && !used(distant));
 	}
 	{
 		Field f; // Ash Remains: an ally carries the ash into its next attack, an enemy scatters it.
@@ -1024,13 +1024,13 @@ static void remainsGroup()
 	{
 		Field f; // Lord of Remains: one body per round, nearest first, half its size in skeletons.
 		auto & lord=f.add(1,11,10,100,2,BattleSide::LEFT,{72});
-		auto & far=f.add(2,22,8,0,9,BattleSide::RIGHT);
-		auto & near=f.add(3,23,4,0,5,BattleSide::LEFT);
+		auto & distant=f.add(2,22,8,0,9,BattleSide::RIGHT);
+		auto & close=f.add(3,23,4,0,5,BattleSide::LEFT);
 		f.add(4,24,50,500,12,BattleSide::RIGHT);
 		nextRound(f.field,f.actions);
-		assert(used(near) && !used(far) && f.field.units.at(5).getCount()==2 && f.field.units.at(5).unitSide()==BattleSide::LEFT);
+		assert(used(close) && !used(distant) && f.field.units.at(5).getCount()==2 && f.field.units.at(5).unitSide()==BattleSide::LEFT);
 		nextRound(f.field,f.actions);
-		assert(used(far) && f.field.units.at(6).getCount()==4);
+		assert(used(distant) && f.field.units.at(6).getCount()==4);
 		nextRound(f.field,f.actions);
 		assert(f.field.units.size()==6);
 		(void)lord;
@@ -1185,8 +1185,8 @@ static void deathAndTransformation()
 		f.field.units.at(3).data.count=12;
 		f.kill(enemy,f.field.units.at(3));
 		assert(f.field.units.size()==4);
-		auto & small=f.add(9,31,5,1,BattleSide::LEFT,{64});
-		f.kill(enemy,small);
+		auto & minor=f.add(9,31,5,1,BattleSide::LEFT,{64});
+		f.kill(enemy,minor);
 		assert(f.field.units.size()==5);
 	}
 	{
@@ -1218,10 +1218,10 @@ static void deathAndTransformation()
 		Field f; // Mind Transfer: all mutations and half of the health pool as one attack charge.
 		auto & mind=f.add(1,30,10,4,BattleSide::LEFT,{55,23,9});
 		auto & heir=f.add(2,31,10,3,BattleSide::LEFT);
-		auto & far=f.add(3,32,10,0,BattleSide::LEFT);
+		auto & distant=f.add(3,32,10,0,BattleSide::LEFT);
 		auto & enemy=f.add(4,40,100,8,BattleSide::RIGHT);
 		f.kill(enemy,mind);
-		assert(hasTrait(heir,23) && hasTrait(heir,9) && !hasTrait(heir,55) && far.bonuses.empty());
+		assert(hasTrait(heir,23) && hasTrait(heir,9) && !hasTrait(heir,55) && distant.bonuses.empty());
 		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==60);
 		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==10);
 	}
@@ -1344,20 +1344,20 @@ static void swarmGroup()
 		assert(f.larvae().size()==1 && f.larvae().front()->getCount()==3);
 	}
 	{
-		Field f; // Sentient Plague: a leech that picks the healthiest clean enemy near an infected one.
+		Field f; // Sentient Plague: a leech that picks the healthiest clean enemy close an infected one.
 		auto & bearer=f.add(1,30,2,BattleSide::LEFT,{81});
 		auto & first=f.add(2,50,5,BattleSide::RIGHT);
-		auto & small=f.add(3,30,6,BattleSide::RIGHT);
+		auto & minor=f.add(3,30,6,BattleSide::RIGHT);
 		auto & large=f.add(4,90,7,BattleSide::RIGHT);
-		auto & far=f.add(5,200,12,BattleSide::RIGHT);
+		auto & distant=f.add(5,200,12,BattleSide::RIGHT);
 		bearer.data.health=150;
 		f.hit(bearer,first);
 		assert(carries(first,BonusType::EVOLUTION_PARASITE,0,1) && !large.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
 		nextRound(f.field,f.actions);
-		assert(carries(large,BonusType::EVOLUTION_PARASITE,0,1) && !small.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		assert(carries(large,BonusType::EVOLUTION_PARASITE,0,1) && !minor.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
 		assert(first.data.health==495 && large.data.health==895 && bearer.data.health==160);
 		nextRound(f.field,f.actions);
-		assert(carries(small,BonusType::EVOLUTION_PARASITE,0,1) && !far.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
+		assert(carries(minor,BonusType::EVOLUTION_PARASITE,0,1) && !distant.hasBonusOfType(BonusType::EVOLUTION_PARASITE));
 	}
 	{
 		Field f; // Swarm Mind: the rest of the brood next to the target joins every strike, once per round each.
@@ -1519,7 +1519,7 @@ static void fieldTricks()
 		f.walk(stalker,9);
 		f.walk(stalker,12);
 		assert(f.field.marks.size()==1 && marksOf(f.field,11,9)==1);
-		// A shadow far from the target stays where it is.
+		// A shadow distant from the target stays where it is.
 		f.hit(stalker,enemy);
 		assert(enemy.data.health==990 && f.field.marks.size()==1);
 	}
@@ -1593,10 +1593,10 @@ static void fieldTricks()
 		Field f; // Predator Merge: the bearer and its nearest ally share every mutation for the battle.
 		auto & bearer=f.add(1,10,2,BattleSide::LEFT,{79,23});
 		auto & mate=f.add(2,10,3,BattleSide::LEFT,{9});
-		auto & far=f.add(3,10,9,BattleSide::LEFT,{19});
+		auto & distant=f.add(3,10,9,BattleSide::LEFT,{19});
 		f.add(4,100,15,BattleSide::RIGHT);
 		f.actions.evolutionRound(f.field,true);
-		assert(hasTrait(mate,23) && hasTrait(bearer,9) && !hasTrait(mate,79) && !hasTrait(bearer,19) && !hasTrait(far,23));
+		assert(hasTrait(mate,23) && hasTrait(bearer,9) && !hasTrait(mate,79) && !hasTrait(bearer,19) && !hasTrait(distant,23));
 
 		Field solo;
 		auto & lone=solo.add(1,10,2,BattleSide::LEFT,{79});
@@ -1690,11 +1690,11 @@ static void magicAndHive()
 		Field f; // Symbiotic Parasite: defending beside an ally lends it mutations and an attack charge.
 		auto & parasite=f.add(1,10,4,BattleSide::LEFT,{36,23});
 		auto & host=f.add(2,10,5,BattleSide::LEFT);
-		auto & far=f.add(3,10,9,BattleSide::LEFT);
+		auto & distant=f.add(3,10,9,BattleSide::LEFT);
 		auto & enemy=f.add(4,100,15,BattleSide::RIGHT);
 		parasite.data.health=80;
 		f.actions.evolutionDefended(f.field,&parasite);
-		assert(hasTrait(host,23) && !hasTrait(host,36) && far.bonuses.empty());
+		assert(hasTrait(host,23) && !hasTrait(host,36) && distant.bonuses.empty());
 		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==50);
 		host.data.pos={12};
 		f.actions.evolutionDefended(f.field,&parasite);

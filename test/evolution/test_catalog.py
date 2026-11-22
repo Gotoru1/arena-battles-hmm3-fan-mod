@@ -114,6 +114,18 @@ class CatalogTests(unittest.TestCase):
                     if count > 1:
                         self.assertEqual({cell % 17 for cell in flanks}, {1, 15})
 
+    def test_storage_keys_and_reserved_names(self):
+        reactions = (ROOT / "server/battles/EvolutionReactions.inc").read_text(encoding="utf-8")
+        # A reserve spans three consecutive bonus subtypes; nothing else may use the next two.
+        keys = {int(k) for k in re.findall(r"[sS]etReserve\([^;]*?,(5\d{5})\)", reactions)}
+        keys |= {int(k) for k in re.findall(r"reserve\(\w+,(5\d{5})\)", reactions)} | {500247}
+        used = {int(n) for n in re.findall(r"\b(5\d{5})\b", reactions)}
+        self.assertFalse([(key, key + limb) for key in keys for limb in (1, 2) if key + limb in used])
+        # Names that the Windows headers define as macros break the MSVC build as identifiers.
+        code = re.sub(r"//[^\n]*", "", reactions)
+        for word in ("near", "far", "small", "interface"):
+            self.assertIsNone(re.search(r"(?<![\w:.>])" + word + r"(?![\w(<])", code), word)
+
     def test_army_rewards(self):
         self.assertEqual(len(DATA["rewards"]),10)
         native = (ROOT/"config/artifacts.json").read_text(encoding="utf-8")
