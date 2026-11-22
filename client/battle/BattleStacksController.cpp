@@ -22,6 +22,8 @@
 #include "CreatureAnimation.h"
 
 #include "../CPlayerInterface.h"
+#include "../CServerHandler.h"
+#include "../GameInstance.h"
 #include "../GameEngine.h"
 #include "../gui/WindowHandler.h"
 #include "../media/ISoundPlayer.h"
@@ -328,7 +330,16 @@ void BattleStacksController::showStackAmountBox(Canvas & canvas, const CStack * 
 		canvas.drawColor(Rect(r.x, r.y, (r.w / healthMaxStack) * healthRemaining, r.h), Colors::GREEN);
 		canvas.drawBorder(r, Colors::YELLOW);
 	}
-	canvas.draw(amountBG, boxPosition);
+	if(GAME->server().arenaMode)
+	{
+		// Arena: the count box tells the sides apart. Own units are always green, enemy units always red.
+		const bool allied = stack->unitSide() == owner.getBattle()->battleGetMySide();
+		const Rect box(boxPosition, amountBG->dimensions());
+		canvas.drawColor(box, allied ? ColorRGBA(0, 120, 30, 255) : ColorRGBA(170, 20, 20, 255));
+		canvas.drawBorder(box, allied ? ColorRGBA(150, 255, 150, 255) : ColorRGBA(255, 160, 150, 255));
+	}
+	else
+		canvas.draw(amountBG, boxPosition);
 	canvas.drawText(textPosition, EFonts::FONT_TINY, Colors::WHITE, ETextAlignment::CENTER, TextOperations::formatMetric(stack->getCount(), 4));
 }
 

@@ -350,24 +350,23 @@ static void parasiteBurstAndGenerations()
 	actions.evolutionAttack(field,&parent,&prey,{{{2,1,2,false,0}}});
 	prey.data.health=0;
 	actions.evolutionAttack(field,&parent,&prey,{{{2,1,50,true,5}}});
-	// War of Generations broods on its own: the kill leaves an egg, the burst adds a larva beside it.
-	assert(field.units.size()==5);
-	auto & egg=field.units.at(4);
-	assert(egg.data.species==500 && egg.data.pos.pos==5);
-	auto & larva=field.units.at(5);
-	assert(larva.data.pos.pos==4 && larva.unitSide()==parent.unitSide());
-	assert(larva.bonuses.size()>=3 && !larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,97)->empty());
-	assert(larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
-	// Fill both adjacent cells and kill another infected stack in the same location.
-	egg.data.health=0;
+	// War of Generations works alone: the first kill splits off an offshoot, a tenth of the unit.
+	assert(field.units.size()==4);
+	auto & child=field.units.at(4);
+	assert(child.data.species==11 && child.getCount()==1 && child.unitSide()==parent.unitSide());
+	assert(!child.getBonusesOfType(BonusType::EVOLUTION_TRAIT,97)->empty());
+	assert(child.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
+	// Parasitic Burst: a quarter of the dead unit's health pool hits the enemies next to it.
+	assert(guard.data.health==28);
+	// One offshoot per battle; the second infected unit only bursts.
 	auto & second=field.units.emplace(6,CStack{6,{44,5,50,{5},BattleSide::RIGHT},{}}).first->second;
 	actions.evolutionAttack(field,&parent,&second,{{{6,1,2,false,0}}});
 	second.data.health=0;
 	actions.evolutionAttack(field,&parent,&second,{{{6,1,50,true,5}}});
-	assert(guard.data.health==30 && larva.data.health==10 && field.units.size()==7 && field.units.at(7).data.species==500);
+	assert(guard.data.health==16 && field.units.size()==5);
 	parent.data.health=0;
 	actions.evolutionAttack(field,&guard,&parent,{{{1,3,100,true,10}}});
-	assert(!larva.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
+	assert(!child.getBonusesOfType(BonusType::EVOLUTION_TRAIT,54)->empty());
 }
 #include "../../server/battles/EvolutionDeployment.inc"
 
@@ -872,22 +871,44 @@ static void playableAlone()
 		assert(carries(a.neighbour,BonusType::NONE,500177,1) && a.neighbour.hasBonusOfType(BonusType::STACKS_SPEED));
 	}
 	{
-		Arena a(39); // Infected Remains infects by itself, does not drain, and leaves a cocoon.
+		Arena a(39); // Infected Remains infects by itself, does not drain, and its dead host infects and poisons its allies.
 		a.hit(a.bearer,a.enemy);
 		assert(carries(a.enemy,BonusType::EVOLUTION_PARASITE,0,1));
 		a.round();
 		assert(a.enemy.data.health==1000 && a.bearer.data.health==100);
 		a.enemy.data.health=0;
 		a.actions.evolutionAttack(a.field,&a.bearer,&a.enemy,{{{3,1,10,true,0}}});
-		assert(a.field.units.size()==5 && a.field.units.at(5).data.species==500);
+		assert(a.field.units.size()==4 && carries(a.neighbour,BonusType::EVOLUTION_PARASITE,0,1) && carries(a.neighbour,BonusType::NONE,500077,1));
 	}
-	for(int colony:{60,75,87,95,97})
+	for(int colony:{75,84,87,90,93,95,97})
 	{
-		Arena a(colony); // Each colony mutation starts its own brood.
+		Arena a(colony); // Each mutation that works through descendants splits off one offshoot per battle.
 		a.hit(a.bearer,a.enemy,1);
-		assert(a.field.units.size()==5 && a.field.units.at(5).data.species==500);
+		assert(a.field.units.size()==5 && a.field.units.at(5).data.species==11 && a.field.units.at(5).getCount()==1);
+		assert(carries(a.field.units.at(5),BonusType::NONE,500190,2));
+		a.hit(a.bearer,a.enemy,1);
+		assert(a.field.units.size()==5);
+	}
+	{
+		Arena a(1); // Hungry Flesh: a third of the health of killed fighters returns the bearer's own.
+		a.bearer.data.health=70;
+		a.hit(a.bearer,a.enemy,3);
+		assert(a.bearer.data.health==80 && a.field.units.size()==4);
+	}
+	{
+		Arena a(60); // Endless Growth: a tenth of the unit grows back at the start of every round.
+		a.bearer.data.health=50;
 		a.round();
-		assert(std::any_of(a.field.units.begin(),a.field.units.end(),[](const auto & u){return u.second.data.species==501;}));
+		assert(a.bearer.data.health==60);
+		a.round();
+		assert(a.bearer.data.health==70);
+	}
+	{
+		Arena a(45); // Hungry Pack: destroying a unit returns a third of the losses and quickens the bearer.
+		a.bearer.data.health=40;
+		a.enemy.data.health=0;
+		a.actions.evolutionAttack(a.field,&a.bearer,&a.enemy,{{{3,1,10,true,0}}});
+		assert(a.bearer.data.health==60 && a.bearer.hasBonusOfType(BonusType::STACKS_SPEED));
 	}
 	{
 		Arena a(10); // Death Legacy with nothing to leave still mutates the heir.
@@ -1305,43 +1326,22 @@ static void swarmGroup()
 			return unit;
 		}
 		void hit(CStack & from,CStack & to,int killed=0){actions.evolutionAttack(field,&from,&to,{{{to.id,from.id,10,false,killed}}});}
-		std::vector<const CStack *> larvae() const
-		{
-			std::vector<const CStack *> found;
-			for(const auto & entry:field.units) if(entry.second.alive() && entry.second.data.species==501) found.push_back(&entry.second);
-			return found;
-		}
 	};
 	{
-		Field f; // Parasitic Mind: infects, broods, and its larvae hunt the infected on their own.
+		Field f; // Parasitic Mind: infects, and at the start of a round strikes the nearest enemy carrying its parasite.
 		auto & mother=f.add(1,10,2,BattleSide::LEFT,{29});
 		auto & enemy=f.add(2,100,6,BattleSide::RIGHT);
 		auto & clean=f.add(3,100,9,BattleSide::RIGHT);
-		f.hit(mother,enemy,1);
-		assert(carries(enemy,BonusType::EVOLUTION_PARASITE,0,1));
-		nextRound(f.field,f.actions);
-		assert(f.larvae().size()==1 && carries(*f.larvae().front(),BonusType::NONE,500190,2));
-		assert(enemy.data.health==1000);
+		f.hit(mother,enemy);
+		assert(carries(enemy,BonusType::EVOLUTION_PARASITE,0,1) && f.field.units.size()==3);
 		nextRound(f.field,f.actions);
 		assert(enemy.data.health==993 && clean.data.health==1000 && mother.data.health==100);
-		// Without the mother the larva goes back to waiting for orders.
+		nextRound(f.field,f.actions);
+		assert(enemy.data.health==986 && clean.data.health==1000);
+		// A dead bearer strikes no more.
 		mother.data.health=0;
 		nextRound(f.field,f.actions);
-		assert(enemy.data.health==993);
-	}
-	{
-		Field f; // Hungry Colony: separate larva stacks of one brood merge at the start of a round.
-		auto & mother=f.add(1,10,2,BattleSide::LEFT,{45,23});
-		auto & enemy=f.add(2,100,8,BattleSide::RIGHT);
-		f.hit(mother,enemy,1);
-		f.hit(mother,enemy,1);
-		nextRound(f.field,f.actions);
-		const auto colony=f.larvae();
-		assert(colony.size()==1 && colony.front()->getCount()==2 && carries(*colony.front(),BonusType::NONE,500190,2));
-		// A third larva joins the colony next round.
-		f.hit(mother,enemy,1);
-		nextRound(f.field,f.actions);
-		assert(f.larvae().size()==1 && f.larvae().front()->getCount()==3);
+		assert(enemy.data.health==986);
 	}
 	{
 		Field f; // Sentient Plague: a leech that picks the healthiest clean enemy close an infected one.
@@ -1701,7 +1701,7 @@ static void magicAndHive()
 		assert(f.actions.evolutionIncoming(f.field,2,&enemy,10,false,false)==10);
 	}
 	{
-		Field f; // Dimensional Hive: fallen summoned descendants return once as larvae beside the bearer.
+		Field f; // Dimensional Hive: fallen summoned descendants return once as a unit of the bearer's kind.
 		auto & hive=f.add(1,10,2,BattleSide::LEFT,{84});
 		auto & child=f.add(2,3,3,BattleSide::LEFT);
 		auto & stranger=f.add(3,3,4,BattleSide::LEFT);
@@ -1718,7 +1718,7 @@ static void magicAndHive()
 		nextRound(f.field,f.actions);
 		assert(hive.getBonusesOfType(BonusType::NONE,500084)->empty() && f.field.units.size()==5);
 		auto & returned=f.field.units.at(5);
-		assert(returned.data.species==501 && returned.getCount()==1 && carries(returned,BonusType::NONE,500184,1));
+		assert(returned.data.species==11 && returned.getCount()==1 && carries(returned,BonusType::NONE,500184,1));
 		returned.data.health=0;
 		f.actions.evolutionAttack(f.field,&enemy,&returned,{{{5,4,10,true,1}}});
 		assert(hive.getBonusesOfType(BonusType::NONE,500084)->empty());
@@ -1818,21 +1818,16 @@ int main(){
 	nest.units.emplace(2,CStack{2,{2,2,20,{8},BattleSide::RIGHT},{}});
 	for(int m:{1,39,60,87}) nest.units.at(1).bonuses.push_back(trait(m));
 	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,false,1}}});
-	assert(nest.units.at(3).data.species==500);
+	// Hereditary Memory works alone: the first kill splits off an offshoot that inherits every mutation.
+	assert(nest.units.size()==3 && nest.units.at(3).data.species==1 && nest.units.at(3).getCount()==1);
+	assert(nest.units.at(3).bonuses.size()>=5);
 	nestActions.evolutionRound(nest,false);
-	assert(nest.units.size()==4);
-	assert(nest.units.at(1).getBonusesOfType(BonusType::NONE,500501)->front()->val==2);
-	assert(std::any_of(nest.units.begin(),nest.units.end(),[](const auto & u){return u.second.data.species==501 && u.second.bonuses.size()>=5;}));
-	// A killed egg never hatches. A living carrier can leave a cocoon on an infected corpse.
-	for(auto & pair : nest.units) if(pair.second.data.species==500) pair.second.data.health=0;
-	auto n=nest.units.size();
-	nestActions.evolutionRound(nest,false);
-	assert(nest.units.size()==n);
+	assert(nest.units.size()==3);
 	// Infected Remains infects with its own hits, so the first attack already left the mark.
 	assert(nest.units.at(2).getBonusesOfType(BonusType::EVOLUTION_PARASITE)->size()==1);
 	nest.units.at(2).data.health=0;
 	nestActions.evolutionAttack(nest,&nest.units.at(1),&nest.units.at(2),{{{2,1,10,true,0}}});
-	assert(nest.units.size()==n+1);
+	assert(nest.units.size()==3);
 	for(int i=0;i<250;++i)
 	{
 		nest.round++;
@@ -1973,7 +1968,8 @@ int main(){
 	plagueActions.evolutionAttack(plague,&plague.units.at(1),&plague.units.at(2),{{{2,1,10,false,0}}});
 	plague.units.at(2).data.health=0;
 	plagueActions.evolutionAttack(plague,&plague.units.at(1),&plague.units.at(2),{{{2,1,100,true,10}}});
-	plagueActions.evolutionRound(plague,false);
+	// Living Epidemic: the germ of the dead host jumps straight to its nearest clean ally.
+	assert(plague.units.size()==3);
 	assert(plague.units.at(3).getBonusesOfType(BonusType::NONE,500062)->front()->val==1);
 	assert(plague.units.at(3).hasBonusOfType(BonusType::EVOLUTION_PARASITE));
 	CBattleInfoCallback brood;
@@ -1981,15 +1977,14 @@ int main(){
 	BattleActionProcessor broodActions{&broodServer};
 	brood.units.emplace(1,CStack{1,{1,10,100,{4},BattleSide::LEFT},{}});
 	brood.units.emplace(2,CStack{2,{2,10,100,{8},BattleSide::RIGHT},{}});
-	for(int id:{1,75})brood.units.at(1).bonuses.push_back(trait(id));
+	for(int id:{23,75})brood.units.at(1).bonuses.push_back(trait(id));
+	// Swarm Queen: the offshoot carries one mutation of the queen, and its death arms her next attack.
 	broodActions.evolutionAttack(brood,&brood.units.at(1),&brood.units.at(2),{{{2,1,10,false,1}}});
-	broodActions.evolutionRound(brood,false);
-	auto & larva=brood.units.at(4);
-	assert(larva.getBonusesOfType(BonusType::NONE,500075)->front()->val==1);
-	larva.data.health=0;
-	broodActions.evolutionAttack(brood,&brood.units.at(2),&larva,{{{4,2,10,true,1}}});
-	broodActions.evolutionAttack(brood,&brood.units.at(1),&brood.units.at(2),{{{2,1,10,false,1}}});
-	broodActions.evolutionRound(brood,false);
-	assert(brood.units.at(6).getCount()==2);
+	auto & spawnling=brood.units.at(3);
+	assert(spawnling.data.species==1 && !spawnling.getBonusesOfType(BonusType::EVOLUTION_TRAIT,23)->empty());
+	assert(spawnling.getBonusesOfType(BonusType::EVOLUTION_TRAIT,75)->empty());
+	spawnling.data.health=0;
+	broodActions.evolutionAttack(brood,&brood.units.at(2),&spawnling,{{{3,2,10,true,1}}});
+	assert(broodActions.evolutionIncoming(brood,1,&brood.units.at(2),10,false,false)==15);
 	rarityTiers();
 }

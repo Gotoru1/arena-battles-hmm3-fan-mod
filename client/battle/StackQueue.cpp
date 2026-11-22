@@ -14,7 +14,9 @@
 #include "BattleSiegeController.h"
 #include "BattleStacksController.h"
 
+#include "../CServerHandler.h"
 #include "../GameEngine.h"
+#include "../GameInstance.h"
 #include "../gui/WindowHandler.h"
 #include "../render/Canvas.h"
 #include "../render/IFont.h"
@@ -154,7 +156,11 @@ void StackQueue::StackBox::setUnit(const battle::Unit * unit, size_t turn, std::
 	if(unit)
 	{
 		boundUnitID = unit->unitId();
-		background->setPlayerColor(unit->unitOwner());
+		// Arena: own units are always green in the turn order, enemy units always red.
+		if(GAME->server().arenaMode)
+			background->setPlayerColor(unit->unitSide() == owner->owner.getBattle()->battleGetMySide() ? PlayerColor(3) : PlayerColor(0)); // green and red in the player palette
+		else
+			background->setPlayerColor(unit->unitOwner());
 		icon->visible = true;
 
 		// temporary code for mod compatibility:

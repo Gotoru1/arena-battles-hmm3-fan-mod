@@ -297,6 +297,48 @@ void ArenaDraft::saveEvolutionAndExit(const evolution::RoguelikeRun & snapshot)
 	CInfoWindow::showInfoDialog(message,{});
 }
 
+namespace
+{
+	// Characters of the mode. The order is the leader number stored in the run.
+	const std::array<std::pair<const char *,const char *>,evolution::RoguelikeRun::leaderCount> & evolutionLeaders()
+	{
+		static const std::array<std::pair<const char *,const char *>,evolution::RoguelikeRun::leaderCount> all{{
+			{"Хирург Мортен", "Полевой врач, который не признаёт слова «потери». Лазарет после каждой победы возвращает в строй на 20% погибших больше."},
+			{"Генетик Велла", "Собирает только редкие образцы. Редкие, эпические и легендарные карточки выпадают заметно чаще: 45/32/18/5 на обычной волне и 30/34/26/10 после босса."},
+			{"Мать стаи Ирга", "Её стая растёт на крови. После каждой победы каждый уцелевший отряд увеличивается на 8% (минимум на одного бойца)."},
+			{"Гладиатор Торн", "Чемпион арены. Каждая победа над боссом навсегда даёт герою +1 к атаке и +1 к защите для всей армии."},
+			{"Алхимик Зейн", "Колет мутаген без перерыва. Его отряды не отдыхают после мутации: один и тот же отряд можно развивать каждую волну."},
+			{"Собиратель Аурик", "Знает, где лежит добыча. После каждой волны одна из трёх карточек — награда для всей армии."}}};
+		return all;
+	}
+}
+
+std::string ArenaDraft::evolutionLeaderLine()
+{
+	if(!run || run->leader < 1) return {};
+	const auto & who = evolutionLeaders().at(run->leader-1);
+	return std::string("\nВожак: ") + who.first;
+}
+
+void ArenaDraft::chooseEvolutionLeader(size_t offset)
+{
+	const auto & all = evolutionLeaders();
+	std::vector<ArenaOffer> cards;
+	// The choice window shows three cards: two characters and the page turn.
+	const auto end = std::min(all.size(), offset + 2);
+	for(size_t i = offset; i < end; ++i) cards.push_back(evolutionCard(all[i].first, all[i].second));
+	cards.push_back(evolutionCard("Другие вожаки", "Показать следующих. Сейчас показаны " + std::to_string(offset+1) + "–" + std::to_string(end) + " из " + std::to_string(all.size()) + "."));
+	auto self = shared_from_this();
+	ENGINE->windows().createAndPushWindow<ArenaChoiceWindow>("Кто поведёт армию?", "Вожак меняет одно правило режима на весь забег", cards,
+		[self,offset,end](int pick)
+		{
+			const auto index = offset + static_cast<size_t>(pick);
+			if(index >= end) { self->chooseEvolutionLeader(end >= evolutionLeaders().size() ? 0 : end); return; }
+			run->lead(static_cast<int>(index)+1);
+			self->buildEvolutionBattle();
+		}, [self](){ self->cancel(); }, nullptr);
+}
+
 void ArenaDraft::chooseEvolutionCreature()
 {
 	const auto choices = offerCreatures(player(), 1);
@@ -325,7 +367,7 @@ void ArenaDraft::chooseEvolutionCreature()
 						run->army.count = 16;
 						for(int i=0;i<2;++i) run->primary[i] += 2;
 					}
-					self->buildEvolutionBattle();
+					self->chooseEvolutionLeader(0);
 				}, [self](){ self->cancel(); }, nullptr);
 		}, [self]() { self->cancel(); }, nullptr);
 }
@@ -350,8 +392,8 @@ void ArenaDraft::settleEvolution(bool won, const std::array<int, 7> & survivors,
 	// The hospital works on the reported survivors, so every run rule still sees one consistent number.
 	std::vector<int> reserves;
 	for(size_t slot = 1; slot < run->rosterSize(); ++slot)
-		reserves.push_back(won ? evolution::engineInt(evolution::RoguelikeRun::afterHospital(run->stack(slot).count, survivors[slot], run->wave)) : survivors[slot]);
-	const auto leaders = won ? evolution::RoguelikeRun::afterHospital(run->army.count, survivors[0], run->wave) : evolution::Amount(survivors[0]);
+		reserves.push_back(won ? evolution::engineInt(run->healed(run->stack(slot).count, survivors[slot])) : survivors[slot]);
+	const auto leaders = won ? run->healed(run->army.count, survivors[0]) : evolution::Amount(survivors[0]);
 	run->finish(won, leaders, casualties, std::move(pool), rarities, eliteFight, reserves, trophies);
 	if(won && run->phase == evolution::Phase::Reward)
 	{
@@ -731,7 +773,8 @@ try
 	}
 
 	std::string detail = "Твоя армия:" + roster;
-	detail += "\nЛазарет: после победы в строй вернётся " + std::to_string(evolution::RoguelikeRun::hospitalShare(run->wave)) + "% потерь каждого выжившего отряда.";
+	detail += evolutionLeaderLine();
+	detail += "\nЛазарет: после победы в строй вернётся " + std::to_string(run->hospital()) + "% потерь каждого выжившего отряда.";
 	if(run->boss())
 		detail += "\nБосс: " + bossRule["name"].String() + ". " + bossRule["text"].String();
 	const std::array<std::string,3> formations{"Смешанное войско", "Орда", "Ударный отряд"};

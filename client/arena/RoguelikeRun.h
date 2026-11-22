@@ -103,10 +103,33 @@ public:
 	std::vector<size_t> lastSlots;
 	// A unit that took a mutation after the previous wave rests for one wave.
 	bool restRule = true;
+	// The character that leads the run. Each one bends a single rule of the mode for the whole run:
+	// 1 Surgeon: the hospital returns 20% more. 2 Geneticist: rarer cards. 3 Pack Mother: survivors grow 8% per victory.
+	// 4 Gladiator: +1 attack and defence per boss. 5 Alchemist: units do not rest. 6 Collector: an army reward every wave.
+	static constexpr int leaderCount = 6;
+	int leader = 0;
+
+	void lead(int who)
+	{
+		if(phase != Phase::Battle || wave != 1 || leader || who < 1 || who > leaderCount) throw std::logic_error("A leader is chosen once, before the first battle");
+		leader = who;
+	}
+
+	// Share of a surviving unit's casualties that returns after a victory on this wave.
+	int hospital() const
+	{
+		return hospitalShare(wave) + (leader == 1 ? 20 : 0);
+	}
+
+	Amount healed(const Amount & before,const Amount & survivors) const
+	{
+		if(survivors <= 0 || survivors >= before) return survivors;
+		return survivors + (before - survivors) * hospital() / 100;
+	}
 
 	bool resting(size_t slot) const
 	{
-		return restRule && !history.empty() && !armyReward(history.back()) && recipients.back() == stack(slot).identity;
+		return restRule && leader != 5 && !history.empty() && !armyReward(history.back()) && recipients.back() == stack(slot).identity;
 	}
 
 	bool allResting() const
@@ -259,10 +282,16 @@ public:
 			for(size_t i = 0; i < rosterSize(); ++i) owned |= stack(i).identity == it->first;
 			it = owned ? std::next(it) : alternateForms.erase(it);
 		}
+		if(leader == 3)
+			for(size_t i = 0; i < rosterSize(); ++i)
+				stack(i).count += std::max<Amount>(1, stack(i).count * 8 / 100);
+		if(leader == 4 && boss())
+			for(int i = 0; i < 2; ++i) ++primary[i];
 		offers.clear();
 		for(int slot = 0; slot < 3; ++slot)
 		{
-			const std::array<int, 4> chances = boss() ? std::array<int,4>{45, 32, 18, 5} : std::array<int,4>{62, 26, 10, 2};
+			const std::array<int, 4> chances = leader == 2 ? (boss() ? std::array<int,4>{30, 34, 26, 10} : std::array<int,4>{45, 32, 18, 5})
+				: boss() ? std::array<int,4>{45, 32, 18, 5} : std::array<int,4>{62, 26, 10, 2};
 			std::array<int,4> weights = chances;
 			for(size_t tier = 0; tier < groups.size(); ++tier)
 				if(groups[tier].empty()) weights[tier] = 0;
@@ -297,7 +326,7 @@ public:
 			}
 			return;
 		}
-		if(extras.empty() || (wave%3!=0 && std::uniform_int_distribution<int>(0,2)(random)!=0)) return;
+		if(extras.empty() || (leader != 6 && wave%3!=0 && std::uniform_int_distribution<int>(0,2)(random)!=0)) return;
 		offers.back()=extras[std::uniform_int_distribution<size_t>(0,extras.size()-1)(random)];
 	}
 
@@ -426,7 +455,7 @@ public:
 	{
 		if(phase != Phase::Battle && phase != Phase::Reward)
 			throw std::logic_error("No active run");
-		out << "EA6 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
+		out << "EA7 " << seed << ' ' << (phase == Phase::Reward) << ' ' << wave << ' ' << kills
 			<< ' ' << hero << ' ' << army.creature << ' ' << army.count << ' ' << army.harvest << '\n';
 		for(auto value : primary) out << value << ' ';
 		out << '\n' << random << '\n';
@@ -449,6 +478,7 @@ public:
 			out << stack(i).gifts.size() << '\n';
 			for(const auto & gift : stack(i).gifts) out << std::quoted(gift.first) << ' ' << gift.second << '\n';
 		}
+		out << leader << '\n';
 		if(!out) throw std::runtime_error("Не удалось записать забег");
 	}
 
@@ -458,7 +488,7 @@ public:
 		std::string version;
 		RoguelikeRun result(0);
 		bool reward = false;
-		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4" && version != "EA5" && version != "EA6") || !(in >> result.seed >> reward >> result.wave >> result.kills
+		if(!(in >> version) || (version != "EA2" && version != "EA3" && version != "EA4" && version != "EA5" && version != "EA6" && version != "EA7") || !(in >> result.seed >> reward >> result.wave >> result.kills
 			>> result.hero >> result.army.creature >> result.army.count >> result.army.harvest))
 			throw invalid;
 		if(result.hero < 0 || result.army.creature < 0 || result.wave < 1 || result.kills < 0 || result.army.count < 1 || result.army.harvest < 0)
@@ -490,7 +520,7 @@ public:
 				result.companions.push_back(line);
 			}
 		}
-		const bool identified = version=="EA5" || version=="EA6";
+		const bool identified = version=="EA5" || version=="EA6" || version=="EA7";
 		if(identified)
 		{
 			if(!(in>>result.nextIdentity) || result.nextIdentity<2) throw invalid;
@@ -538,7 +568,7 @@ public:
 					|| !result.alternateForms.emplace(result.stack(slot).identity,id).second) throw invalid;
 			}
 		}
-		if(version == "EA6")
+		if(version == "EA6" || version == "EA7")
 			for(size_t slot=0;slot<result.rosterSize();++slot)
 			{
 				size_t count;
@@ -550,6 +580,7 @@ public:
 					if(!(in >> std::quoted(key) >> value) || key.empty() || value < 1 || !result.stack(slot).gifts.emplace(key,value).second) throw invalid;
 				}
 			}
+		if(version == "EA7" && (!(in >> result.leader) || result.leader < 0 || result.leader > leaderCount)) throw invalid;
 		result.phase = reward ? Phase::Reward : Phase::Battle;
 		return result;
 	}
@@ -557,11 +588,11 @@ public:
 	// The first ten waves ramp up from half strength so that a new army can find its build.
 	static Amount introduction(const Amount & wave)
 	{
-		// Waves 1-5 start gently (50% to 70%), full strength comes on wave 8,
-		// and every later wave adds another tenth on top of the growing budget.
-		if(wave <= 5) return Amount(45 + 5 * wave);
-		if(wave <= 8) return Amount(20 + 10 * wave);
-		return Amount(100 + 10 * (wave - 8));
+		// Waves 1-5 go from 60% to 80%, full strength comes on wave 7,
+		// and from wave 9 every wave adds 15% on top of the growing budget.
+		if(wave <= 5) return Amount(55 + 5 * wave);
+		if(wave <= 8) return Amount(30 + 10 * wave);
+		return Amount(110 + 15 * (wave - 8));
 	}
 
 	Amount threat() const

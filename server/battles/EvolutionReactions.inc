@@ -197,45 +197,6 @@ class EvolutionReactions
 		return mother && mother->unitSide()==unit->unitSide() && rules(mother).count(trait) ? mother : nullptr;
 	}
 
-	// Parasitic Mind: a larva hunts the nearest infected enemy on its own at the start of a round.
-	void seek(const CStack * larva)
-	{
-		if(!larva->alive() || counter(larva,500190)<=0 || !broodMother(larva,29)) return;
-		const CStack * prey=nullptr;
-		for(auto * unit:living())
-			if(unit->unitSide()!=larva->unitSide() && unit->hasBonusOfType(BonusType::EVOLUTION_PARASITE) && (!prey ||
-				BattleHex::getDistance(larva->getPosition(),unit->getPosition())<BattleHex::getDistance(larva->getPosition(),prey->getPosition()))) prey=unit;
-		if(prey) strike(larva,prey);
-	}
-
-	// Hungry Colony: the bearer's larva stacks eat each other into one, keeping every mutation.
-	void gather(const CStack * mother)
-	{
-		std::vector<const CStack *> larvae;
-		for(auto * unit:living())
-			if(unit->unitSide()==mother->unitSide() && unit->creatureId()==larvaType() && counter(unit,500190)==static_cast<int>(mother->unitId())+1)
-				larvae.push_back(unit);
-		if(larvae.size()<2) return;
-		int64_t total=0;
-		Rules pooled;
-		for(auto * larva:larvae)
-		{
-			total+=larva->getCount();
-			for(auto rule:rules(larva)) pooled[rule.first]=std::max(pooled[rule.first],rule.second);
-		}
-		const auto place=larvae.front()->getPosition();
-		BattleUnitsChanged merge;
-		merge.battleID=battle.getBattle()->getBattleID();
-		for(auto * larva:larvae) merge.changedStacks.emplace_back(larva->unitId(),UnitChanges::EOperation::REMOVE);
-		server.sendAndApply(merge);
-		if(auto * colony=spawn(mother->unitSide(),larvaType(),headcount(total),place))
-		{
-			descend(mother,colony);
-			for(auto rule:pooled) transfer(colony,rule.first,rule.second);
-			observe(colony);
-		}
-	}
-
 	// Sentient Plague: each round the bearer's infection moves to the healthiest clean enemy near an infected one.
 	void plague(const CStack * bearer,int reach)
 	{
@@ -269,7 +230,7 @@ class EvolutionReactions
 		{
 			if(!primary->alive()) return;
 			if(member==source || !member->alive() || member->unitSide()!=source->unitSide() || brood(member)!=family) continue;
-			if(member->creatureId()==eggType() || !touches(member,member->getPosition(),primary->getPosition(),1) || counter(member,500090)==~round) continue;
+			if(!touches(member,member->getPosition(),primary->getPosition(),1) || counter(member,500090)==~round) continue;
 			setCounter(member,500090,~round);
 			strike(member,primary);
 		}
@@ -283,6 +244,13 @@ class EvolutionReactions
 		auto roots=parent->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500095));
 		for(const auto & root:*roots) remember(child,500095,root->val);
 		if(rules(parent).count(95)) remember(child,500095,parent->unitId());
+		if(rules(parent).count(75))
+			for(auto trait:rules(parent))
+				if(trait.first!=75 && trait.first!=88)
+				{
+					transfer(child,trait.first,trait.second);
+					break;
+				}
 		if(rules(parent).count(97))
 		{
 			remember(child,500097,parent->unitId());
@@ -448,24 +416,20 @@ class EvolutionReactions
 		}
 	}
 
-	// Colony mutations are playable alone: each of them lets its bearer lay eggs on a kill.
+	// Mutations that work through descendants are playable alone: the first enemy fighter
+	// their bearer kills in a battle makes it split off an offshoot, a tenth of the unit.
 	bool brooder(const CStack * unit) const
 	{
 		const auto active=rules(unit);
-		for(int id:{1,29,45,60,75,84,87,90,93,95,97}) if(active.count(id)) return true;
+		for(int id:{75,84,87,90,93,95,97}) if(active.count(id)) return true;
 		return false;
 	}
 
-	static CreatureID eggType()
+	void offshoot(const CStack * unit)
 	{
-		static const CreatureID id(CreatureID::decode("arenabattles:evolutionEgg"));
-		return id;
-	}
-
-	static CreatureID larvaType()
-	{
-		static const CreatureID id(CreatureID::decode("arenabattles:evolutionLarva"));
-		return id;
+		if(!unit->alive() || unit->getCount()<2 || marked(unit,500601,1)) return;
+		if(summon(unit,unit->creatureId(),std::max(1,unit->getCount()/10),unit->getPosition(),false))
+			remember(unit,500601,1);
 	}
 
 	int counter(const CStack * unit,int subtype) const
@@ -505,65 +469,6 @@ class EvolutionReactions
 	static int64_t combineDamage(int64_t amount,int64_t extra)
 	{
 		return amount + std::min(extra,INT64_MAX-amount);
-	}
-
-	void lostLarvae(const CStack * larva,uint32_t count)
-	{
-		if(!count) return;
-		const auto mothers=larva->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500075));
-		for(const auto & mother:*mothers)
-			if(const auto * queen=battle.battleGetStackByID(mother->val,false))
-				setCounter(queen,500175,static_cast<int>(std::min<int64_t>(INT32_MAX-1,int64_t(counter(queen,500175))+count)));
-	}
-
-	bool lay(const CStack * parent, BattleHex hex)
-	{
-		auto * egg = spawn(parent->unitSide(),eggType(),1,hex);
-		if(!egg) return false;
-		origins[egg->unitId()]=lineageRoot(parent->unitId());
-		Bonus source;
-		source.type = BonusType::EVOLUTION_BROOD;
-		source.val = static_cast<int>(parent->unitId());
-		grant(egg,source);
-		if(const auto stored=counter(parent,500175))
-		{
-			setCounter(egg,500275,stored);
-			setCounter(parent,500175,0);
-		}
-		return true;
-	}
-
-	bool hatch(const CStack * egg)
-	{
-		auto brood = egg->getBonusesOfType(BonusType::EVOLUTION_BROOD);
-		if(brood->empty()) return false;
-		const auto parentId = (*brood->begin())->val;
-		const auto side = egg->unitSide();
-		const auto hex = egg->getPosition();
-		const auto id = egg->unitId();
-		const int clutch=1+counter(egg,500275);
-		BattleUnitsChanged remove;
-		remove.battleID = battle.getBattle()->getBattleID();
-		remove.changedStacks.emplace_back(id,UnitChanges::EOperation::REMOVE);
-		server.sendAndApply(remove);
-		auto * parent = battle.battleGetStackByID(parentId,false);
-		if(parent)
-		{
-			const auto * larva=summon(parent,larvaType(),clutch,hex,false);
-			if(larva && rules(parent).count(75))
-			{
-				remember(larva,500075,parent->unitId());
-				for(auto trait:rules(parent))
-					if(trait.first!=75)
-					{
-						transfer(larva,trait.first,trait.second);
-						break;
-					}
-			}
-			if(rules(parent).count(60) && lay(parent,hex)) discovery(parent,2);
-		}
-		else spawn(side,larvaType(),clutch,hex);
-		return true;
 	}
 
 	void recycle(const CStack * carrier, uint32_t casualties)
@@ -681,7 +586,7 @@ class EvolutionReactions
 		std::vector<const CStack *> result;
 		for(const auto * unit:battle.battleGetAllStacks())
 			if(!unit->alive() && !unit->isGhost() && !unit->summoned && unit->getPosition().isValid() && !marked(unit,500905,1)
-				&& unit->creatureId()!=eggType() && unit->creatureId()!=huskType()) result.push_back(unit);
+				&& unit->creatureId()!=huskType()) result.push_back(unit);
 		std::sort(result.begin(),result.end(),[](auto * a,auto * b){return a->unitId()<b->unitId();});
 		return result;
 	}
@@ -804,18 +709,13 @@ class EvolutionReactions
 		return true;
 	}
 
+	// Parasitic Burst: an infected enemy unit bursts when the bearer destroys it.
 	void burst(const CStack * killer,const CStack * corpse)
 	{
-		bool spawned = false;
-		for(auto hex : corpse->getPosition().getNeighbouringTiles())
-		{
-			if(!hex.isValid() || battle.getAvailableHex(larvaType(),killer->unitSide(),hex.toInt()) != hex) continue;
-			if(summon(killer,larvaType(),1,hex,false)) spawned = true;
-		}
-		if(spawned) return;
+		const auto blast=tier(54,std::max<int64_t>(1,int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth()/4));
 		for(auto * neighbour : living())
-			if(neighbour->unitSide()!=killer->unitSide() && BattleHex::getDistance(neighbour->getPosition(),corpse->getPosition())==1)
-				injure(neighbour,killer,tier(54,std::max<int64_t>(1,corpse->getMaxHealth())));
+			if(killer->alive() && neighbour->unitSide()!=killer->unitSide() && BattleHex::getDistance(neighbour->getPosition(),corpse->getPosition())==1)
+				injure(neighbour,killer,blast);
 	}
 
 	void passGeneration(const CStack * corpse,const Rules & legacy,const std::vector<const CStack *> & survivors)
@@ -865,8 +765,19 @@ class EvolutionReactions
 		const auto pathogens=corpse->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500062));
 		for(const auto & germ:*pathogens)
 			if(auto * owner=battle.battleGetStackByID(germ->val,false))
-				if(auto * carrier=summon(owner,larvaType(),1,corpse->getPosition(),false))
-					remember(carrier,500162,owner->unitId());
+			{
+				// Living Epidemic: the germ of a dead host jumps to the nearest clean ally of that host within three cells.
+				const CStack * closest=nullptr;
+				for(auto * unit:beforeSummons)
+				{
+					if(!unit->alive() || unit->unitSide()!=corpse->unitSide() || marked(unit,500062,germ->val)) continue;
+					const auto distance=BattleHex::getDistance(corpse->getPosition(),unit->getPosition());
+					if(distance<=3 && (!closest || distance<BattleHex::getDistance(corpse->getPosition(),closest->getPosition()))) closest=unit;
+				}
+				if(!closest) continue;
+				afflict(closest,2,germ->val);
+				attach(closest,owner,BonusType::EVOLUTION_PARASITE);
+			}
 		const bool original=!corpse->summoned && !corpse->isClone();
 		if(legacy.count(64) && original && corpse->unitBaseAmount()>=6 && !marked(corpse,500064,1))
 		{
@@ -968,12 +879,20 @@ class EvolutionReactions
 		if(source && source->unitSide()!=corpse->unitSide())
 			for(auto * witness:beforeSummons)
 				if(witness->unitSide()==corpse->unitSide() && rules(witness).count(8)) remember(witness,500008,source->unitId());
+		if(corpse->summoned && counter(corpse,500190)>0)
+			if(const auto * queen=broodMother(corpse,75))
+				if(queen->alive() && queen!=corpse)
+				{
+					// Swarm Queen: half of the health of a fallen descendant arms the bearer's next attack.
+					setReserve(queen,combineDamage(reserve(queen,500312),std::max<int64_t>(1,int64_t(corpse->unitBaseAmount())*corpse->getMaxHealth()/2)),500312);
+					discovery(queen,2);
+				}
 		if(corpse->summoned && counter(corpse,500190)>0 && !marked(corpse,500184,1))
 			if(const auto * hive=broodMother(corpse,84))
 				if(hive->alive() && hive!=corpse)
 					setCounter(hive,500084,std::min(INT32_MAX-1,counter(hive,500084))+1);
 		// Vengeance Machine counts every allied body destroyed in this battle; the run turns the count into lasting damage.
-		if(corpse->creatureId()!=eggType() && corpse->creatureId()!=huskType())
+		if(corpse->creatureId()!=huskType())
 			for(auto * witness:beforeSummons)
 				if(witness!=corpse && witness->unitSide()==corpse->unitSide() && rules(witness).count(80))
 					setCounter(witness,500080,std::min(INT32_MAX-1,counter(witness,500080))+1);
@@ -1011,7 +930,14 @@ class EvolutionReactions
 					if(!legacy.empty()) transfer(converted,legacy.begin()->first,legacy.begin()->second);
 				}
 			}
-			else if(traits.count(39) && !traits.count(89)) lay(carrier,corpse->getPosition());
+			else if(traits.count(39) && !traits.count(89))
+				for(auto * bystander:living())
+					if(bystander->unitSide()==corpse->unitSide() && BattleHex::getDistance(bystander->getPosition(),corpse->getPosition())<=2)
+					{
+						// Infected Remains: the death of an infected unit infects and poisons its allies around it.
+						afflict(bystander,0,mark->val);
+						afflict(bystander,4,mark->val);
+					}
 		}
 		for(int id : {10,25})
 		{
@@ -1043,6 +969,15 @@ class EvolutionReactions
 		{
 			const auto hunter=rules(source);
 			if(hunter.count(12)) stain(corpse->getPosition(),12,source,-1);
+			if(hunter.count(45))
+			{
+				// Hungry Pack: a destroyed enemy unit returns a third of the bearer's losses and quickens it.
+				mend(source,tier(45,std::max<int64_t>(1,missing(source)/3)));
+				Bonus haste;
+				haste.type=BonusType::STACKS_SPEED;
+				haste.val=1;
+				grant(source,haste);
+			}
 			if(hunter.count(37)) stain(corpse->getPosition(),37,source,3);
 			if(hunter.count(96) && !counter(source,500096))
 			{
@@ -1345,7 +1280,7 @@ class EvolutionReactions
 		if(counter(unit,key)) return;
 		const CStack * best=nullptr;
 		for(auto * other:living())
-			if(other!=unit && other->unitSide()==unit->unitSide() && !counter(other,reverseKey) && other->creatureId()!=eggType() && other->creatureId()!=huskType()
+			if(other!=unit && other->unitSide()==unit->unitSide() && !counter(other,reverseKey) && other->creatureId()!=huskType()
 				&& (!best || BattleHex::getDistance(unit->getPosition(),other->getPosition())<BattleHex::getDistance(unit->getPosition(),best->getPosition()))) best=other;
 		// Alone, the bearer is bound to itself.
 		if(!best) best=unit;
@@ -1613,7 +1548,6 @@ public:
 			switch(event.kind)
 			{
 			case evolution::ReactionKind::Loss:
-				lostLarvae(target,event.amount);
 				casualties(event.amount);
 				if(event.amount && target->alive()) leap(target,2);
 				if(event.amount && counter(target,500069)>0)
@@ -1625,8 +1559,13 @@ public:
 							setReserve(twin,combineDamage(reserve(twin,500312),gift),500312);
 						}
 				if(event.amount) { shed(target,event.amount); split(target); }
-				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide() && brooder(source))
-					lay(source,target->getPosition());
+				if(event.amount && source && source->alive() && source->unitSide()!=target->unitSide())
+				{
+					// Hungry Flesh: a third of the health of the fighters it kills returns the bearer's own fallen.
+					if(rules(source).count(1))
+						mend(source,tier(1,std::max<int64_t>(1,int64_t(event.amount)*target->getMaxHealth()/3)));
+					if(source->alive() && brooder(source)) offshoot(source);
+				}
 				// Blood Debt also remembers whoever kills the bearer's own fighters.
 				if(event.amount && source && target->alive() && source->unitSide()!=target->unitSide() && rules(target).count(8))
 					remember(target,500008,source->unitId());
@@ -1656,25 +1595,6 @@ public:
 		return false;
 	}
 
-	void epidemic(const CStack * carrier)
-	{
-		const auto roots=carrier->getBonusesOfType(BonusType::NONE,BonusCustomSubtype(500162));
-		for(const auto & root:*roots)
-		{
-			const CStack * closest=nullptr;
-			for(auto * unit:living())
-			{
-				if(unit->unitSide()==carrier->unitSide() || marked(unit,500062,root->val)) continue;
-				const auto distance=BattleHex::getDistance(carrier->getPosition(),unit->getPosition());
-				if(distance<=3 && (!closest || distance<BattleHex::getDistance(carrier->getPosition(),closest->getPosition()))) closest=unit;
-			}
-			if(!closest) continue;
-			const int germ=root->val;
-			afflict(closest,2,germ);
-			if(auto * owner=battle.battleGetStackByID(germ,false)) attach(closest,owner,BonusType::EVOLUTION_PARASITE);
-		}
-	}
-
 	void spread(const CStack * host)
 	{
 		const auto infected=carried(host,3);
@@ -1695,7 +1615,6 @@ public:
 	bool moved(const CStack * mover,BattleHex origin)
 	{
 		spread(mover);
-		epidemic(mover);
 		const auto landing=mover->getPosition();
 		if(origin.isValid() && origin!=landing)
 		{
@@ -1735,7 +1654,7 @@ public:
 			// Symbiotic Parasite: defending next to an ally feeds that ally.
 			const CStack * host=nullptr;
 			for(auto * ally:living())
-				if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType()
+				if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=huskType()
 					&& touches(unit,unit->getPosition(),ally->getPosition(),1) && (!host || ally->unitId()<host->unitId())) host=ally;
 			if(host)
 			{
@@ -1748,7 +1667,7 @@ public:
 			// Army Devourer: defending swallows the summoned allies standing next to the bearer.
 			std::vector<const CStack *> meal;
 			for(auto * ally:living())
-				if(ally!=unit && ally->summoned && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType()
+				if(ally!=unit && ally->summoned && ally->unitSide()==unit->unitSide() && ally->creatureId()!=huskType()
 					&& touches(unit,unit->getPosition(),ally->getPosition(),1)) meal.push_back(ally);
 			for(auto * ally:meal)
 			{
@@ -2004,9 +1923,9 @@ public:
 				if(nearestBody && summon(unit,skeletonType(),headcount(evolution::damageProduct(nearestBody->unitBaseAmount(),active.at(72),2)),nearestBody->getPosition(),false))
 					consume(nearestBody);
 			}
-			if(!first && (awakenHusk(unit) || hatch(unit))) continue;
+			if(!first && awakenHusk(unit)) continue;
 			if(!first) { inhale(unit); mycelium(unit); }
-			if(!first && unit->alive()) { parasites(unit); if(unit->alive()) epidemic(unit); }
+			if(!first && unit->alive()) parasites(unit);
 			if(!unit->alive()) continue;
 			if(active.count(32)) recycle(unit,0);
 			if(battle.battleGetRound()>=3) leap(unit,4);
@@ -2022,7 +1941,7 @@ public:
 				// Predator Merge: the bearer and its nearest ally fight this battle with each other's mutations.
 				const CStack * mate=nullptr;
 				for(auto * ally:living())
-					if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=eggType() && ally->creatureId()!=huskType() && (!mate ||
+					if(ally!=unit && ally->unitSide()==unit->unitSide() && ally->creatureId()!=huskType() && (!mate ||
 						BattleHex::getDistance(unit->getPosition(),ally->getPosition())<BattleHex::getDistance(unit->getPosition(),mate->getPosition()))) mate=ally;
 				if(!mate) adapt(unit);
 				else
@@ -2056,24 +1975,27 @@ public:
 			}
 			if(!first && unit->alive() && active.count(84) && counter(unit,500084))
 			{
-				// Dimensional Hive: the fallen descendants come back as larvae beside the bearer.
+				// Dimensional Hive: the fallen descendants come back as one unit of the bearer's kind, a tenth of it per charge.
 				const int charges=counter(unit,500084);
-				if(auto * returned=summon(unit,larvaType(),charges,unit->getPosition(),false))
+				if(auto * returned=summon(unit,unit->creatureId(),headcount(int64_t(charges)*std::max(1,unit->getCount()/10)),unit->getPosition(),false))
 				{
 					setCounter(unit,500084,0);
 					remember(returned,500184,1);
 				}
 			}
-			if(!first && unit->alive() && unit->creatureId()==larvaType()) seek(unit);
-		}
-		if(!first)
-		{
-			// Merging removes larvae from the field, so walk the mothers by id, not a list taken before.
-			std::vector<uint32_t> mothers;
-			for(auto * unit : living())
-				if(rules(unit).count(45)) mothers.push_back(unit->unitId());
-			for(auto id : mothers)
-				if(const auto * mother=battle.battleGetStackByID(id)) gather(mother);
+			// Endless Growth: a tenth of the unit grows back every round; the surplus feeds the blood mutations.
+			if(!first && unit->alive() && active.count(60))
+				mend(unit,std::max<int64_t>(1,int64_t(unit->unitBaseAmount())*unit->getMaxHealth()/10));
+			if(!first && unit->alive() && active.count(29))
+			{
+				// Parasitic Mind: at the start of a round the bearer strikes the nearest enemy that carries its parasite.
+				const int self=static_cast<int>(unit->unitId());
+				const CStack * prey=nullptr;
+				for(auto * foe:living())
+					if(foe->unitSide()!=unit->unitSide() && suffers(foe,0,self) && (!prey ||
+						BattleHex::getDistance(unit->getPosition(),foe->getPosition())<BattleHex::getDistance(unit->getPosition(),prey->getPosition()))) prey=foe;
+				if(prey) strike(unit,prey);
+			}
 		}
 	}
 

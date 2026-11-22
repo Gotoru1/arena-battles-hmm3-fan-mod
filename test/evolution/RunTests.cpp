@@ -28,7 +28,7 @@ int main()
 		r->begin(2, {1,2,3,4}, 3, 24);
 	mustFail([&]{run.finish(true, 20, 12, {"a", "a", "b"});});
 	require(run.phase == Phase::Battle && run.kills == 0, "Rejected report mutated run");
-	require(run.threat() == 449, "The first wave starts at half strength");
+	require(run.threat() == 538, "The first wave starts at 60% strength");
 	require(RoguelikeRun::afterHospital(24,12,1) == 18 && RoguelikeRun::afterHospital(24,12,6) == 16
 		&& RoguelikeRun::afterHospital(24,12,11) == 15, "Hospital share by wave");
 	require(RoguelikeRun::afterHospital(24,0,1) == 0 && RoguelikeRun::afterHospital(24,30,1) == 30
@@ -475,9 +475,9 @@ int main()
 			&& heir.lastSlots==std::vector<size_t>{1},"The companion takes the lead");
 	}
 	{
-		// Enemy strength: gentle first five waves, full budget on wave eight, then a tenth more every wave.
+		// Enemy strength: 60-80% on the first five waves, full budget on wave seven, then 15% more every wave.
 		const auto ramp=[](int wave){return RoguelikeRun::introduction(wave);};
-		require(ramp(1)==50 && ramp(5)==70 && ramp(6)==80 && ramp(8)==100 && ramp(9)==110 && ramp(20)==220 && ramp(50)==520,"Enemy ramp");
+		require(ramp(1)==60 && ramp(5)==80 && ramp(6)==90 && ramp(8)==110 && ramp(9)==125 && ramp(20)==290 && ramp(50)==740,"Enemy ramp");
 		// Rarity odds: a common card is far likelier than a rare one, and so on down to legendary.
 		const std::vector<std::string> cards{"c1","c2","c3","c4","r1","r2","r3","r4","e1","e2","e3","e4","l1","l2","l3","l4"};
 		std::map<std::string,unsigned> tiers;
@@ -491,6 +491,86 @@ int main()
 			for(const auto & offer : odds.offers) ++seen[tiers.at(offer)];
 		}
 		require(seen[0]>seen[1]*3/2 && seen[1]>seen[2]*3/2 && seen[2]>seen[3]*2 && seen[3]>0,"Rarity odds fall steeply");
+	}
+	{
+		// Characters: each bends one rule for the whole run and survives a save.
+		const std::vector<std::string> extras{"reward.stat.0","reward.stat.1","reward.stat.2","reward.stat.3"};
+		RoguelikeRun surgeon(5);
+		surgeon.begin(2,{1,2,3,4},3,24);
+		mustFail([&]{surgeon.lead(0);});
+		mustFail([&]{surgeon.lead(7);});
+		surgeon.lead(1);
+		mustFail([&]{surgeon.lead(2);});
+		require(surgeon.hospital()==70 && surgeon.healed(24,14)==21 && surgeon.healed(24,0)==0 && surgeon.healed(24,30)==30,"The surgeon returns more of the fallen");
+		std::stringstream stream;
+		surgeon.save(stream);
+		require(RoguelikeRun::restore(stream).leader==1,"The leader survives a save");
+		RoguelikeRun nobody(5);
+		nobody.begin(2,{1,2,3,4},3,24);
+		require(nobody.hospital()==50 && nobody.healed(24,14)==19,"Without the surgeon");
+
+		// The same battles with and without the Pack Mother differ by her 8%.
+		RoguelikeRun mother(5), orphan(5);
+		mother.begin(2,{1,2,3,4},3,24);
+		orphan.begin(2,{1,2,3,4},3,24);
+		mother.lead(3);
+		mother.finish(true,4,1,pool);
+		orphan.finish(true,4,1,pool);
+		require(orphan.army.count<12 && mother.army.count==orphan.army.count+1,"The pack grows by at least one fighter");
+		mother.army.count=100;
+		orphan.army.count=100;
+		mother.pick(0);
+		orphan.pick(0);
+		mother.finish(true,100,1,pool);
+		orphan.finish(true,100,1,pool);
+		require(mother.army.count==orphan.army.count+orphan.army.count*8/100,"The pack grows by 8%");
+
+		RoguelikeRun gladiator(5);
+		gladiator.restRule=false;
+		gladiator.begin(2,{1,2,3,4},3,24);
+		gladiator.lead(4);
+		for(int wave=1;wave<=5;++wave)
+		{
+			gladiator.finish(true,24,1,pool);
+			require(gladiator.primary[0]==(wave==5 ? 2 : 1) && gladiator.primary[1]==(wave==5 ? 3 : 2),"The gladiator grows on bosses only");
+			gladiator.pick(0);
+		}
+
+		RoguelikeRun alchemist(5);
+		alchemist.begin(2,{1,2,3,4},3,24);
+		alchemist.lead(5);
+		alchemist.finish(true,24,1,pool);
+		alchemist.pick(0);
+		alchemist.finish(true,24,1,pool);
+		require(!alchemist.resting(0) && !alchemist.allResting(),"The alchemist's units do not rest");
+		alchemist.pick(0);
+
+		RoguelikeRun collector(5);
+		collector.restRule=false;
+		collector.begin(2,{1,2,3,4},3,24);
+		collector.lead(6);
+		for(int wave=1;wave<=4;++wave)
+		{
+			collector.finish(true,24,1,pool);
+			collector.offerArmyReward(extras);
+			require(RoguelikeRun::armyReward(collector.offers.back()),"The collector finds an army reward every wave");
+			collector.pick(0);
+		}
+
+		std::array<int,4> plain{},rare{};
+		const std::vector<std::string> cards{"c1","c2","c3","c4","r1","r2","r3","r4","e1","e2","e3","e4","l1","l2","l3","l4"};
+		std::map<std::string,unsigned> tiers;
+		for(const auto & card : cards) tiers[card]=card[0]=='c' ? 0 : card[0]=='r' ? 1 : card[0]=='e' ? 2 : 3;
+		for(unsigned seed=1;seed<=300;++seed)
+			for(int who:{0,2})
+			{
+				RoguelikeRun odds(seed);
+				odds.begin(2,{1,2,3,4},3,24);
+				if(who) odds.lead(who);
+				odds.finish(true,20,1,cards,tiers);
+				for(const auto & offer : odds.offers) ++(who ? rare : plain)[tiers.at(offer)];
+			}
+		require(rare[0]<plain[0] && rare[2]+rare[3]>plain[2]+plain[3],"The geneticist sees rarer cards");
 	}
 	Amount enormous = Amount(1)<<160;
 	require((enormous*enormous) > enormous, "Arbitrary precision");
