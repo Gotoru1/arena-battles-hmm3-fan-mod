@@ -66,7 +66,10 @@ void BattleObstacleController::obstacleRemoved(const std::vector<ObstacleChanges
 
 		if (!obstacle.isStruct())
 		{
-			logGlobal->error("I don't know how to animate removal of this obstacle");
+			// Removal without a description: expired spell obstacles and Evolution Arena ground marks.
+			// They simply disappear, so drop the cached pictures and say nothing.
+			obstacleAnimations.erase(oi.id);
+			obstacleImages.erase(oi.id);
 			continue;
 		}
 

@@ -59,18 +59,22 @@ struct CStack {
 	bool base=true;
 	// Engine flags for bodies that vanish on death. The model has no summoned units.
 	bool ghostPending=false, summoned=false;
+	// The engine never frees a unit; a removed one only leaves the field. The model keeps removed
+	// units in a graveyard and fails loudly when a reaction still reads one of them.
+	bool gone=false;
 	bool isGhost() const{return false;} bool isClone() const{return false;}
 	static bool isMeleeAttackPossible(const CStack *,const CStack *){return true;}
-	int unitId() const{return id;} bool alive() const{return data.health>0;}
+	int unitId() const{assert(!gone);return id;} bool alive() const{assert(!gone);return data.health>0;}
 	int getCount() const{return (data.health+9)/10;}
 	int getMaxHealth() const{return 10;}
 	int unitBaseAmount() const{return data.count;}
 	void damage(int64_t & n){data.health-=int(n);}
 	auto unitSide() const{return data.side;} auto creatureId() const{return CreatureID(data.species);}
-	auto getPosition() const{return data.pos;} std::vector<BattleHex> getHexes() const{return {data.pos};}
+	auto getPosition() const{assert(!gone);return data.pos;} std::vector<BattleHex> getHexes() const{assert(!gone);return {data.pos};}
 	std::vector<BattleHex> getHexes(BattleHex p) const{return {p};}
 	int getAvailableHealth() const{return data.health;}
 	auto getBonusesOfType(BonusType t) const{
+		assert(!gone);
 		auto result=std::make_shared<std::vector<std::shared_ptr<Bonus>>>();
 		for(auto b:bonuses) if(b.type==t)result->push_back(std::make_shared<Bonus>(b));
 		return result;
@@ -118,6 +122,7 @@ struct StacksInjured {int battleID{};std::vector<BattleStackAttacked> stacks;};
 struct SetStackEffect {int battleID{};std::vector<std::pair<int,std::vector<Bonus>>> toAdd,toRemove;};
 struct CBattleInfoCallback {
 	std::map<int,CStack> units;int round=1;
+	std::map<int,CStack> graveyard;
 	std::vector<std::shared_ptr<SpellCreatedObstacle>> marks;
 	auto battleGetAllObstacles() const{return std::vector<std::shared_ptr<const CObstacleInstance>>(marks.begin(),marks.end());}
 	int nextObstacleId() const{int next=0;for(const auto & mark:marks)next=std::max(next,mark->uniqueID+1);return next;}
@@ -157,7 +162,14 @@ struct CGameHandler {
 	void sendAndApply(const StacksInjured & p){for(auto & h:p.stacks)field.units.at(h.stackAttacked).data.health-=int(h.damageAmount);}
 	void sendAndApply(const BattleUnitsChanged & p){for(auto & c:p.changedStacks){
 		if(c.op==UnitChanges::EOperation::ADD) field.units.emplace(c.id,CStack{c.id,c.data,{}, {}, false}).first->second.summoned=c.data.summoned;
-		else if(c.op==UnitChanges::EOperation::REMOVE) field.units.erase(c.id);
+		else if(c.op==UnitChanges::EOperation::REMOVE)
+		{
+			auto node=field.units.extract(c.id);
+			assert(!node.empty());
+			node.mapped().gone=true;
+			node.key()=static_cast<int>(field.graveyard.size())+1000000;
+			field.graveyard.insert(std::move(node));
+		}
 		else field.units.at(c.id).data=c.data;
 	}}
 	void sendAndApply(const BattleStackMoved & p){field.units.at(p.stack).data.pos=p.tilesToMove.back();}

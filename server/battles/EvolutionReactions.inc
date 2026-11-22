@@ -2044,8 +2044,14 @@ public:
 			if(!first && unit->alive() && unit->creatureId()==larvaType()) seek(unit);
 		}
 		if(!first)
+		{
+			// Merging removes larvae from the field, so walk the mothers by id, not a list taken before.
+			std::vector<uint32_t> mothers;
 			for(auto * unit : living())
-				if(unit->alive() && rules(unit).count(45)) gather(unit);
+				if(rules(unit).count(45)) mothers.push_back(unit->unitId());
+			for(auto id : mothers)
+				if(const auto * mother=battle.battleGetStackByID(id)) gather(mother);
+		}
 	}
 
 	BattleHex pursue(const CStack * source,const CStack * victim) const
